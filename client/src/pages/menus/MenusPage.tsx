@@ -173,7 +173,7 @@ export default function MenusPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Gestion de Menus"
+        title="Gestión de Menús"
         subtitle={`${menusData.pagination.totalItems || 0} registros`}
         icon={Menu}
       />

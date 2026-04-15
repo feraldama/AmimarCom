@@ -198,7 +198,7 @@ export default function CajaTipoPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Gestion de Tipos de Caja"
+        title="Gestión de Tipos de Caja"
         subtitle={`${cajaTiposData.pagination.totalItems || 0} registros`}
         icon={List}
       />

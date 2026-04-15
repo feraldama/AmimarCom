@@ -41,7 +41,6 @@ function Login() {
           ? error.message || "Credenciales incorrectas"
           : "Credenciales incorrectas"
       );
-      setTimeout(() => setError(""), 5000);
     } finally {
       setLoading(false);
     }
@@ -56,21 +55,27 @@ function Login() {
             <span className="text-white font-bold text-2xl">A</span>
           </div>
           <h1 className="text-2xl font-bold text-gray-900">AMIMAR</h1>
-          <p className="text-sm text-gray-500 mt-1">Inicia sesion en tu cuenta</p>
+          <p className="text-sm text-gray-500 mt-1">Inicia sesión en tu cuenta</p>
         </div>
 
         {/* Card */}
         <div className="bg-white rounded-xl shadow-card p-6 space-y-5">
           {/* Error */}
           {error && (
-            <div className="flex items-start gap-3 p-3 bg-danger-50 border border-danger-100 rounded-lg text-sm">
-              <AlertTriangle className="size-5 text-danger-500 flex-shrink-0 mt-0.5" />
+            <div
+              role="alert"
+              aria-live="assertive"
+              className="flex items-start gap-3 p-3 bg-danger-50 border border-danger-100 rounded-lg text-sm"
+            >
+              <AlertTriangle className="size-5 text-danger-500 flex-shrink-0 mt-0.5" aria-hidden="true" />
               <span className="text-danger-600 flex-1">{error}</span>
               <button
+                type="button"
                 onClick={() => setError("")}
+                aria-label="Cerrar mensaje de error"
                 className="text-danger-500 hover:text-danger-600 cursor-pointer"
               >
-                <X className="size-4" />
+                <X className="size-4" aria-hidden="true" />
               </button>
             </div>
           )}
@@ -92,20 +97,20 @@ function Login() {
                 value={credentials.email}
                 onChange={handleChange}
                 required
-                autoComplete="email"
+                autoComplete="username"
                 placeholder="Ingresa tu usuario"
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900
                   placeholder:text-gray-400 focus:ring-2 focus:ring-primary-300 focus:border-primary-500 transition-colors"
               />
             </div>
 
-            {/* Contrasena */}
+            {/* Contraseña */}
             <div>
               <label
                 htmlFor="password"
                 className="block text-sm font-medium text-gray-700 mb-1.5"
               >
-                Contrasena
+                Contraseña
               </label>
               <div className="relative">
                 <input
@@ -116,7 +121,7 @@ function Login() {
                   onChange={handleChange}
                   required
                   autoComplete="current-password"
-                  placeholder="Ingresa tu contrasena"
+                  placeholder="Ingresa tu contraseña"
                   className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pr-10 text-sm text-gray-900
                     placeholder:text-gray-400 focus:ring-2 focus:ring-primary-300 focus:border-primary-500 transition-colors"
                 />
@@ -124,12 +129,12 @@ function Login() {
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 cursor-pointer"
-                  aria-label={showPassword ? "Ocultar contrasena" : "Mostrar contrasena"}
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                 >
                   {showPassword ? (
-                    <EyeOff className="size-[18px]" />
+                    <EyeOff className="size-[18px]" aria-hidden="true" />
                   ) : (
-                    <Eye className="size-[18px]" />
+                    <Eye className="size-[18px]" aria-hidden="true" />
                   )}
                 </button>
               </div>
@@ -148,7 +153,12 @@ function Login() {
             >
               {loading ? (
                 <>
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                  <svg
+                    className="animate-spin -ml-1 mr-2 h-4 w-4 text-white motion-reduce:animate-none"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                   </svg>

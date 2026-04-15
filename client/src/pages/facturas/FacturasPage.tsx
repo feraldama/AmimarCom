@@ -194,7 +194,7 @@ export default function FacturasPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Gestion de Facturas"
+        title="Gestión de Facturas"
         subtitle={`${facturasData.pagination.totalItems || 0} registros`}
         icon={FileText}
       />

@@ -198,7 +198,7 @@ export default function HorarioUsoPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Gestion de Horarios de Uso"
+        title="Gestión de Horarios de Uso"
         subtitle={`${horariosData.pagination.totalItems || 0} registros`}
         icon={Clock}
       />

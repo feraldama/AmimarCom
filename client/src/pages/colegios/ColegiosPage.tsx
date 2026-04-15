@@ -192,7 +192,7 @@ export default function ColegiosPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Administracion de Colegios"
+        title="Administración de Colegios"
         subtitle={`${colegiosData.pagination.totalItems || 0} registros`}
         icon={GraduationCap}
       />

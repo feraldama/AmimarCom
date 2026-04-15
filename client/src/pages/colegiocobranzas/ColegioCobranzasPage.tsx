@@ -208,7 +208,7 @@ export default function ColegioCobranzasPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Administracion de Cobranzas"
+        title="Administración de Cobranzas"
         subtitle={`${cobranzasData.pagination.totalItems || 0} registros`}
         icon={CreditCard}
       />

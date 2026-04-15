@@ -192,7 +192,7 @@ export default function DivisasPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Gestion de Divisas"
+        title="Gestión de Divisas"
         subtitle={`${divisasData.pagination.totalItems || 0} registros`}
         icon={DollarSign}
       />

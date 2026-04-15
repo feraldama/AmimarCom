@@ -195,7 +195,7 @@ export default function LocalesPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Gestion de Locales"
+        title="Gestión de Locales"
         subtitle={`${localesData.pagination.totalItems || 0} registros`}
         icon={MapPin}
       />

@@ -10,6 +10,7 @@ import {
   TrendingUp,
   Clock,
 } from "lucide-react";
+import { formatMiles } from "../../utils/utils";
 
 interface QuickActionProps {
   to: string;
@@ -41,7 +42,7 @@ function QuickAction({ to, icon, title, description, color }: QuickActionProps) 
 
 interface StatCardProps {
   icon: React.ReactNode;
-  value: string | number;
+  value: number;
   label: string;
   color: string;
   bgColor: string;
@@ -53,9 +54,11 @@ function StatCard({ icon, value, label, color, bgColor }: StatCardProps) {
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-gray-500">{label}</p>
-          <p className={`text-3xl font-bold mt-1 ${color}`}>{value}</p>
+          <p className={`text-3xl font-bold mt-1 tabular-nums ${color}`}>
+            {formatMiles(value)}
+          </p>
         </div>
-        <div className={`p-3 rounded-lg ${bgColor}`}>
+        <div className={`p-3 rounded-lg ${bgColor}`} aria-hidden="true">
           {icon}
         </div>
       </div>
@@ -94,7 +97,7 @@ function Dashboard() {
         />
         <StatCard
           icon={<UserGroupIcon className="size-6 text-warning-600" />}
-          value="9,454"
+          value={9454}
           label="Clientes"
           color="text-warning-600"
           bgColor="bg-warning-50"
@@ -123,7 +126,7 @@ function Dashboard() {
             to="/apertura-cierre-caja"
             icon={<Lock className="size-6 text-primary" />}
             title="Apertura / Cierre de Caja"
-            description="Gestionar cajas del dia"
+            description="Gestionar cajas del día"
             color="bg-primary-50/60"
           />
           <QuickAction
@@ -144,7 +147,7 @@ function Dashboard() {
             to="/users"
             icon={<UserGroupIcon className="size-6 text-gray-600" />}
             title="Usuarios"
-            description="Gestion de usuarios"
+            description="Gestión de usuarios"
             color="bg-gray-100"
           />
           <QuickAction

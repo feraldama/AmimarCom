@@ -190,7 +190,7 @@ export default function PerfilesPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Gestion de Perfiles"
+        title="Gestión de Perfiles"
         subtitle={`${perfilesData.pagination.totalItems || 0} registros`}
         icon={ShieldCheck}
       />

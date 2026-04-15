@@ -94,7 +94,7 @@ export default function Navbar({ setMobileOpen }: NavbarProps) {
                       ${focus ? "bg-gray-50" : ""}`}
                   >
                     <LogOut className="size-4" />
-                    Cerrar sesion
+                    Cerrar sesión
                   </button>
                 )}
               </MenuItem>

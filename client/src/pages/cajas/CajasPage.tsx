@@ -200,7 +200,7 @@ export default function CajasPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Gestion de Cajas"
+        title="Gestión de Cajas"
         subtitle={`${cajasData.pagination.totalItems || 0} registros`}
         icon={Inbox}
       />

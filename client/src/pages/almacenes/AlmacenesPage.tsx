@@ -197,7 +197,7 @@ export default function AlmacenesPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Gestion de Almacenes"
+        title="Gestión de Almacenes"
         subtitle={`${almacenesData.pagination.totalItems || 0} registros`}
         icon={Store}
       />

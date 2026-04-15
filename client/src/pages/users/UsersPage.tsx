@@ -232,7 +232,7 @@ export default function UsuariosPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Gestion de Usuarios"
+        title="Gestión de Usuarios"
         subtitle={`${usuariosData.pagination.totalItems || 0} registros`}
         icon={Users}
       />

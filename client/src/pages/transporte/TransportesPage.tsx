@@ -204,7 +204,7 @@ export default function TransportesPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Gestion de Transportes"
+        title="Gestión de Transportes"
         subtitle={`${transportesData.pagination.totalItems || 0} registros`}
         icon={Truck}
       />

@@ -95,7 +95,7 @@ const navigation: NavigationItem[] = [
     icon: <GraduationCap className="size-5" />,
     children: [
       { name: "Colegios", href: "/colegios" },
-      { name: "Nominas", href: "/nominas" },
+      { name: "Nóminas", href: "/nominas" },
       { name: "Cobranzas", href: "/colegiocobranzas" },
     ],
   },

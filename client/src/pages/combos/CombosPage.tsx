@@ -173,7 +173,7 @@ export default function CombosPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Gestion de Combos"
+        title="Gestión de Combos"
         subtitle={`${combosData.pagination.totalItems || 0} registros`}
         icon={LayoutGrid}
       />

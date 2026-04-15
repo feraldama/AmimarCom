@@ -141,7 +141,7 @@ export default function TiposGastoPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Gestion de Tipos de Gasto"
+        title="Gestión de Tipos de Gasto"
         subtitle={`${tiposGastoData.pagination.totalItems || 0} registros`}
         icon={List}
       />

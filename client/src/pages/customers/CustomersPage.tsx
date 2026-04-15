@@ -149,7 +149,7 @@ export default function CustomersPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Gestion de Clientes"
+        title="Gestión de Clientes"
         subtitle={`${clientesData.pagination.totalItems || 0} clientes registrados`}
         icon={Users}
       />

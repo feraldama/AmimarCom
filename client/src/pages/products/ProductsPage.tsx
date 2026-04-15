@@ -213,7 +213,7 @@ export default function ProductsPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Gestion de Productos"
+        title="Gestión de Productos"
         subtitle={`${productosData.pagination.totalItems || 0} registros`}
         icon={Archive}
       />

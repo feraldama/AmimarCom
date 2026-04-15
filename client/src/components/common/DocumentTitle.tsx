@@ -18,7 +18,7 @@ const routeTitles: Record<string, string> = {
   "/movements/western": "Western",
   "/pagotrans": "Pagos Transporte",
   "/colegios": "Colegios",
-  "/nominas": "Nominas",
+  "/nominas": "Nóminas",
   "/colegiocobranzas": "Cobranzas de Colegios",
   "/customers": "Clientes",
   "/apertura-cierre-caja": "Apertura/Cierre de Caja",

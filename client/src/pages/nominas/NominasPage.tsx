@@ -192,7 +192,7 @@ export default function NominasPage() {
   return (
     <div className="w-full">
       <PageHeader
-        title="Administracion de Nominas"
+        title="Administración de Nóminas"
         subtitle={`${nominasData.pagination.totalItems || 0} registros`}
         icon={FileStack}
       />
