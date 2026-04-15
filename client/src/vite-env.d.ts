@@ -2,8 +2,8 @@
 
 interface ImportMetaEnv {
   readonly VITE_API_URL: string;
-  // Agrega aquí otras variables si las tienes, por ejemplo:
-  // readonly VITE_OTRA_VARIABLE: string;
+  readonly VITE_APP_URL: string;
+  readonly VITE_APP_URL_GENEXUS: string;
 }
 
 interface ImportMeta {

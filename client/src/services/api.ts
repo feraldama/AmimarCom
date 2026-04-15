@@ -1,8 +1,14 @@
 import axios from "axios";
 import Swal from "sweetalert2";
 
+if (!import.meta.env.VITE_API_URL) {
+  throw new Error(
+    "VITE_API_URL no está definida. Configúrala en el archivo .env del cliente."
+  );
+}
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "http://181.123.61.216:3013/api",
+  baseURL: import.meta.env.VITE_API_URL,
 });
 
 // Interceptor para añadir token a las peticiones
