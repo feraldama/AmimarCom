@@ -1,0 +1,115 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  /* ══════════════════════════════════════
+     AMIMAR - Design Tokens
+     Paleta: Slate + Indigo + Emerald
+     ══════════════════════════════════════ */
+
+  /* ── shadcn/ui semantic tokens ── */
+  --color-background: #ffffff;
+  --color-foreground: #0f172a;
+  --color-card: #ffffff;
+  --color-card-foreground: #1e293b;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1e293b;
+
+  /* Primary: Indigo */
+  --color-primary: #4f46e5;
+  --color-primary-foreground: #ffffff;
+
+  /* Secondary */
+  --color-secondary: #f1f5f9;
+  --color-secondary-foreground: #334155;
+
+  /* Muted */
+  --color-muted: #f8fafc;
+  --color-muted-foreground: #64748b;
+
+  /* Accent */
+  --color-accent: #eef2ff;
+  --color-accent-foreground: #3730a3;
+
+  /* Destructive */
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #ffffff;
+
+  /* Borders & Input */
+  --color-border: #e2e8f0;
+  --color-input: #e2e8f0;
+  --color-ring: #6366f1;
+
+  /* ── Primary scale ── */
+  --color-primary-50: #eef2ff;
+  --color-primary-100: #e0e7ff;
+  --color-primary-200: #c7d2fe;
+  --color-primary-300: #a5b4fc;
+  --color-primary-400: #818cf8;
+  --color-primary-500: #6366f1;
+  --color-primary-600: #4f46e5;
+  --color-primary-700: #4338ca;
+  --color-primary-800: #3730a3;
+  --color-primary-900: #312e81;
+
+  /* ── Sidebar / Nav ── */
+  --color-sidebar: #0f172a;
+  --color-sidebar-hover: #1e293b;
+  --color-sidebar-active: #4f46e5;
+
+  /* ── Superficies ── */
+  --color-surface: #ffffff;
+  --color-surface-alt: #f8fafc;
+  --color-page-bg: #f1f5f9;
+
+  /* ── Estados semanticos ── */
+  --color-success-50: #ecfdf5;
+  --color-success-100: #d1fae5;
+  --color-success-500: #10b981;
+  --color-success-600: #059669;
+  --color-success-700: #047857;
+
+  --color-danger-50: #fef2f2;
+  --color-danger-100: #fee2e2;
+  --color-danger-500: #ef4444;
+  --color-danger-600: #dc2626;
+
+  --color-warning-50: #fffbeb;
+  --color-warning-100: #fef3c7;
+  --color-warning-500: #f59e0b;
+  --color-warning-600: #d97706;
+
+  --color-info-50: #eff6ff;
+  --color-info-500: #3b82f6;
+  --color-info-600: #2563eb;
+
+  /* ── Tipografia ── */
+  --font-sans: "Inter", "Baloo 2", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-baloo: "Inter", "Baloo 2", ui-sans-serif, system-ui, sans-serif;
+
+  /* ── Sombras ── */
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-card-hover: 0 4px 6px -1px rgb(0 0 0 / 0.06), 0 2px 4px -2px rgb(0 0 0 / 0.04);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.04);
+
+  /* ── Radios ── */
+  --radius: 0.5rem;
+
+  /* ── Animaciones ── */
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+
+  @keyframes accordion-down {
+    from { height: 0; }
+    to { height: var(--radix-accordion-content-height); }
+  }
+  @keyframes accordion-up {
+    from { height: var(--radix-accordion-content-height); }
+    to { height: 0; }
+  }
+}
+
+/* ── Google Font ── */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
