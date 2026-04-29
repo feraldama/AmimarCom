@@ -17,6 +17,7 @@ import { usePermiso } from "../../hooks/usePermiso";
 interface Pagination {
   totalItems: number;
   totalPages: number;
+  itemsPerPage?: number;
   [key: string]: unknown;
 }
 
@@ -205,7 +206,6 @@ export default function JSICobroPage() {
         onDelete={puedeEliminar ? handleDelete : undefined}
         onEdit={puedeEditar ? handleEdit : undefined}
         onCreate={puedeCrear ? handleCreate : undefined}
-        pagination={jsicobrosData.pagination}
         onSearch={handleSearch}
         searchTerm={searchTerm}
         onKeyPress={handleKeyPress}

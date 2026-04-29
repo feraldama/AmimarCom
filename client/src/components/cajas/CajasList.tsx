@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import SearchButton from "../common/Input/SearchButton";
 import ActionButton from "../common/Button/ActionButton";
 import DataTable from "../common/Table/DataTable";
+import Modal from "../common/Modal";
 import CajaGastosList from "./CajaGastosList";
 import { formatMiles, formatMilesWithDecimals } from "../../utils/utils";
 import { getAllCajaTipos } from "../../services/cajatipo.service";
@@ -22,16 +23,12 @@ interface CajaTipo {
   CajaTipoDescripcion: string;
 }
 
-interface Pagination {
-  totalItems: number;
-}
 
 interface CajasListProps {
   cajas: Caja[];
   onDelete?: (item: Caja) => void;
   onEdit?: (item: Caja) => void;
   onCreate?: () => void;
-  pagination?: Pagination;
   onSearch: (value: string) => void;
   searchTerm: string;
   onKeyPress?: React.KeyboardEventHandler<HTMLInputElement>;
@@ -52,7 +49,6 @@ export default function CajasList({
   onDelete,
   onEdit,
   onCreate,
-  pagination,
   onSearch,
   searchTerm,
   onKeyPress,
@@ -139,11 +135,7 @@ export default function CajasList({
     onSubmit(formData);
   };
 
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) {
-      onCloseModal();
-    }
-  };
+  const cajaFormId = "caja-form";
 
   const columns = [
     { key: "CajaId", label: "ID" },
@@ -228,171 +220,139 @@ export default function CajasList({
         sortOrder={sortOrder}
         onSort={onSort}
       />
-      {isModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          onClick={handleBackdropClick}
-        >
-          <div className="absolute inset-0 bg-black opacity-50" />
-          <div className="relative w-full max-w-2xl max-h-full z-10">
-            <form
-              onSubmit={handleSubmit}
-              className="relative bg-white rounded-lg shadow max-h-[90vh] overflow-y-auto"
-            >
-              <div className="flex items-start justify-between p-4 border-b rounded-t">
-                <h3 className="text-xl font-semibold text-gray-900">
-                  {currentCaja
-                    ? `Editar caja: ${currentCaja.CajaId}`
-                    : "Crear nueva caja"}
-                </h3>
-                <button
-                  type="button"
-                  className="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 ml-auto inline-flex justify-center items-center"
-                  onClick={onCloseModal}
-                >
-                  <svg
-                    className="size-3"
-                    aria-hidden="true"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 14 14"
-                  >
-                    <path
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"
-                    />
-                  </svg>
-                </button>
-              </div>
-              <div className="p-6 space-y-6">
-                <div className="grid grid-cols-6 gap-6">
-                  <div className="col-span-6 sm:col-span-3">
-                    <label
-                      htmlFor="CajaDescripcion"
-                      className="block mb-2 text-sm font-medium text-gray-900"
-                    >
-                      Descripción
-                    </label>
-                    <input
-                      type="text"
-                      name="CajaDescripcion"
-                      id="CajaDescripcion"
-                      value={formData.CajaDescripcion}
-                      onChange={(e) => {
-                        const value = e.target.value.toUpperCase();
-                        handleInputChange({
-                          target: {
-                            name: "CajaDescripcion",
-                            value: value,
-                          },
-                        } as React.ChangeEvent<HTMLInputElement>);
-                      }}
-                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
-                      required
-                    />
-                  </div>
-                  <div className="col-span-6 sm:col-span-3">
-                    <label
-                      htmlFor="CajaMonto"
-                      className="block mb-2 text-sm font-medium text-gray-900"
-                    >
-                      Monto
-                    </label>
-                    <input
-                      type="text"
-                      name="CajaMonto"
-                      id="CajaMonto"
-                      value={
-                        formData.CajaMonto !== undefined &&
-                        formData.CajaMonto !== null
-                          ? formData.CajaTipoId === 3
-                            ? formatMilesWithDecimals(formData.CajaMonto)
-                            : formatMiles(formData.CajaMonto)
-                          : "0"
-                      }
-                      onChange={(e) => {
-                        let raw = e.target.value
-                          .replace(/\s/g, "")
-                          .replace(/\./g, ""); // Eliminar puntos de miles
-                        // Manejar signo negativo
-                        const isNegative = raw.startsWith("-");
-                        if (isNegative) {
-                          raw = raw.substring(1);
-                        }
-                        // Reemplazar coma por punto para parseFloat (el backend usa punto como decimal)
-                        raw = raw.replace(/,/g, ".");
-                        const num = parseFloat(raw);
-                        if (!isNaN(num)) {
-                          setFormData((prev) => ({
-                            ...prev,
-                            CajaMonto: isNegative ? -num : num,
-                          }));
-                        } else if (raw === "" || raw === "-") {
-                          setFormData((prev) => ({ ...prev, CajaMonto: 0 }));
-                        }
-                      }}
-                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
-                      required
-                    />
-                  </div>
-                  <div className="col-span-6 sm:col-span-3">
-                    <label
-                      htmlFor="CajaTipoId"
-                      className="block mb-2 text-sm font-medium text-gray-900"
-                    >
-                      Tipo de Caja <span className="text-destructive">*</span>
-                    </label>
-                    <select
-                      name="CajaTipoId"
-                      id="CajaTipoId"
-                      value={formData.CajaTipoId || ""}
-                      onChange={handleInputChange}
-                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
-                      required
-                    >
-                      <option value="">Seleccione un tipo</option>
-                      {cajaTipos
-                        .sort((a, b) =>
-                          a.CajaTipoDescripcion.localeCompare(
-                            b.CajaTipoDescripcion
-                          )
-                        )
-                        .map((tipo) => (
-                          <option key={tipo.CajaTipoId} value={tipo.CajaTipoId}>
-                            {tipo.CajaTipoDescripcion}
-                          </option>
-                        ))}
-                    </select>
-                  </div>
-                </div>
-                {/* Detalle: gastos de la caja */}
-                {currentCaja && (
-                  <div className="mt-8">
-                    <h4 className="text-lg font-semibold mb-2">
-                      Gastos asignados a la caja
-                    </h4>
-                    <CajaGastosList cajaId={currentCaja.CajaId} />
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center p-6 space-x-2 border-t border-gray-200 rounded-b">
-                <ActionButton
-                  label={currentCaja ? "Actualizar" : "Crear"}
-                  type="submit"
-                />
-                <ActionButton
-                  label="Cancelar"
-                  variant="secondary"
-                  onClick={onCloseModal}
-                />
-              </div>
-            </form>
+      <Modal
+        isOpen={isModalOpen}
+        onClose={onCloseModal}
+        title={
+          currentCaja
+            ? `Editar caja: ${currentCaja.CajaId}`
+            : "Crear nueva caja"
+        }
+        size="2xl"
+        footer={
+          <>
+            <ActionButton
+              label={currentCaja ? "Actualizar" : "Crear"}
+              type="submit"
+              form={cajaFormId}
+            />
+            <ActionButton
+              label="Cancelar"
+              variant="secondary"
+              onClick={onCloseModal}
+            />
+          </>
+        }
+      >
+        <form id={cajaFormId} onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-6 gap-6">
+            <div className="col-span-6 sm:col-span-3">
+              <label
+                htmlFor="CajaDescripcion"
+                className="block mb-2 text-sm font-medium text-gray-900"
+              >
+                Descripción
+              </label>
+              <input
+                type="text"
+                name="CajaDescripcion"
+                id="CajaDescripcion"
+                value={formData.CajaDescripcion}
+                onChange={(e) => {
+                  const value = e.target.value.toUpperCase();
+                  handleInputChange({
+                    target: {
+                      name: "CajaDescripcion",
+                      value: value,
+                    },
+                  } as React.ChangeEvent<HTMLInputElement>);
+                }}
+                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
+                required
+              />
+            </div>
+            <div className="col-span-6 sm:col-span-3">
+              <label
+                htmlFor="CajaMonto"
+                className="block mb-2 text-sm font-medium text-gray-900"
+              >
+                Monto
+              </label>
+              <input
+                type="text"
+                name="CajaMonto"
+                id="CajaMonto"
+                value={
+                  formData.CajaMonto !== undefined &&
+                  formData.CajaMonto !== null
+                    ? formData.CajaTipoId === 3
+                      ? formatMilesWithDecimals(formData.CajaMonto)
+                      : formatMiles(formData.CajaMonto)
+                    : "0"
+                }
+                onChange={(e) => {
+                  let raw = e.target.value
+                    .replace(/\s/g, "")
+                    .replace(/\./g, "");
+                  const isNegative = raw.startsWith("-");
+                  if (isNegative) {
+                    raw = raw.substring(1);
+                  }
+                  raw = raw.replace(/,/g, ".");
+                  const num = parseFloat(raw);
+                  if (!isNaN(num)) {
+                    setFormData((prev) => ({
+                      ...prev,
+                      CajaMonto: isNegative ? -num : num,
+                    }));
+                  } else if (raw === "" || raw === "-") {
+                    setFormData((prev) => ({ ...prev, CajaMonto: 0 }));
+                  }
+                }}
+                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
+                required
+              />
+            </div>
+            <div className="col-span-6 sm:col-span-3">
+              <label
+                htmlFor="CajaTipoId"
+                className="block mb-2 text-sm font-medium text-gray-900"
+              >
+                Tipo de Caja <span className="text-destructive">*</span>
+              </label>
+              <select
+                name="CajaTipoId"
+                id="CajaTipoId"
+                value={formData.CajaTipoId || ""}
+                onChange={handleInputChange}
+                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
+                required
+              >
+                <option value="">Seleccione un tipo</option>
+                {cajaTipos
+                  .sort((a, b) =>
+                    a.CajaTipoDescripcion.localeCompare(
+                      b.CajaTipoDescripcion
+                    )
+                  )
+                  .map((tipo) => (
+                    <option key={tipo.CajaTipoId} value={tipo.CajaTipoId}>
+                      {tipo.CajaTipoDescripcion}
+                    </option>
+                  ))}
+              </select>
+            </div>
           </div>
-        </div>
-      )}
+        </form>
+        {currentCaja && (
+          <div className="mt-8">
+            <h4 className="text-lg font-semibold mb-2">
+              Gastos asignados a la caja
+            </h4>
+            <CajaGastosList cajaId={currentCaja.CajaId} />
+          </div>
+        )}
+      </Modal>
     </>
   );
 }

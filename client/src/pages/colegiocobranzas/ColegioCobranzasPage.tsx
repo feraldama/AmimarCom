@@ -35,6 +35,7 @@ interface ColegioCobranza {
 interface Pagination {
   totalItems: number;
   totalPages: number;
+  itemsPerPage?: number;
   [key: string]: unknown;
 }
 
@@ -227,9 +228,7 @@ export default function ColegioCobranzasPage() {
           puedeEliminar ? (cobranza) => handleDelete(cobranza) : undefined
         }
         onEdit={puedeEditar ? handleEdit : undefined}
-        onCreate={puedeCrear ? handleCreate : undefined}
-        pagination={cobranzasData.pagination}
-        onSearch={handleSearch}
+        onCreate={puedeCrear ? handleCreate : undefined}        onSearch={handleSearch}
         searchTerm={searchTerm}
         onKeyPress={handleKeyPress}
         onSearchSubmit={applySearch}

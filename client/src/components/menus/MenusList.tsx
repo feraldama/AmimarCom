@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import ActionButton from "../common/Button/ActionButton";
 import DataTable from "../common/Table/DataTable";
 import SearchButton from "../common/Input/SearchButton";
+import Modal from "../common/Modal";
 import Swal from "sweetalert2";
 
 interface Menu {
@@ -77,6 +78,8 @@ export default function MenusList({
     });
   };
 
+  const formId = "menu-form";
+
   const columns = [
     { key: "MenuId", label: "ID" },
     { key: "MenuNombre", label: "Nombre" },
@@ -111,50 +114,32 @@ export default function MenusList({
         onDelete={onDelete ? (item) => onDelete(item.MenuId) : undefined}
         emptyMessage="No se encontraron menús"
       />
-      {isModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) onCloseModal();
-          }}
-        >
-          <div className="absolute inset-0 bg-black opacity-50" />
-          <div className="relative w-full max-w-2xl max-h-full z-10">
-            <form
-              onSubmit={handleSubmit}
-              className="relative bg-white rounded-lg shadow max-h-[90vh] overflow-y-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="flex items-start justify-between p-4 border-b rounded-t">
-                <h3 className="text-xl font-semibold text-gray-900">
-                  {currentMenu
-                    ? `Editar menú: ${currentMenu.MenuNombre}`
-                    : "Crear nuevo menú"}
-                </h3>
-                <button
-                  type="button"
-                  className="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 ml-auto inline-flex justify-center items-center"
-                  onClick={onCloseModal}
-                >
-                  <svg
-                    className="size-3"
-                    aria-hidden="true"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 14 14"
-                  >
-                    <path
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"
-                    />
-                  </svg>
-                </button>
-              </div>
-              <div className="p-6 space-y-6">
-                <div className="grid grid-cols-6 gap-6">
+      <Modal
+        isOpen={isModalOpen}
+        onClose={onCloseModal}
+        title={
+          currentMenu
+            ? `Editar menú: ${currentMenu.MenuNombre}`
+            : "Crear nuevo menú"
+        }
+        size="2xl"
+        footer={
+          <>
+            <ActionButton
+              label={currentMenu ? "Actualizar" : "Crear"}
+              type="submit"
+              form={formId}
+            />
+            <ActionButton
+              label="Cancelar"
+              variant="secondary"
+              onClick={onCloseModal}
+            />
+          </>
+        }
+      >
+        <form id={formId} onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-6 gap-6">
                   <div className="col-span-6 sm:col-span-3">
                     <label className="block mb-2 text-sm font-medium text-gray-900">
                       ID
@@ -183,23 +168,9 @@ export default function MenusList({
                       style={{ textTransform: "uppercase" }}
                     />
                   </div>
-                </div>
-              </div>
-              <div className="flex items-center p-6 space-x-2 border-t border-gray-200 rounded-b">
-                <ActionButton
-                  label={currentMenu ? "Actualizar" : "Crear"}
-                  type="submit"
-                />
-                <ActionButton
-                  label="Cancelar"
-                  variant="secondary"
-                  onClick={onCloseModal}
-                />
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
     </>
   );
 }

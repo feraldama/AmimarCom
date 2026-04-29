@@ -23,6 +23,7 @@ interface CajaTipo {
 interface Pagination {
   totalItems: number;
   totalPages: number;
+  itemsPerPage?: number;
   [key: string]: unknown;
 }
 
@@ -219,9 +220,7 @@ export default function CajaTipoPage() {
             : undefined
         }
         onEdit={puedeEditar ? handleEdit : undefined}
-        onCreate={puedeCrear ? handleCreate : undefined}
-        pagination={cajaTiposData.pagination}
-        onSearch={handleSearch}
+        onCreate={puedeCrear ? handleCreate : undefined}        onSearch={handleSearch}
         searchTerm={searchTerm}
         onKeyPress={handleKeyPress}
         onSearchSubmit={applySearch}

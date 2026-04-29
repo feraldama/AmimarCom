@@ -49,7 +49,6 @@ const VentasList = ({
   searchTerm,
   onKeyPress,
   onSearchSubmit,
-  pagination,
 }: VentasListProps) => {
   const [ventasWithAlmacen, setVentasWithAlmacen] = useState<VentaWithId[]>([]);
 

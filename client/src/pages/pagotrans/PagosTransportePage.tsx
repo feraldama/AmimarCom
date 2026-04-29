@@ -17,6 +17,7 @@ import { usePermiso } from "../../hooks/usePermiso";
 interface Pagination {
   totalItems: number;
   totalPages: number;
+  itemsPerPage?: number;
   [key: string]: unknown;
 }
 
@@ -207,7 +208,6 @@ export default function PagosTransportePage() {
         onDelete={puedeEliminar ? handleDelete : undefined}
         onEdit={puedeEditar ? handleEdit : undefined}
         onCreate={puedeCrear ? handleCreate : undefined}
-        pagination={pagosTransData.pagination}
         onSearch={handleSearch}
         searchTerm={searchTerm}
         onKeyPress={handleKeyPress}

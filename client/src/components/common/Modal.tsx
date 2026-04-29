@@ -5,6 +5,7 @@ import {
   DialogTitle,
   DialogBody,
   DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
 
 type ModalSize = "sm" | "md" | "lg" | "xl" | "2xl" | "4xl" | "6xl" | "full";
@@ -16,6 +17,7 @@ interface ModalProps {
   children: React.ReactNode;
   size?: ModalSize;
   hideClose?: boolean;
+  footer?: React.ReactNode;
 }
 
 const sizeClasses: Record<ModalSize, string> = {
@@ -35,6 +37,7 @@ export default function Modal({
   title,
   children,
   size = "2xl",
+  footer,
 }: ModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
@@ -46,6 +49,7 @@ export default function Modal({
           </DialogHeader>
         )}
         <DialogBody>{children}</DialogBody>
+        {footer && <DialogFooter>{footer}</DialogFooter>}
       </DialogContent>
     </Dialog>
   );

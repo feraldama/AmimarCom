@@ -25,6 +25,7 @@ interface Divisa {
 interface Pagination {
   totalItems: number;
   totalPages: number;
+  itemsPerPage?: number;
   [key: string]: unknown;
 }
 
@@ -213,9 +214,7 @@ export default function DivisasPage() {
             : undefined
         }
         onEdit={puedeEditar ? handleEdit : undefined}
-        onCreate={puedeCrear ? handleCreate : undefined}
-        pagination={divisasData.pagination}
-        onSearch={handleSearch}
+        onCreate={puedeCrear ? handleCreate : undefined}        onSearch={handleSearch}
         searchTerm={searchTerm}
         onKeyPress={handleKeyPress}
         onSearchSubmit={applySearch}

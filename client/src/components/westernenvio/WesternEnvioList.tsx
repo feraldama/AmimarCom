@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import SearchButton from "../common/Input/SearchButton";
 import ActionButton from "../common/Button/ActionButton";
 import DataTable from "../common/Table/DataTable";
+import Modal from "../common/Modal";
 import { getCajas } from "../../services/cajas.service";
 import { getTiposGasto } from "../../services/tipogasto.service";
 import { getTiposGastoGrupo } from "../../services/tipogastogrupo.service";
@@ -48,16 +49,12 @@ interface TipoGastoGrupo {
   TipoGastoId: number;
 }
 
-interface Pagination {
-  totalItems: number;
-}
 
 interface WesternEnvioListProps {
   envios: WesternEnvio[];
   onDelete?: (item: WesternEnvio) => void | Promise<void>;
   onEdit?: (item: WesternEnvio) => void;
   onCreate?: () => void;
-  pagination?: Pagination;
   onSearch: (value: string) => void;
   isModalOpen?: boolean;
   onCloseModal: () => void;
@@ -77,7 +74,6 @@ export default function WesternEnvioList({
   onDelete,
   onEdit,
   onCreate,
-  pagination,
   onSearch,
   searchTerm,
   onKeyPress,
@@ -202,17 +198,13 @@ export default function WesternEnvioList({
       WesternEnvioCambio: Number(formData.WesternEnvioCambio) || 0,
       WesternEnvioMTCN: Number(formData.WesternEnvioMTCN) || 0,
       WesternEnvioCargoEnvio: Number(formData.WesternEnvioCargoEnvio) || 0,
-      ClienteId: formData.ClienteId && formData.ClienteId !== "" 
-        ? Number(formData.ClienteId) 
+      ClienteId: formData.ClienteId && formData.ClienteId !== ""
+        ? Number(formData.ClienteId)
         : undefined,
     });
   };
 
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) {
-      onCloseModal();
-    }
-  };
+  const formId = "westernenvio-form";
 
   // Formatear fecha
   const formatDate = (dateString: string) => {
@@ -331,47 +323,32 @@ export default function WesternEnvioList({
         onSort={onSort}
       />
 
-      {isModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          onClick={handleBackdropClick}
-        >
-          <div className="absolute inset-0 bg-black opacity-50" />
-          <div className="relative w-full max-w-4xl max-h-full z-10">
-            <form
-              onSubmit={handleSubmit}
-              className="relative bg-white rounded-lg shadow max-h-[90vh] overflow-y-auto"
-            >
-              <div className="flex items-start justify-between p-4 border-b rounded-t">
-                <h3 className="text-xl font-semibold text-gray-900">
-                  {currentEnvio
-                    ? `Editar envío: ${currentEnvio.WesternEnvioId}`
-                    : "Crear nuevo envío western"}
-                </h3>
-                <button
-                  type="button"
-                  className="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 ml-auto inline-flex justify-center items-center"
-                  onClick={onCloseModal}
-                >
-                  <svg
-                    className="size-3"
-                    aria-hidden="true"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 14 14"
-                  >
-                    <path
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"
-                    />
-                  </svg>
-                </button>
-              </div>
-              <div className="p-6 space-y-6">
-                <div className="grid grid-cols-6 gap-6">
+      <Modal
+        isOpen={!!isModalOpen}
+        onClose={onCloseModal}
+        title={
+          currentEnvio
+            ? `Editar envío: ${currentEnvio.WesternEnvioId}`
+            : "Crear nuevo envío western"
+        }
+        size="4xl"
+        footer={
+          <>
+            <ActionButton
+              label={currentEnvio ? "Actualizar" : "Crear"}
+              type="submit"
+              form={formId}
+            />
+            <ActionButton
+              label="Cancelar"
+              variant="secondary"
+              onClick={onCloseModal}
+            />
+          </>
+        }
+      >
+        <form id={formId} onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-6 gap-6">
                   <div className="col-span-6 sm:col-span-3">
                     <label
                       htmlFor="CajaId"
@@ -643,23 +620,9 @@ export default function WesternEnvioList({
                       className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
                     />
                   </div>
-                </div>
-              </div>
-              <div className="flex items-center p-6 space-x-2 border-t border-gray-200 rounded-b">
-                <ActionButton
-                  label={currentEnvio ? "Actualizar" : "Crear"}
-                  type="submit"
-                />
-                <ActionButton
-                  label="Cancelar"
-                  variant="secondary"
-                  onClick={onCloseModal}
-                />
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
     </>
   );
 }

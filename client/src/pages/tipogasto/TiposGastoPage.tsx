@@ -24,6 +24,7 @@ interface TipoGasto {
 interface PaginationData {
   totalItems: number;
   totalPages: number;
+  itemsPerPage?: number;
   [key: string]: unknown;
 }
 
@@ -157,9 +158,7 @@ export default function TiposGastoPage() {
           tiposGasto={tiposGastoData.tiposGasto.map((t) => ({ ...t, id: t.TipoGastoId }))}
           onDelete={puedeEliminar ? (tipo) => handleDelete(tipo.TipoGastoId as string) : undefined}
           onEdit={puedeEditar ? (tipo) => { setCurrentTipoGasto(tipo); setIsModalOpen(true); } : undefined}
-          onCreate={puedeCrear ? () => { setCurrentTipoGasto(null); setIsModalOpen(true); } : undefined}
-          pagination={tiposGastoData.pagination}
-          onSearch={(term) => setSearchTerm(term)}
+          onCreate={puedeCrear ? () => { setCurrentTipoGasto(null); setIsModalOpen(true); } : undefined}          onSearch={(term) => setSearchTerm(term)}
           searchTerm={searchTerm}
           onKeyPress={(e) => { if (e.key === "Enter") applySearch(); }}
           onSearchSubmit={applySearch}

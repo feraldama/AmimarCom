@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { Cliente } from "../../types/cliente.types";
 import ClienteForm from "./ClienteForm";
 import Modal from "./Modal";
+import ActionButton from "./Button/ActionButton";
 
 interface ClienteFormModalProps {
   isOpen: boolean;
@@ -67,6 +68,8 @@ export default function ClienteFormModal({
     onSubmit(formData);
   };
 
+  const formId = "cliente-form";
+
   return (
     <Modal
       isOpen={isOpen}
@@ -77,13 +80,26 @@ export default function ClienteFormModal({
           : "Crear nuevo cliente"
       }
       size="2xl"
+      footer={
+        <>
+          <ActionButton
+            label={currentCliente ? "Actualizar" : "Crear"}
+            type="submit"
+            form={formId}
+          />
+          <ActionButton
+            label="Cancelar"
+            variant="secondary"
+            onClick={onClose}
+          />
+        </>
+      }
     >
       <ClienteForm
         formData={formData}
         onInputChange={handleInputChange}
         onSubmit={handleSubmit}
-        onCancel={onClose}
-        isEditing={!!currentCliente}
+        formId={formId}
         showCodJSI={showCodJSI}
       />
     </Modal>

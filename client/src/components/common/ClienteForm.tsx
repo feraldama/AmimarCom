@@ -1,5 +1,4 @@
 import type { Cliente } from "../../types/cliente.types";
-import ActionButton from "./Button/ActionButton";
 
 interface ClienteFormProps {
   formData: Cliente;
@@ -7,8 +6,7 @@ interface ClienteFormProps {
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => void;
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void;
-  onCancel: () => void;
-  isEditing?: boolean;
+  formId?: string;
   showCodJSI?: boolean;
 }
 
@@ -21,11 +19,10 @@ export default function ClienteForm({
   formData,
   onInputChange,
   onSubmit,
-  onCancel,
-  isEditing = false,
+  formId,
 }: ClienteFormProps) {
   return (
-    <form onSubmit={onSubmit} className="space-y-5">
+    <form id={formId} onSubmit={onSubmit} className="space-y-5">
       <div className="grid grid-cols-6 gap-x-4 gap-y-4">
         <div className="col-span-6 sm:col-span-3">
           <label htmlFor="ClienteRUC" className={labelClass}>
@@ -121,17 +118,6 @@ export default function ClienteForm({
           />
           <p className="mt-1 text-xs text-gray-400">Asignado automaticamente</p>
         </div>
-      </div>
-      <div className="flex items-center gap-2 border-t border-gray-100 pt-4">
-        <ActionButton
-          label={isEditing ? "Actualizar" : "Crear"}
-          type="submit"
-        />
-        <ActionButton
-          label="Cancelar"
-          variant="secondary"
-          onClick={onCancel}
-        />
       </div>
     </form>
   );

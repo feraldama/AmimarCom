@@ -8,12 +8,6 @@ import SearchButton from "../common/Input/SearchButton";
 import ActionButton from "../common/Button/ActionButton";
 
 
-interface Pagination {
-  totalItems: number;
-  totalPages: number;
-  [key: string]: unknown;
-}
-
 interface ComprasListProps {
   compras: Compra[];
   onSort?: (key: string, order: "asc" | "desc") => void;
@@ -26,7 +20,6 @@ interface ComprasListProps {
   searchTerm: string;
   onKeyPress?: React.KeyboardEventHandler<HTMLInputElement>;
   onSearchSubmit: () => void;
-  pagination?: Pagination;
 }
 
 interface CompraWithId extends Compra {
@@ -53,7 +46,6 @@ const ComprasList = ({
   searchTerm,
   onKeyPress,
   onSearchSubmit,
-  pagination,
 }: ComprasListProps) => {
   const [comprasWithAlmacen, setComprasWithAlmacen] = useState<CompraWithId[]>(
     []

@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import ActionButton from "../common/Button/ActionButton";
 import DataTable from "../common/Table/DataTable";
+import Modal from "../common/Modal";
 import Swal from "sweetalert2";
 import {
   getColegioCursos,
@@ -254,76 +255,79 @@ export default function ColegioCursosList({
           Agregar
         </button>
       </div>
-      {isModalOpen && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black opacity-50"
-            onClick={() => {
-              setIsModalOpen(false);
-              setFormData({});
-            }}
-          />
-          <form
-            onSubmit={handleSubmit}
-            className="relative bg-white rounded-lg shadow p-6 z-10 max-w-md w-full"
-          >
-            <h3 className="text-lg font-semibold mb-4">
-              {formData.ColegioCursoId ? "Editar Curso" : "Nuevo Curso"}
-            </h3>
-            <div className="mb-4">
-              <label className="block mb-1">Nombre del Curso</label>
-              <input
-                type="text"
-                value={formData.ColegioCursoNombre || ""}
-                onChange={(e) =>
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => {
+          setIsModalOpen(false);
+          setFormData({});
+        }}
+        title={formData.ColegioCursoId ? "Editar Curso" : "Nuevo Curso"}
+        size="md"
+        footer={
+          <>
+            <ActionButton
+              label="Guardar"
+              type="submit"
+              form="colegiocurso-form"
+            />
+            <ActionButton
+              label="Cancelar"
+              variant="secondary"
+              onClick={() => {
+                setIsModalOpen(false);
+                setFormData({});
+              }}
+            />
+          </>
+        }
+      >
+        <form
+          id="colegiocurso-form"
+          onSubmit={handleSubmit}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block mb-1">Nombre del Curso</label>
+            <input
+              type="text"
+              value={formData.ColegioCursoNombre || ""}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  ColegioCursoNombre: e.target.value.toUpperCase(),
+                }))
+              }
+              className="w-full border rounded px-2 py-1"
+              required
+            />
+          </div>
+          <div>
+            <label className="block mb-1">Importe</label>
+            <input
+              type="text"
+              value={
+                formData.ColegioCursoImporte
+                  ? formatMiles(formData.ColegioCursoImporte)
+                  : ""
+              }
+              onChange={(e) => {
+                const raw = e.target.value
+                  .replace(/\./g, "")
+                  .replace(/\s/g, "");
+                const num = Number(raw);
+                if (!isNaN(num)) {
                   setFormData((prev) => ({
                     ...prev,
-                    ColegioCursoNombre: e.target.value.toUpperCase(),
-                  }))
+                    ColegioCursoImporte: num,
+                  }));
                 }
-                className="w-full border rounded px-2 py-1"
-                required
-              />
-            </div>
-            <div className="mb-4">
-              <label className="block mb-1">Importe</label>
-              <input
-                type="text"
-                value={
-                  formData.ColegioCursoImporte
-                    ? formatMiles(formData.ColegioCursoImporte)
-                    : ""
-                }
-                onChange={(e) => {
-                  const raw = e.target.value
-                    .replace(/\./g, "")
-                    .replace(/\s/g, "");
-                  const num = Number(raw);
-                  if (!isNaN(num)) {
-                    setFormData((prev) => ({
-                      ...prev,
-                      ColegioCursoImporte: num,
-                    }));
-                  }
-                }}
-                className="w-full border rounded px-2 py-1"
-                required
-              />
-            </div>
-            <div className="flex gap-2 justify-end">
-              <ActionButton label="Guardar" type="submit" />
-              <ActionButton
-                label="Cancelar"
-                variant="secondary"
-                onClick={() => {
-                  setIsModalOpen(false);
-                  setFormData({});
-                }}
-              />
-            </div>
-          </form>
-        </div>
-      )}
+              }}
+              className="w-full border rounded px-2 py-1"
+              required
+            />
+          </div>
+        </form>
+      </Modal>
       {loading && <div>Cargando cursos...</div>}
       {error && <div className="text-destructive">{error}</div>}
     </div>

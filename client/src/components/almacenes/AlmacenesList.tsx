@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import SearchButton from "../common/Input/SearchButton";
 import ActionButton from "../common/Button/ActionButton";
 import DataTable from "../common/Table/DataTable";
+import Modal from "../common/Modal";
 
 interface Almacen {
   id: string | number;
@@ -11,16 +12,12 @@ interface Almacen {
   [key: string]: unknown;
 }
 
-interface Pagination {
-  totalItems: number;
-}
 
 interface AlmacenesListProps {
   almacenes: Almacen[];
   onDelete?: (item: Almacen) => void;
   onEdit?: (item: Almacen) => void;
   onCreate?: () => void;
-  pagination?: Pagination;
   onSearch: (value: string) => void;
   searchTerm: string;
   onKeyPress?: React.KeyboardEventHandler<HTMLInputElement>;
@@ -39,7 +36,6 @@ export default function AlmacenesList({
   onDelete,
   onEdit,
   onCreate,
-  pagination,
   onSearch,
   searchTerm,
   onKeyPress,
@@ -89,11 +85,7 @@ export default function AlmacenesList({
     onSubmit(formData as Almacen);
   };
 
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) {
-      onCloseModal();
-    }
-  };
+  const formId = "almacen-form";
 
   const columns = [
     { key: "AlmacenId", label: "ID" },
@@ -132,89 +124,60 @@ export default function AlmacenesList({
         sortOrder={sortOrder}
         onSort={onSort}
       />
-      {isModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          onClick={handleBackdropClick}
-        >
-          <div className="absolute inset-0 bg-black opacity-50" />
-          <div className="relative w-full max-w-2xl max-h-full z-10">
-            <form
-              onSubmit={handleSubmit}
-              className="relative bg-white rounded-lg shadow max-h-[90vh] overflow-y-auto"
-            >
-              <div className="flex items-start justify-between p-4 border-b rounded-t">
-                <h3 className="text-xl font-semibold text-gray-900">
-                  {currentAlmacen
-                    ? `Editar almacén: ${currentAlmacen.AlmacenId}`
-                    : "Crear nuevo almacén"}
-                </h3>
-                <button
-                  type="button"
-                  className="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 ml-auto inline-flex justify-center items-center"
-                  onClick={onCloseModal}
-                >
-                  <svg
-                    className="size-3"
-                    aria-hidden="true"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 14 14"
-                  >
-                    <path
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"
-                    />
-                  </svg>
-                </button>
-              </div>
-              <div className="p-6 space-y-6">
-                <div className="grid grid-cols-6 gap-6">
-                  <div className="col-span-6 sm:col-span-6">
-                    <label
-                      htmlFor="AlmacenNombre"
-                      className="block mb-2 text-sm font-medium text-gray-900"
-                    >
-                      Nombre
-                    </label>
-                    <input
-                      type="text"
-                      name="AlmacenNombre"
-                      id="AlmacenNombre"
-                      value={formData.AlmacenNombre}
-                      onChange={(e) => {
-                        const value = e.target.value.toUpperCase();
-                        handleInputChange({
-                          target: {
-                            name: "AlmacenNombre",
-                            value: value,
-                          },
-                        } as React.ChangeEvent<HTMLInputElement>);
-                      }}
-                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
-                      required
-                    />
-                  </div>
-                </div>
-              </div>
-              <div className="flex items-center p-6 space-x-2 border-t border-gray-200 rounded-b">
-                <ActionButton
-                  label={currentAlmacen ? "Actualizar" : "Crear"}
-                  type="submit"
-                />
-                <ActionButton
-                  label="Cancelar"
-                  variant="secondary"
-                  onClick={onCloseModal}
-                />
-              </div>
-            </form>
+      <Modal
+        isOpen={isModalOpen}
+        onClose={onCloseModal}
+        title={
+          currentAlmacen
+            ? `Editar almacén: ${currentAlmacen.AlmacenId}`
+            : "Crear nuevo almacén"
+        }
+        size="2xl"
+        footer={
+          <>
+            <ActionButton
+              label={currentAlmacen ? "Actualizar" : "Crear"}
+              type="submit"
+              form={formId}
+            />
+            <ActionButton
+              label="Cancelar"
+              variant="secondary"
+              onClick={onCloseModal}
+            />
+          </>
+        }
+      >
+        <form id={formId} onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-6 gap-6">
+            <div className="col-span-6 sm:col-span-6">
+              <label
+                htmlFor="AlmacenNombre"
+                className="block mb-2 text-sm font-medium text-gray-900"
+              >
+                Nombre
+              </label>
+              <input
+                type="text"
+                name="AlmacenNombre"
+                id="AlmacenNombre"
+                value={formData.AlmacenNombre}
+                onChange={(e) => {
+                  const value = e.target.value.toUpperCase();
+                  handleInputChange({
+                    target: {
+                      name: "AlmacenNombre",
+                      value: value,
+                    },
+                  } as React.ChangeEvent<HTMLInputElement>);
+                }}
+                className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
+                required
+              />
+            </div>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
     </>
   );
 }

@@ -19,6 +19,7 @@ import { useAuth } from "../../contexts/useAuth";
 interface Pagination {
   totalItems: number;
   totalPages: number;
+  itemsPerPage?: number;
   [key: string]: unknown;
 }
 
@@ -208,7 +209,6 @@ export default function WesternEnvioPage() {
         onDelete={puedeEliminar ? handleDelete : undefined}
         onEdit={puedeEditar ? handleEdit : undefined}
         onCreate={puedeCrear ? handleCreate : undefined}
-        pagination={enviosData.pagination}
         onSearch={handleSearch}
         searchTerm={searchTerm}
         onKeyPress={handleKeyPress}

@@ -37,6 +37,7 @@ interface Producto {
 interface Pagination {
   totalItems: number;
   totalPages: number;
+  itemsPerPage?: number;
   [key: string]: unknown;
 }
 
@@ -243,9 +244,7 @@ export default function ProductsPage() {
                 })
             : undefined
         }
-        onCreate={puedeCrear ? handleCreate : undefined}
-        pagination={productosData.pagination}
-        onSearch={handleSearch}
+        onCreate={puedeCrear ? handleCreate : undefined}        onSearch={handleSearch}
         searchTerm={searchTerm}
         onKeyPress={handleKeyPress}
         onSearchSubmit={applySearch}

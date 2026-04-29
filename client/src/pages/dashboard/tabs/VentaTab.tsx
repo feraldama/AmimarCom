@@ -957,6 +957,7 @@ export default function VentasTab() {
                 setClienteSeleccionado(cliente as Cliente);
                 setShowClienteModal(false);
               }}
+              onCreateCliente={handleCreateCliente}
               currentUserId={user?.id}
             />
           </div>

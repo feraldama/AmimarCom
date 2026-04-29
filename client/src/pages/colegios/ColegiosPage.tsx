@@ -28,6 +28,7 @@ interface Colegio {
 interface Pagination {
   totalItems: number;
   totalPages: number;
+  itemsPerPage?: number;
   [key: string]: unknown;
 }
 
@@ -208,9 +209,7 @@ export default function ColegiosPage() {
           puedeEliminar ? (colegio) => handleDelete(colegio) : undefined
         }
         onEdit={puedeEditar ? handleEdit : undefined}
-        onCreate={puedeCrear ? handleCreate : undefined}
-        pagination={colegiosData.pagination}
-        onSearch={handleSearch}
+        onCreate={puedeCrear ? handleCreate : undefined}        onSearch={handleSearch}
         searchTerm={searchTerm}
         onKeyPress={handleKeyPress}
         onSearchSubmit={applySearch}

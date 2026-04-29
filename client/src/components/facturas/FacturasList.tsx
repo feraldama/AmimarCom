@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import SearchButton from "../common/Input/SearchButton";
 import ActionButton from "../common/Button/ActionButton";
 import DataTable from "../common/Table/DataTable";
+import Modal from "../common/Modal";
 
 interface Factura {
   id: string | number;
@@ -13,16 +14,12 @@ interface Factura {
   [key: string]: unknown;
 }
 
-interface Pagination {
-  totalItems: number;
-}
 
 interface FacturasListProps {
   facturas: Factura[];
   onDelete?: (item: Factura) => void;
   onEdit?: (item: Factura) => void;
   onCreate?: () => void;
-  pagination?: Pagination;
   onSearch: (value: string) => void;
   searchTerm: string;
   onKeyPress?: React.KeyboardEventHandler<HTMLInputElement>;
@@ -41,7 +38,6 @@ export default function FacturasList({
   onDelete,
   onEdit,
   onCreate,
-  pagination,
   onSearch,
   searchTerm,
   onKeyPress,
@@ -97,11 +93,7 @@ export default function FacturasList({
     onSubmit(formData as Factura);
   };
 
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) {
-      onCloseModal();
-    }
-  };
+  const formId = "factura-form";
 
   const columns = [
     { key: "FacturaId", label: "ID" },
@@ -142,47 +134,32 @@ export default function FacturasList({
         sortOrder={sortOrder}
         onSort={onSort}
       />
-      {isModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          onClick={handleBackdropClick}
-        >
-          <div className="absolute inset-0 bg-black opacity-50" />
-          <div className="relative w-full max-w-2xl max-h-full z-10">
-            <form
-              onSubmit={handleSubmit}
-              className="relative bg-white rounded-lg shadow max-h-[90vh] overflow-y-auto"
-            >
-              <div className="flex items-start justify-between p-4 border-b rounded-t">
-                <h3 className="text-xl font-semibold text-gray-900">
-                  {currentFactura
-                    ? `Editar factura: ${currentFactura.FacturaId}`
-                    : "Crear nueva factura"}
-                </h3>
-                <button
-                  type="button"
-                  className="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 ml-auto inline-flex justify-center items-center"
-                  onClick={onCloseModal}
-                >
-                  <svg
-                    className="size-3"
-                    aria-hidden="true"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 14 14"
-                  >
-                    <path
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"
-                    />
-                  </svg>
-                </button>
-              </div>
-              <div className="p-6 space-y-6">
-                <div className="grid grid-cols-6 gap-6">
+      <Modal
+        isOpen={isModalOpen}
+        onClose={onCloseModal}
+        title={
+          currentFactura
+            ? `Editar factura: ${currentFactura.FacturaId}`
+            : "Crear nueva factura"
+        }
+        size="2xl"
+        footer={
+          <>
+            <ActionButton
+              label={currentFactura ? "Actualizar" : "Crear"}
+              type="submit"
+              form={formId}
+            />
+            <ActionButton
+              label="Cancelar"
+              variant="secondary"
+              onClick={onCloseModal}
+            />
+          </>
+        }
+      >
+        <form id={formId} onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-6 gap-6">
                   <div className="col-span-6 sm:col-span-3">
                     <label
                       htmlFor="FacturaTimbrado"
@@ -244,28 +221,14 @@ export default function FacturasList({
                     />
                   </div>
                 </div>
-                <div className="text-sm text-gray-500">
-                  <p>• El timbrado debe tener máximo 8 dígitos numéricos</p>
-                  <p>• Los números desde/hasta deben tener máximo 7 dígitos</p>
-                  <p>• El número "Desde" debe ser menor que "Hasta"</p>
-                  <p>• No se permiten superposiciones de rangos</p>
-                </div>
-              </div>
-              <div className="flex items-center p-6 space-x-2 border-t border-gray-200 rounded-b">
-                <ActionButton
-                  label={currentFactura ? "Actualizar" : "Crear"}
-                  type="submit"
-                />
-                <ActionButton
-                  label="Cancelar"
-                  variant="secondary"
-                  onClick={onCloseModal}
-                />
-              </div>
-            </form>
+          <div className="text-sm text-gray-500">
+            <p>• El timbrado debe tener máximo 8 dígitos numéricos</p>
+            <p>• Los números desde/hasta deben tener máximo 7 dígitos</p>
+            <p>• El número "Desde" debe ser menor que "Hasta"</p>
+            <p>• No se permiten superposiciones de rangos</p>
           </div>
-        </div>
-      )}
+        </form>
+      </Modal>
     </>
   );
 }

@@ -6,16 +6,12 @@ import ClienteFormModal from "../common/ClienteFormModal";
 import { useAuth } from "../../contexts/useAuth";
 import type { Cliente, ClienteWithId } from "../../types/cliente.types";
 
-interface Pagination {
-  totalItems: number;
-}
 
 interface CustomersListProps {
   clientes: ClienteWithId[];
   onDelete?: (item: ClienteWithId) => void;
   onEdit?: (item: ClienteWithId) => void;
   onCreate?: () => void;
-  pagination?: Pagination;
   onSearch: (value: string) => void;
   searchTerm: string;
   onKeyPress?: React.KeyboardEventHandler<HTMLInputElement>;
@@ -34,7 +30,6 @@ export default function CustomersList({
   onDelete,
   onEdit,
   onCreate,
-  pagination,
   onSearch,
   searchTerm,
   onKeyPress,

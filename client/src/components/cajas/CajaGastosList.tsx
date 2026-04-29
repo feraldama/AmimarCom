@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import ActionButton from "../common/Button/ActionButton";
 import DataTable from "../common/Table/DataTable";
+import Modal from "../common/Modal";
 import Swal from "sweetalert2";
 import {
   getCajaGastosByCajaId,
@@ -248,73 +249,77 @@ export default function CajaGastosList({ cajaId }: CajaGastosListProps) {
           Agregar
         </button>
       </div>
-      {isModalOpen && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center">
-          <div
-            className="absolute inset-0 bg-black opacity-50"
-            onClick={() => setIsModalOpen(false)}
-          />
-          <form
-            onSubmit={handleSubmit}
-            className="relative bg-white rounded-lg shadow p-6 z-10 max-w-md w-full"
-          >
-            <h3 className="text-lg font-semibold mb-4">
-              {formData.CajaGastoId ? "Editar Gasto" : "Nuevo Gasto"}
-            </h3>
-            <div className="mb-4">
-              <label className="block mb-1">Tipo de Gasto</label>
-              <select
-                name="TipoGastoId"
-                value={formData.TipoGastoId || ""}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    TipoGastoId: e.target.value,
-                  }))
-                }
-                className="w-full border rounded px-2 py-1"
-                required
-              >
-                <option value="">Seleccione...</option>
-                {tiposGasto.map((tg) => (
-                  <option key={tg.TipoGastoId} value={tg.TipoGastoId}>
-                    {tg.TipoGastoDescripcion}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="mb-4">
-              <label className="block mb-1">Grupo de Gasto</label>
-              <select
-                name="TipoGastoGrupoId"
-                value={formData.TipoGastoGrupoId || ""}
-                onChange={(e) =>
-                  setFormData((prev) => ({
-                    ...prev,
-                    TipoGastoGrupoId: e.target.value,
-                  }))
-                }
-                className="w-full border rounded px-2 py-1"
-                required
-              >
-                <option value="">Seleccione...</option>
-                {gruposGasto.map((gg) => (
-                  <option key={gg.TipoGastoGrupoId} value={gg.TipoGastoGrupoId}>
-                    {gg.TipoGastoGrupoDescripcion}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex gap-2 justify-end">
-              <ActionButton label="Guardar" type="submit" />
-              <ActionButton
-                label="Cancelar"
-                onClick={() => setIsModalOpen(false)}
-              />
-            </div>
-          </form>
-        </div>
-      )}
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title={formData.CajaGastoId ? "Editar Gasto" : "Nuevo Gasto"}
+        size="md"
+        footer={
+          <>
+            <ActionButton
+              label="Guardar"
+              type="submit"
+              form="cajagasto-form"
+            />
+            <ActionButton
+              label="Cancelar"
+              variant="secondary"
+              onClick={() => setIsModalOpen(false)}
+            />
+          </>
+        }
+      >
+        <form
+          id="cajagasto-form"
+          onSubmit={handleSubmit}
+          className="space-y-4"
+        >
+          <div>
+            <label className="block mb-1">Tipo de Gasto</label>
+            <select
+              name="TipoGastoId"
+              value={formData.TipoGastoId || ""}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  TipoGastoId: e.target.value,
+                }))
+              }
+              className="w-full border rounded px-2 py-1"
+              required
+            >
+              <option value="">Seleccione...</option>
+              {tiposGasto.map((tg) => (
+                <option key={tg.TipoGastoId} value={tg.TipoGastoId}>
+                  {tg.TipoGastoDescripcion}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block mb-1">Grupo de Gasto</label>
+            <select
+              name="TipoGastoGrupoId"
+              value={formData.TipoGastoGrupoId || ""}
+              onChange={(e) =>
+                setFormData((prev) => ({
+                  ...prev,
+                  TipoGastoGrupoId: e.target.value,
+                }))
+              }
+              className="w-full border rounded px-2 py-1"
+              required
+            >
+              <option value="">Seleccione...</option>
+              {gruposGasto.map((gg) => (
+                <option key={gg.TipoGastoGrupoId} value={gg.TipoGastoGrupoId}>
+                  {gg.TipoGastoGrupoDescripcion}
+                </option>
+              ))}
+            </select>
+          </div>
+        </form>
+      </Modal>
       {loading && <div>Cargando gastos...</div>}
       {error && <div className="text-destructive">{error}</div>}
     </div>

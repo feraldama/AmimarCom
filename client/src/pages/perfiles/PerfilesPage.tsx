@@ -27,6 +27,7 @@ interface Perfil {
 interface PaginationType {
   totalItems: number;
   totalPages: number;
+  itemsPerPage?: number;
   [key: string]: unknown;
 }
 
@@ -175,7 +176,10 @@ export default function PerfilesPage() {
 
   const handleSearch = (value: string) => setSearchInput(value);
 
-  const handleSearchSubmit = () => setSearchTerm(searchInput);
+  const handleSearchSubmit = () => {
+    setSearchTerm(searchInput);
+    setCurrentPage(1);
+  };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter") handleSearchSubmit();

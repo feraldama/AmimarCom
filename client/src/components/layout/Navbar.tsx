@@ -4,7 +4,7 @@ import {
   MenuItem,
   MenuItems,
 } from "@headlessui/react";
-import { Menu as MenuIcon, UserCircle, LogOut } from "lucide-react";
+import { Menu as MenuIcon, LogOut } from "lucide-react";
 import { useAuth } from "../../contexts/useAuth";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import type { Dispatch, SetStateAction } from "react";

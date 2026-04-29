@@ -238,11 +238,9 @@ const Usuario = {
   },
 
   delete: async (id) => {
-    // Normalizar el ID (eliminar espacios)
-    const idNormalizado = String(id).trim();
     const result = await db.query(
-      'DELETE FROM "usuario" WHERE TRIM("UsuarioId") = $1',
-      [idNormalizado]
+      'DELETE FROM "usuario" WHERE "UsuarioId" = $1',
+      [id]
     );
     return result.rowCount > 0;
   },
@@ -277,12 +275,9 @@ const Usuario = {
       },
     ];
 
-    // Normalizar el ID (eliminar espacios)
-    const idNormalizado = String(id).trim();
-
     const queries = tablas.map((tabla) => {
-      const query = `SELECT COUNT(*) as cantidad FROM "${tabla.nombre}" WHERE TRIM("${tabla.campo}") = $1`;
-      return db.query(query, [idNormalizado]).then((result) => ({
+      const query = `SELECT COUNT(*) as cantidad FROM "${tabla.nombre}" WHERE "${tabla.campo}" = $1`;
+      return db.query(query, [id]).then((result) => ({
         tabla: tabla.nombre,
         descripcion: tabla.descripcion,
         cantidad: result.rows[0]?.cantidad || 0,

@@ -10,11 +10,11 @@ const UsuarioPerfil = {
   },
 
   create: async (data) => {
-    const result = await db.query(
-      'INSERT INTO "usuarioperfil" ("UsuarioId", "PerfilId") VALUES ($1, $2) RETURNING "UsuarioPerfilId"',
+    await db.query(
+      'INSERT INTO "usuarioperfil" ("UsuarioId", "PerfilId") VALUES ($1, $2)',
       [data.UsuarioId, data.PerfilId]
     );
-    return { UsuarioPerfilId: result.rows[0].UsuarioPerfilId, ...data };
+    return { UsuarioId: data.UsuarioId, PerfilId: data.PerfilId };
   },
 
   delete: async (usuarioId, perfilId) => {

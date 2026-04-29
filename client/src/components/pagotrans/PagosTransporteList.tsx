@@ -2,12 +2,8 @@ import { Plus } from "lucide-react";
 import SearchButton from "../common/Input/SearchButton";
 import ActionButton from "../common/Button/ActionButton";
 import DataTable from "../common/Table/DataTable";
+import Modal from "../common/Modal";
 import type { PagoTrans } from "../../services/pagotrans.service";
-
-interface Pagination {
-  totalItems: number;
-  // Puedes agregar más campos si tu paginación los tiene
-}
 
 interface PagoTransWithId extends PagoTrans {
   id: string | number;
@@ -19,7 +15,6 @@ interface PagosTransporteListProps {
   onDelete?: (item: PagoTrans) => void;
   onEdit?: (item: PagoTrans) => void;
   onCreate?: () => void;
-  pagination?: Pagination;
   onSearch: (value: string) => void;
   isModalOpen?: boolean;
   onCloseModal: () => void;
@@ -39,7 +34,6 @@ export default function PagosTransporteList({
   onDelete,
   onEdit,
   onCreate,
-  pagination,
   onSearch,
   searchTerm,
   onKeyPress,
@@ -162,20 +156,14 @@ export default function PagosTransporteList({
     },
   ];
 
-  const handleBackdropClick = (
-    event: React.MouseEvent<HTMLDivElement, MouseEvent>
-  ) => {
-    if (event.target === event.currentTarget) {
-      onCloseModal();
-    }
-  };
-
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (currentPagoTrans) {
       onSubmit(currentPagoTrans);
     }
   };
+
+  const formId = "pagotrans-form";
 
   return (
     <>
@@ -208,30 +196,32 @@ export default function PagosTransporteList({
         onSort={onSort}
       />
 
-      {isModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          onClick={handleBackdropClick}
-        >
-          <div className="absolute inset-0 bg-black opacity-50" />
-          <div className="relative w-full max-w-2xl max-h-full z-10">
-            <form
-              onSubmit={handleSubmit}
-              className="relative bg-white rounded-lg shadow max-h-[90vh] overflow-y-auto"
-            >
-              <ActionButton
-                label={currentPagoTrans ? "Actualizar" : "Crear"}
-                type="submit"
-              />
-              <ActionButton
-                label="Cancelar"
-                variant="secondary"
-                onClick={onCloseModal}
-              />
-            </form>
-          </div>
-        </div>
-      )}
+      <Modal
+        isOpen={!!isModalOpen}
+        onClose={onCloseModal}
+        title={
+          currentPagoTrans
+            ? "Editar pago de transporte"
+            : "Crear nuevo pago de transporte"
+        }
+        size="2xl"
+        footer={
+          <>
+            <ActionButton
+              label={currentPagoTrans ? "Actualizar" : "Crear"}
+              type="submit"
+              form={formId}
+            />
+            <ActionButton
+              label="Cancelar"
+              variant="secondary"
+              onClick={onCloseModal}
+            />
+          </>
+        }
+      >
+        <form id={formId} onSubmit={handleSubmit} className="space-y-6" />
+      </Modal>
     </>
   );
 }

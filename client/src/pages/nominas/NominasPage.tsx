@@ -28,6 +28,7 @@ interface Nomina {
 interface Pagination {
   totalItems: number;
   totalPages: number;
+  itemsPerPage?: number;
   [key: string]: unknown;
 }
 
@@ -206,9 +207,7 @@ export default function NominasPage() {
         nominas={nominasData.nominas.map((n) => ({ ...n, id: n.NominaId }))}
         onDelete={puedeEliminar ? (nomina) => handleDelete(nomina) : undefined}
         onEdit={puedeEditar ? handleEdit : undefined}
-        onCreate={puedeCrear ? handleCreate : undefined}
-        pagination={nominasData.pagination}
-        onSearch={handleSearch}
+        onCreate={puedeCrear ? handleCreate : undefined}        onSearch={handleSearch}
         searchTerm={searchTerm}
         onKeyPress={handleKeyPress}
         onSearchSubmit={applySearch}

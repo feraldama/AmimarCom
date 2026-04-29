@@ -12,20 +12,7 @@ import Pagination from "../../components/common/Pagination";
 import PageHeader from "../../components/common/PageHeader";
 import Swal from "sweetalert2";
 import { usePermiso } from "../../hooks/usePermiso";
-
-interface Cliente {
-  id: string | number;
-  ClienteId: string;
-  ClienteRUC: string;
-  ClienteNombre: string;
-  ClienteApellido: string;
-  ClienteDireccion: string;
-  ClienteTelefono: string;
-  ClienteTipo: string;
-  UsuarioId: string;
-  ClienteCodJSI: string;
-  [key: string]: unknown;
-}
+import type { Cliente } from "../../types/cliente.types";
 
 interface PaginationData {
   totalItems: number;
@@ -85,7 +72,7 @@ export default function CustomersPage() {
     setCurrentPage(1);
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: string | number) => {
     const result = await Swal.fire({
       title: "Estas seguro?",
       text: "No podras revertir esto!",
@@ -166,7 +153,6 @@ export default function CustomersPage() {
           onDelete={puedeEliminar ? (cliente) => handleDelete(cliente.ClienteId) : undefined}
           onEdit={puedeEditar ? (cliente) => { setCurrentCliente(cliente); setIsModalOpen(true); } : undefined}
           onCreate={puedeCrear ? () => { setCurrentCliente(null); setIsModalOpen(true); } : undefined}
-          pagination={clientesData.pagination}
           onSearch={(term) => setSearchTerm(term)}
           searchTerm={searchTerm}
           onKeyPress={(e) => { if (e.key === "Enter") applySearch(); }}

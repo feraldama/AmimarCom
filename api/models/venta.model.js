@@ -366,7 +366,7 @@ const Venta = {
     const query = `
       SELECT
         c."ClienteId",
-        CONCAT(TRIM(c."ClienteNombre"), ' ', TRIM(c."ClienteApellido")) AS "Cliente",
+        CONCAT(c."ClienteNombre", ' ', c."ClienteApellido") AS "Cliente",
         SUM(v."Total") AS "TotalVentas",
         SUM(COALESCE(v."VentaEntrega",0)) AS "TotalEntregado",
         SUM(v."Total" - COALESCE(v."VentaEntrega",0)) AS "Saldo"
@@ -503,8 +503,8 @@ const Venta = {
     const result = await db.query(
       `SELECT
         u."UsuarioId",
-        TRIM(u."UsuarioNombre") AS "UsuarioNombre",
-        TRIM(u."UsuarioApellido") AS "UsuarioApellido",
+        u."UsuarioNombre",
+        u."UsuarioApellido",
         COUNT(*) AS "CantVentas",
         COALESCE(SUM(v."Total"), 0) AS "MontoTotal",
         COALESCE(SUM(CASE WHEN v."VentaTipo" = 'CO' THEN v."Total" ELSE 0 END), 0) AS "Contado",

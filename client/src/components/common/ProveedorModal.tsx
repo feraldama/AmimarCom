@@ -2,6 +2,7 @@ import { Plus } from "lucide-react";
 import React, { useState } from "react";
 
 import Modal from "./Modal";
+import ActionButton from "./Button/ActionButton";
 
 // Definir la interfaz Proveedor localmente
 interface Proveedor {
@@ -69,8 +70,27 @@ const ProveedorModal: React.FC<ProveedorModalProps> = ({
     }
   };
 
+  const formId = "proveedor-create-form";
+
   return (
-    <Modal isOpen={show} onClose={onClose} title="Seleccionar Proveedor" size="4xl">
+    <Modal
+      isOpen={show}
+      onClose={onClose}
+      title="Seleccionar Proveedor"
+      size="4xl"
+      footer={
+        showCreateForm ? (
+          <>
+            <ActionButton label="Crear" type="submit" form={formId} />
+            <ActionButton
+              label="Cancelar"
+              variant="secondary"
+              onClick={() => setShowCreateForm(false)}
+            />
+          </>
+        ) : undefined
+      }
+    >
       <div className="flex justify-end mb-4">
         <button
           onClick={() => setShowCreateForm(true)}
@@ -116,7 +136,11 @@ const ProveedorModal: React.FC<ProveedorModalProps> = ({
           </div>
         </>
       ) : (
-        <form onSubmit={handleCreateProveedor} className="space-y-4">
+        <form
+          id={formId}
+          onSubmit={handleCreateProveedor}
+          className="space-y-4"
+        >
           <h3 className="text-lg font-semibold">Crear Nuevo Proveedor</h3>
 
           <div>
@@ -186,22 +210,6 @@ const ProveedorModal: React.FC<ProveedorModalProps> = ({
               }
               className="w-full p-2 border border-gray-300 rounded-lg"
             />
-          </div>
-
-          <div className="flex gap-2">
-            <button
-              type="submit"
-              className="bg-success-500 text-white px-4 py-2 rounded-lg hover:bg-success-600"
-            >
-              Crear
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowCreateForm(false)}
-              className="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600"
-            >
-              Cancelar
-            </button>
           </div>
         </form>
       )}

@@ -2,6 +2,7 @@ import { Plus } from "lucide-react";
 import SearchButton from "../common/Input/SearchButton";
 import ActionButton from "../common/Button/ActionButton";
 import DataTable from "../common/Table/DataTable";
+import Modal from "../common/Modal";
 
 export interface Movimiento {
   id: string | number;
@@ -22,17 +23,11 @@ export interface Movimiento {
   [key: string]: unknown;
 }
 
-interface Pagination {
-  totalItems: number;
-  // Puedes agregar más campos si tu paginación los tiene
-}
-
 interface MovementsListProps {
   movimientos: Movimiento[];
   onDelete?: (item: Movimiento) => void | Promise<void>;
   onEdit?: (item: Movimiento) => void;
   onCreate?: () => void;
-  pagination?: Pagination;
   onSearch: (value: string) => void;
   isModalOpen?: boolean;
   onCloseModal: () => void;
@@ -52,7 +47,6 @@ export default function MovementsList({
   onDelete,
   onEdit,
   onCreate,
-  pagination,
   onSearch,
   searchTerm,
   onKeyPress,
@@ -144,20 +138,14 @@ export default function MovementsList({
     },
   ];
 
-  const handleBackdropClick = (
-    event: React.MouseEvent<HTMLDivElement, MouseEvent>
-  ) => {
-    if (event.target === event.currentTarget) {
-      onCloseModal();
-    }
-  };
-
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (currentMovement) {
       onSubmit(currentMovement);
     }
   };
+
+  const formId = "movimiento-form";
 
   return (
     <>
@@ -191,30 +179,30 @@ export default function MovementsList({
         onSort={onSort}
       />
 
-      {isModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          onClick={handleBackdropClick}
-        >
-          <div className="absolute inset-0 bg-black opacity-50" />
-          <div className="relative w-full max-w-2xl max-h-full z-10">
-            <form
-              onSubmit={handleSubmit}
-              className="relative bg-white rounded-lg shadow max-h-[90vh] overflow-y-auto"
-            >
-              <ActionButton
-                label={currentMovement ? "Actualizar" : "Crear"}
-                type="submit"
-              />
-              <ActionButton
-                label="Cancelar"
-                variant="secondary"
-                onClick={onCloseModal}
-              />
-            </form>
-          </div>
-        </div>
-      )}
+      <Modal
+        isOpen={!!isModalOpen}
+        onClose={onCloseModal}
+        title={
+          currentMovement ? "Editar movimiento" : "Crear nuevo movimiento"
+        }
+        size="2xl"
+        footer={
+          <>
+            <ActionButton
+              label={currentMovement ? "Actualizar" : "Crear"}
+              type="submit"
+              form={formId}
+            />
+            <ActionButton
+              label="Cancelar"
+              variant="secondary"
+              onClick={onCloseModal}
+            />
+          </>
+        }
+      >
+        <form id={formId} onSubmit={handleSubmit} className="space-y-6" />
+      </Modal>
     </>
   );
 }

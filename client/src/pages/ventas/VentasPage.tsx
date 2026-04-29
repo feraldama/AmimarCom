@@ -23,6 +23,7 @@ import { js2xml } from "xml-js";
 interface Pagination {
   totalItems: number;
   totalPages: number;
+  itemsPerPage?: number;
   [key: string]: unknown;
 }
 
@@ -408,7 +409,6 @@ export default function VentasPage() {
         searchTerm={searchTerm}
         onKeyPress={handleKeyPress}
         onSearchSubmit={applySearch}
-        pagination={ventasData.pagination}
         sortKey={sortKey}
         sortOrder={sortOrder}
         onSort={(key, order) => {

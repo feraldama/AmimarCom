@@ -13,6 +13,7 @@ interface ActionButtonProps {
   type?: "button" | "submit" | "reset";
   variant?: ButtonVariant;
   size?: ButtonSize;
+  form?: string;
 }
 
 const variantMap: Record<ButtonVariant, "default" | "outline" | "destructive" | "secondary" | "ghost" | "success"> = {
@@ -38,6 +39,7 @@ export default function ActionButton({
   type = "button",
   variant = "primary",
   size = "md",
+  form,
 }: ActionButtonProps) {
   return (
     <Button
@@ -47,6 +49,7 @@ export default function ActionButton({
       size={sizeMap[size]}
       disabled={disabled}
       className={className}
+      form={form}
     >
       {Icon && <Icon className="size-4" />}
       {label}

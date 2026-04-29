@@ -304,9 +304,22 @@ const NominaModal: React.FC<NominaModalProps> = ({
         onClose={() => setShowCreateModal(false)}
         title="Crear nueva nómina"
         size="2xl"
-        zIndex={60}
+        footer={
+          <>
+            <ActionButton label="Crear" type="submit" form="nomina-create-form" />
+            <ActionButton
+              label="Cancelar"
+              variant="secondary"
+              onClick={() => setShowCreateModal(false)}
+            />
+          </>
+        }
       >
-        <form onSubmit={handleCreateSubmit} onClick={(e) => e.stopPropagation()}>
+        <form
+          id="nomina-create-form"
+          onSubmit={handleCreateSubmit}
+          onClick={(e) => e.stopPropagation()}
+        >
           <div className="space-y-6">
             <div className="grid grid-cols-6 gap-6">
               <div className="col-span-6 sm:col-span-3">
@@ -398,18 +411,6 @@ const NominaModal: React.FC<NominaModalProps> = ({
                 </select>
               </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2 pt-4 border-t border-gray-100 mt-4">
-            <ActionButton label="Crear" type="submit" />
-            <ActionButton
-              label="Cancelar"
-              variant="secondary"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setShowCreateModal(false);
-              }}
-            />
           </div>
         </form>
       </Modal>

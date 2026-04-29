@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import SearchButton from "../common/Input/SearchButton";
 import ActionButton from "../common/Button/ActionButton";
 import DataTable from "../common/Table/DataTable";
+import Modal from "../common/Modal";
 import { getTiposGasto } from "../../services/tipogasto.service";
 import { getTiposGastoGrupo } from "../../services/tipogastogrupo.service";
 import {
@@ -45,16 +46,12 @@ interface ColegioCurso {
   ColegioCursoImporte: number;
 }
 
-interface Pagination {
-  totalItems: number;
-}
 
 interface ColegiosListProps {
   colegios: Colegio[];
   onDelete?: (item: Colegio) => void;
   onEdit?: (item: Colegio) => void;
   onCreate?: () => void;
-  pagination?: Pagination;
   onSearch: (value: string) => void;
   searchTerm: string;
   onKeyPress?: React.KeyboardEventHandler<HTMLInputElement>;
@@ -74,7 +71,6 @@ export default function ColegiosList({
   onDelete,
   onEdit,
   onCreate,
-  pagination,
   onSearch,
   searchTerm,
   onKeyPress,
@@ -197,11 +193,7 @@ export default function ColegiosList({
     onSubmit(dataToSubmit as Colegio);
   };
 
-  const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.target === e.currentTarget) {
-      onCloseModal();
-    }
-  };
+  const formId = "colegio-form";
 
   const columns = [
     { key: "ColegioId", label: "ID" },
@@ -253,47 +245,32 @@ export default function ColegiosList({
         sortOrder={sortOrder}
         onSort={onSort}
       />
-      {isModalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center"
-          onClick={handleBackdropClick}
-        >
-          <div className="absolute inset-0 bg-black opacity-50" />
-          <div className="relative w-full max-w-2xl max-h-[90vh] z-10 flex flex-col">
-            <form
-              onSubmit={handleSubmit}
-              className="relative bg-white rounded-lg shadow flex flex-col max-h-[90vh]"
-            >
-              <div className="flex items-start justify-between p-4 border-b rounded-t flex-shrink-0">
-                <h3 className="text-xl font-semibold text-gray-900">
-                  {currentColegio
-                    ? `Editar colegio: ${currentColegio.ColegioNombre}`
-                    : "Crear nuevo colegio"}
-                </h3>
-                <button
-                  type="button"
-                  className="text-gray-400 bg-transparent hover:bg-gray-200 hover:text-gray-900 rounded-lg text-sm w-8 h-8 ml-auto inline-flex justify-center items-center"
-                  onClick={onCloseModal}
-                >
-                  <svg
-                    className="size-3"
-                    aria-hidden="true"
-                    xmlns="http://www.w3.org/2000/svg"
-                    fill="none"
-                    viewBox="0 0 14 14"
-                  >
-                    <path
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"
-                    />
-                  </svg>
-                </button>
-              </div>
-              <div className="p-6 space-y-6 overflow-y-auto flex-1">
-                <div className="grid grid-cols-6 gap-6">
+      <Modal
+        isOpen={isModalOpen}
+        onClose={onCloseModal}
+        title={
+          currentColegio
+            ? `Editar colegio: ${currentColegio.ColegioNombre}`
+            : "Crear nuevo colegio"
+        }
+        size="2xl"
+        footer={
+          <>
+            <ActionButton
+              label={currentColegio ? "Actualizar" : "Crear"}
+              type="submit"
+              form={formId}
+            />
+            <ActionButton
+              label="Cancelar"
+              variant="secondary"
+              onClick={onCloseModal}
+            />
+          </>
+        }
+      >
+        <form id={formId} onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-6 gap-6">
                   <div className="col-span-6 sm:col-span-3">
                     <label
                       htmlFor="ColegioNombre"
@@ -706,24 +683,10 @@ export default function ColegiosList({
                         )}
                       </>
                     )}
-                  </div>
-                )}
-              </div>
-              <div className="flex items-center p-6 space-x-2 border-t border-gray-200 rounded-b flex-shrink-0">
-                <ActionButton
-                  label={currentColegio ? "Actualizar" : "Crear"}
-                  type="submit"
-                />
-                <ActionButton
-                  label="Cancelar"
-                  variant="secondary"
-                  onClick={onCloseModal}
-                />
-              </div>
-            </form>
           </div>
-        </div>
-      )}
+        )}
+        </form>
+      </Modal>
     </>
   );
 }

@@ -8,6 +8,7 @@ import { getCajaById } from "../../services/cajas.service";
 import Swal from "sweetalert2";
 import { formatMiles } from "../../utils/utils";
 import Modal from "./Modal";
+import ActionButton from "./Button/ActionButton";
 
 interface TipoGasto {
   TipoGastoId: number;
@@ -105,10 +106,27 @@ const PagoModal: React.FC<PagoModalProps> = ({
     }
   };
 
+  const formId = "pago-form";
+
   return (
-    <Modal isOpen={show} onClose={handleClose} title="Nuevo Pago" size="md">
-      <form onSubmit={handleSubmit}>
-        <div className="grid grid-cols-1 gap-4 mb-4">
+    <Modal
+      isOpen={show}
+      onClose={handleClose}
+      title="Nuevo Pago"
+      size="md"
+      footer={
+        <>
+          <ActionButton label="Guardar" type="submit" form={formId} />
+          <ActionButton
+            label="Cancelar"
+            variant="secondary"
+            onClick={handleClose}
+          />
+        </>
+      }
+    >
+      <form id={formId} onSubmit={handleSubmit}>
+        <div className="grid grid-cols-1 gap-4">
           <div>
             <label className="block text-xs font-semibold text-gray-500 mb-1">
               Fecha
@@ -190,21 +208,6 @@ const PagoModal: React.FC<PagoModalProps> = ({
               pattern="[0-9.]*"
             />
           </div>
-        </div>
-        <div className="flex justify-end gap-2 mt-4">
-          <button
-            type="submit"
-            className="bg-primary text-white px-4 py-2 rounded hover:bg-primary-700 transition"
-          >
-            Guardar
-          </button>
-          <button
-            type="button"
-            className="bg-gray-200 text-gray-700 px-4 py-2 rounded hover:bg-gray-300 transition"
-            onClick={handleClose}
-          >
-            Cancelar
-          </button>
         </div>
       </form>
     </Modal>

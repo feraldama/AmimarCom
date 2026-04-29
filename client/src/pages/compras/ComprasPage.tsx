@@ -23,6 +23,7 @@ import { js2xml } from "xml-js";
 interface Pagination {
   totalItems: number;
   totalPages: number;
+  itemsPerPage?: number;
   [key: string]: unknown;
 }
 
@@ -397,7 +398,6 @@ export default function ComprasPage() {
         searchTerm={searchTerm}
         onKeyPress={handleKeyPress}
         onSearchSubmit={applySearch}
-        pagination={comprasData.pagination}
         sortKey={sortKey}
         sortOrder={sortOrder}
         onSort={(key, order) => {
