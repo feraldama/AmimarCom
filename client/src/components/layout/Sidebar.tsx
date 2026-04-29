@@ -17,6 +17,7 @@ import {
   BarChart3,
   Truck,
   GraduationCap,
+  CalendarCheck,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import type { Dispatch, SetStateAction } from "react";
@@ -41,6 +42,11 @@ const navigation: NavigationItem[] = [
     name: "Apertura/Cierre de Caja",
     href: "/apertura-cierre-caja",
     icon: <Lock className="size-5" />,
+  },
+  {
+    name: "Historial Cierres Diarios",
+    href: "/cierre-diario-historial",
+    icon: <CalendarCheck className="size-5" />,
   },
   {
     name: "Cobranzas",

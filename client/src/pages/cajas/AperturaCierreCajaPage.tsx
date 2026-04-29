@@ -1,4 +1,4 @@
-import { LockOpen } from "lucide-react";
+import { LockOpen, CalendarCheck } from "lucide-react";
 import { useEffect, useState, useMemo } from "react";
 import { getCajas } from "../../services/cajas.service";
 import ActionButton from "../../components/common/Button/ActionButton";
@@ -6,6 +6,7 @@ import {
   aperturaCierreCaja,
   getEstadoAperturaPorUsuario,
 } from "../../services/registrodiariocaja.service";
+import { createCierreDiarioSnapshot } from "../../services/cierrediario.service";
 import { useAuth } from "../../contexts/useAuth";
 import Swal from "sweetalert2";
 import { formatMiles } from "../../utils/utils";
@@ -13,6 +14,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import jsPDF from "jspdf";
 import { getRegistrosDiariosCaja } from "../../services/registros.service";
 import PageHeader from "../../components/common/PageHeader";
+import { usePermiso } from "../../hooks/usePermiso";
 
 
 const BILLETES = [100000, 50000, 20000, 10000, 5000, 2000];
@@ -81,6 +83,8 @@ export default function AperturaCierreCajaPage() {
   const [descargarPDF, setDescargarPDF] = useState(false);
   const [operacionCompletada, setOperacionCompletada] = useState(false);
   const [todasLasCajas, setTodasLasCajas] = useState<Caja[]>([]);
+  const [snapshotting, setSnapshotting] = useState(false);
+  const puedeCrearCierreDiario = usePermiso("CIERREDIARIO", "crear");
 
   const subtotalesBilletes = useMemo(
     () =>
@@ -591,6 +595,44 @@ export default function AperturaCierreCajaPage() {
     });
   };
 
+  const handleCierreDiarioSnapshot = async () => {
+    const confirm = await Swal.fire({
+      title: "¿Registrar Cierre Diario?",
+      html:
+        "Esto va a guardar el saldo actual de <b>todas las cajas</b> en el historial " +
+        `del día de hoy (${new Date().toLocaleDateString()}).<br><br>` +
+        "Solo se puede hacer una vez por día.",
+      icon: "question",
+      showCancelButton: true,
+      confirmButtonColor: "#2563eb",
+      cancelButtonColor: "#6b7280",
+      confirmButtonText: "Sí, registrar",
+      cancelButtonText: "Cancelar",
+    });
+    if (!confirm.isConfirmed) return;
+
+    setSnapshotting(true);
+    try {
+      const result = await createCierreDiarioSnapshot();
+      Swal.fire({
+        icon: "success",
+        title: "Cierre diario registrado",
+        text: result.message,
+        confirmButtonColor: "#2563eb",
+      });
+    } catch (err) {
+      const e = err as { message?: string };
+      Swal.fire({
+        icon: "warning",
+        title: "No se pudo registrar",
+        text: e?.message || "Error desconocido",
+        confirmButtonColor: "#2563eb",
+      });
+    } finally {
+      setSnapshotting(false);
+    }
+  };
+
   const parseMontoInput = (raw: string): number => {
     const normalized = raw
       .replace(/\./g, "")
@@ -622,6 +664,27 @@ export default function AperturaCierreCajaPage() {
               {cajas.find((c) => c.CajaId == cajaId)?.CajaDescripcion || ""}
             </span>
           )}
+        </div>
+      )}
+
+      {puedeCrearCierreDiario && (
+        <div className="mb-4 p-4 bg-primary-50 border border-primary-100 rounded-lg flex items-start gap-3">
+          <CalendarCheck className="size-5 text-primary mt-0.5 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-gray-900">
+              Cierre Diario Gerencial
+            </p>
+            <p className="text-xs text-gray-600 mt-0.5">
+              Registra un snapshot del saldo actual de todas las cajas en el
+              historial. Hacer una vez al final del día.
+            </p>
+          </div>
+          <ActionButton
+            label={snapshotting ? "Registrando..." : "Registrar Cierre Diario"}
+            onClick={handleCierreDiarioSnapshot}
+            disabled={snapshotting}
+            icon={CalendarCheck}
+          />
         </div>
       )}
 

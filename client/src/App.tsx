@@ -19,6 +19,7 @@ import CajaTipoPage from "./pages/cajatipo/CajaTipoPage";
 import TiposGastoPage from "./pages/tipogasto/TiposGastoPage";
 import CustomersPage from "./pages/customers/CustomersPage";
 import AperturaCierreCajaPage from "./pages/cajas/AperturaCierreCajaPage";
+import CierreDiarioHistorialPage from "./pages/cajas/CierreDiarioHistorialPage";
 import Sales from "./pages/dashboard/Sales";
 import LocalesPage from "./pages/locales/LocalesPage";
 import AlmacenesPage from "./pages/almacenes/AlmacenesPage";
@@ -110,6 +111,10 @@ function App() {
             <Route
               path="/apertura-cierre-caja"
               element={<AperturaCierreCajaPage />}
+            />
+            <Route
+              path="/cierre-diario-historial"
+              element={<CierreDiarioHistorialPage />}
             />
             <Route path="/locales" element={<LocalesPage />} />
             <Route path="/almacenes" element={<AlmacenesPage />} />
