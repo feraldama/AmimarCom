@@ -8,6 +8,7 @@ import { getTiposGastoGrupo } from "../../../services/tipogastogrupo.service";
 import { updateCajaMonto } from "../../../services/cajas.service";
 import { getCajaGastosByTipoGastoAndGrupo } from "../../../services/cajagasto.service";
 import { createWesternEnvio } from "../../../services/westernenvio.service";
+import { getDivisas } from "../../../services/divisa.service";
 import {
   getAllClientesSinPaginacion,
   createCliente,
@@ -112,6 +113,22 @@ export default function WesternPagosTab() {
         setTiposGasto(tiposGastoData);
         const tiposGastoGrupoData = await getTiposGastoGrupo();
         setTiposGastoGrupo(tiposGastoGrupoData);
+
+        // Obtener cotización del DOLAR para los grupos "USD CON COTIZACION".
+        // PAGOS  -> venta, ENVIOS -> compra (input se ve como readonly).
+        try {
+          const divisasResp = await getDivisas(1, 1000);
+          const dolar = (divisasResp.data || []).find(
+            (d: { DivisaNombre?: string }) =>
+              (d.DivisaNombre || "").trim().toUpperCase() === "DOLAR"
+          );
+          if (dolar) {
+            setCambioDolarPagos(Number(dolar.DivisaVentaMonto) || 0);
+            setCambioDolarEnvios(Number(dolar.DivisaCompraMonto) || 0);
+          }
+        } catch (err) {
+          console.error("Error al cargar cotización del dólar:", err);
+        }
 
         // Obtener clientes
         const clientesData = await getAllClientesSinPaginacion();
@@ -567,7 +584,7 @@ export default function WesternPagosTab() {
     tipoGastoGrupoId: number | "",
     setTipoGastoGrupoId: (value: number | "") => void,
     cambioDolar: number | "",
-    setCambioDolar: (value: number | "") => void,
+    _setCambioDolar: (value: number | "") => void,
     detalle: string,
     setDetalle: (value: string) => void,
     mtcn: number | "",
@@ -591,17 +608,20 @@ export default function WesternPagosTab() {
     mtcnRequired: boolean = false,
     mostrarCargoEnvio: boolean = true,
     valorEspecial: number | "" = "",
-    setValorEspecial: (value: number | "") => void = () => {}
+    setValorEspecial: (value: number | "") => void = () => {},
+    autoFocusGrupo: boolean = false
   ) => {
     // Determinar si debe mostrar el input especial
-    const mostrarInputEspecial = 
+    const mostrarInputEspecial =
       (tipoGastoId === 1 && tipoGastoGrupoId === 19) ||
       (tipoGastoId === 2 && tipoGastoGrupoId === 24);
-    
-    // Determinar si debe ocultar el cambio dolar (grupo 13)
-    const ocultarCambioDolar = 
-      (tipoGastoId === 1 && tipoGastoGrupoId === 13) ||
-      (tipoGastoId === 2 && tipoGastoGrupoId === 13);
+
+    // Mostrar Cambio Dolar solo en grupos "USD CON COTIZACION":
+    // PAGOS  (TipoGastoId=1) -> grupo 8
+    // ENVIOS (TipoGastoId=2) -> grupo 15
+    const mostrarCambioDolar =
+      (tipoGastoId === 1 && tipoGastoGrupoId === 8) ||
+      (tipoGastoId === 2 && tipoGastoGrupoId === 15);
 
     return (
     <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-6">
@@ -651,6 +671,7 @@ export default function WesternPagosTab() {
               value={tipoGastoGrupoId}
               onChange={(e) => setTipoGastoGrupoId(Number(e.target.value))}
               required
+              autoFocus={autoFocusGrupo}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
             >
               <option value="">Seleccione...</option>
@@ -662,8 +683,8 @@ export default function WesternPagosTab() {
             </select>
           </div>
 
-          {/* Cambio Dolar */}
-          {!ocultarCambioDolar && (
+          {/* Cambio Dolar — readonly, viene de divisas (DOLAR) */}
+          {mostrarCambioDolar && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Cambio Dolar
@@ -671,16 +692,13 @@ export default function WesternPagosTab() {
               <input
                 type="text"
                 value={cambioDolar !== "" ? formatMiles(cambioDolar) : ""}
-                onChange={(e) => {
-                  const raw = e.target.value
-                    .replace(/\./g, "")
-                    .replace(/,/g, ".");
-                  const num = Number(raw);
-                  setCambioDolar(isNaN(num) ? "" : num);
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                inputMode="numeric"
+                readOnly
+                tabIndex={-1}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-100 text-gray-700 cursor-not-allowed"
               />
+              <p className="mt-1 text-xs text-gray-500">
+                Cotización del dólar tomada de Divisas.
+              </p>
             </div>
           )}
 
@@ -943,7 +961,8 @@ export default function WesternPagosTab() {
             true, // MTCN requerido para Pagos
             false, // No mostrar Cargo Envío para Pagos
             valorEspecialPagos,
-            setValorEspecialPagos
+            setValorEspecialPagos,
+            true // autoFocus en Grupo al montar el tab
           )}
         </div>
 
