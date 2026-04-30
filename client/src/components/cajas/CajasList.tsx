@@ -5,7 +5,7 @@ import ActionButton from "../common/Button/ActionButton";
 import DataTable from "../common/Table/DataTable";
 import Modal from "../common/Modal";
 import CajaGastosList from "./CajaGastosList";
-import { formatMiles, formatMilesWithDecimals } from "../../utils/utils";
+import { formatMiles, formatMilesSmart } from "../../utils/utils";
 import { getAllCajaTipos } from "../../services/cajatipo.service";
 
 interface Caja {
@@ -71,7 +71,21 @@ export default function CajasList({
     CajaGastoCantidad: 0,
     CajaTipoId: null as number | null,
   });
+  // Buffer local del input Monto: deja escribir/borrar sin re-formatear en
+  // cada tecla. Se sincroniza con formData.CajaMonto en onChange y se
+  // re-formatea bonito en onBlur.
+  const [montoInput, setMontoInput] = useState("0");
   const [cajaTipos, setCajaTipos] = useState<CajaTipo[]>([]);
+
+  const parseMontoInput = (text: string): number => {
+    let raw = text.replace(/\s/g, "").replace(/\./g, "");
+    const isNegative = raw.startsWith("-");
+    if (isNegative) raw = raw.substring(1);
+    raw = raw.replace(/,/g, ".");
+    const num = parseFloat(raw);
+    if (isNaN(num)) return 0;
+    return isNegative ? -num : num;
+  };
 
   useEffect(() => {
     const loadCajaTipos = async () => {
@@ -97,6 +111,7 @@ export default function CajasList({
         CajaGastoCantidad: currentCaja.CajaGastoCantidad,
         CajaTipoId: currentCaja.CajaTipoId || null,
       });
+      setMontoInput(formatMilesSmart(monto));
     } else {
       setFormData({
         id: "",
@@ -106,6 +121,7 @@ export default function CajasList({
         CajaGastoCantidad: 0,
         CajaTipoId: null,
       });
+      setMontoInput("0");
     }
   }, [currentCaja]);
 
@@ -144,11 +160,11 @@ export default function CajasList({
       key: "CajaMonto",
       label: "Monto",
       render: (caja: Caja) => {
-        // Si CajaTipoId === 3, mostrar con decimales
-        // Si es distinto a 3, mostrar con formato de miles
+        // DIVISAS (TipoId=3): mostrar decimales sólo si los hay (formatMilesSmart).
+        // Otros tipos: enteros con separador de miles.
         const monto = Number(caja.CajaMonto);
         if (caja.CajaTipoId === 3) {
-          return `Gs. ${formatMilesWithDecimals(monto)}`;
+          return `Gs. ${formatMilesSmart(monto)}`;
         }
         return `Gs. ${formatMiles(monto)}`;
       },
@@ -280,34 +296,20 @@ export default function CajasList({
               </label>
               <input
                 type="text"
+                inputMode="decimal"
                 name="CajaMonto"
                 id="CajaMonto"
-                value={
-                  formData.CajaMonto !== undefined &&
-                  formData.CajaMonto !== null
-                    ? formData.CajaTipoId === 3
-                      ? formatMilesWithDecimals(formData.CajaMonto)
-                      : formatMiles(formData.CajaMonto)
-                    : "0"
-                }
+                value={montoInput}
                 onChange={(e) => {
-                  let raw = e.target.value
-                    .replace(/\s/g, "")
-                    .replace(/\./g, "");
-                  const isNegative = raw.startsWith("-");
-                  if (isNegative) {
-                    raw = raw.substring(1);
-                  }
-                  raw = raw.replace(/,/g, ".");
-                  const num = parseFloat(raw);
-                  if (!isNaN(num)) {
-                    setFormData((prev) => ({
-                      ...prev,
-                      CajaMonto: isNegative ? -num : num,
-                    }));
-                  } else if (raw === "" || raw === "-") {
-                    setFormData((prev) => ({ ...prev, CajaMonto: 0 }));
-                  }
+                  const text = e.target.value;
+                  setMontoInput(text);
+                  setFormData((prev) => ({
+                    ...prev,
+                    CajaMonto: parseMontoInput(text),
+                  }));
+                }}
+                onBlur={() => {
+                  setMontoInput(formatMilesSmart(formData.CajaMonto));
                 }}
                 className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
                 required

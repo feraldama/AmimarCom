@@ -203,10 +203,17 @@ const RegistroDiarioCaja = {
         "RegistroDiarioCajaFecha",
         "TipoGastoId",
         "TipoGastoGrupoId",
+        "RegistroDiarioCajaCambio",
         "RegistroDiarioCajaDetalle",
+        "RegistroDiarioCajaMTCN",
+        "RegistroDiarioCajaCargoEnvio",
         "RegistroDiarioCajaMonto",
+        "RegistroDiarioCajaPendiente1",
+        "RegistroDiarioCajaPendiente2",
+        "RegistroDiarioCajaPendiente3",
+        "RegistroDiarioCajaPendiente4",
         "UsuarioId"
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
       RETURNING "RegistroDiarioCajaId"
     `;
 
@@ -215,8 +222,15 @@ const RegistroDiarioCaja = {
       normalizeRegistroFecha(registroData.RegistroDiarioCajaFecha),
       registroData.TipoGastoId,
       registroData.TipoGastoGrupoId,
+      Number(registroData.RegistroDiarioCajaCambio) || 0,
       registroData.RegistroDiarioCajaDetalle,
+      Number(registroData.RegistroDiarioCajaMTCN) || 0,
+      Number(registroData.RegistroDiarioCajaCargoEnvio) || 0,
       registroData.RegistroDiarioCajaMonto,
+      Number(registroData.RegistroDiarioCajaPendiente1) || 0,
+      Number(registroData.RegistroDiarioCajaPendiente2) || 0,
+      Number(registroData.RegistroDiarioCajaPendiente3) || 0,
+      Number(registroData.RegistroDiarioCajaPendiente4) || 0,
       registroData.UsuarioId,
     ];
 
@@ -281,6 +295,28 @@ const RegistroDiarioCaja = {
       [id]
     );
     return result.rowCount > 0;
+  },
+
+  // Find the registrodiariocaja entry that was created together with a
+  // westernenvio. Used to cascade-delete it when the envío is removed.
+  // Matches by (CajaId, TipoGastoId, TipoGastoGrupoId, Fecha, Monto) — these
+  // five fields are guaranteed identical between both tables at creation
+  // (Fecha is the same string passed to both inserts) and are stored even
+  // in legacy rows where MTCN/Cambio were never persisted. Returns the most
+  // recent match.
+  findByWesternEnvio: async (cajaId, tipoGastoId, tipoGastoGrupoId, fecha, monto) => {
+    const result = await db.query(
+      `SELECT * FROM "registrodiariocaja"
+       WHERE "CajaId" = $1
+         AND "TipoGastoId" = $2
+         AND "TipoGastoGrupoId" = $3
+         AND "RegistroDiarioCajaFecha" = $4
+         AND "RegistroDiarioCajaMonto" = $5
+       ORDER BY "RegistroDiarioCajaId" DESC
+       LIMIT 1`,
+      [cajaId, tipoGastoId, tipoGastoGrupoId, fecha, monto]
+    );
+    return result.rows.length > 0 ? result.rows[0] : null;
   },
 
   getUltimaApertura: async (cajaId) => {

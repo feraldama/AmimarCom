@@ -17,6 +17,10 @@ router.get(
 router.get("/:id", authMiddleware, cajagastoController.getById);
 router.post("/", authMiddleware, cajagastoController.create);
 router.put("/:id", authMiddleware, cajagastoController.update);
-router.delete("/:id", authMiddleware, cajagastoController.delete);
+router.delete(
+  "/:cajaId/:cajaGastoId",
+  authMiddleware,
+  cajagastoController.delete
+);
 
 module.exports = router;

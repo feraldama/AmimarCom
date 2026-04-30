@@ -22,6 +22,28 @@ export const formatMiles = (value: number | string): string => {
   }).format(roundedCommission);
 };
 
+/**
+ * Formato con separadores de miles, mostrando hasta 2 decimales SOLO si el
+ * valor tiene parte decimal distinta de cero. Ejemplos:
+ *   100      -> "100"
+ *   100.00   -> "100"
+ *   100.5    -> "100,5"
+ *   0.08     -> "0,08"
+ *   1234.56  -> "1.234,56"
+ */
+export const formatMilesSmart = (value: number | string): string => {
+  const num =
+    typeof value === "string"
+      ? parseFloat(value.replace(/\./g, "").replace(",", "."))
+      : value;
+  if (isNaN(num)) return "0";
+  return new Intl.NumberFormat("es-ES", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+    useGrouping: true,
+  }).format(num);
+};
+
 export const formatMilesWithDecimals = (value: number | string): string => {
   const parseToNumber = (value: number | string): number => {
     if (typeof value === "string") {

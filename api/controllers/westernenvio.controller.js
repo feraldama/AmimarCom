@@ -108,13 +108,16 @@ exports.delete = async (req, res) => {
       return res.status(404).json({ message: "Envío western no encontrado" });
     }
 
-    // Buscar el registro correspondiente en registrodiariocaja
-    // usando TipoGastoId, TipoGastoGrupoId, detalle y MTCN
+    // Buscar el registro correspondiente en registrodiariocaja usando los
+    // campos compartidos al crear el par: CajaId, TipoGastoId,
+    // TipoGastoGrupoId, Fecha y Monto. Estos son idénticos en ambas tablas
+    // y existen incluso en filas viejas donde MTCN/Cambio no se persistían.
     const registroDiarioCaja = await RegistroDiarioCaja.findByWesternEnvio(
+      envio.CajaId,
       envio.TipoGastoId,
       envio.TipoGastoGrupoId,
-      envio.WesternEnvioDetalle,
-      envio.WesternEnvioMTCN || 0
+      envio.WesternEnvioFecha,
+      envio.WesternEnvioMonto
     );
 
     // Si se encuentra el registro en registrodiariocaja, eliminarlo

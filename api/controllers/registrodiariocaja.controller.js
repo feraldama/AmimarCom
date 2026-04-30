@@ -161,14 +161,21 @@ exports.delete = async (req, res) => {
       });
     }
 
-    // Verificar casos especiales para WESTERN PAGOS
-    const esCasoEspecial19 = TipoGastoId === 1 && TipoGastoGrupoId === 19;
+    // Verificar casos especiales para WESTERN PAGOS USD CON COTIZACION
+    // Grupos vigentes: 8 (USD COTIZACION) y 13. Se mantiene 19 por compatibilidad
+    // con datos previos a la migración del grupo USD COTIZACION (19 -> 8).
+    const esCasoEspecialUSDCotPagos =
+      TipoGastoId === 1 && (TipoGastoGrupoId === 8 || TipoGastoGrupoId === 19);
     const esCasoEspecial13 = TipoGastoId === 1 && TipoGastoGrupoId === 13;
     const esCasoEspecial4 = TipoGastoId === 1 && TipoGastoGrupoId === 4; // PAGOS: suma a demás cajas
-    // Verificar casos especiales para WESTERN ENVÍOS (opuestos a los de pagos)
-    const esCasoEspecial24 = TipoGastoId === 2 && TipoGastoGrupoId === 24;
+    const esCasoEspecialUSDPagos = TipoGastoId === 1 && TipoGastoGrupoId === 20; // PAGOS USD puro: aperturada GS no participa
+    // Verificar casos especiales para WESTERN ENVÍOS (opuestos a los de pagos).
+    // Grupos vigentes: 15 (USD COTIZACION) y 13. Se mantiene 24 por compatibilidad.
+    const esCasoEspecialUSDCotEnvios =
+      TipoGastoId === 2 && (TipoGastoGrupoId === 15 || TipoGastoGrupoId === 24);
     const esCasoEspecial13Envios = TipoGastoId === 2 && TipoGastoGrupoId === 13;
     const esCasoEspecial5 = TipoGastoId === 2 && TipoGastoGrupoId === 5; // ENVÍOS: resta a demás cajas
+    const esCasoEspecialUSDEnvios = TipoGastoId === 2 && TipoGastoGrupoId === 28; // ENVÍOS USD puro: aperturada GS no participa
     const cambioNumero = cambio > 0 ? cambio : 1; // Evitar división por 0
 
     // Si es un registro de PAGO ADMIN, no actualizar las cajas aquí
@@ -192,8 +199,14 @@ exports.delete = async (req, res) => {
       }
 
       // Actualizar la caja del registro (caja aperturada)
-      if (cajaIdRegistro && !esCasoEspecial13 && !esCasoEspecial13Envios) {
-        // Casos especiales 13 (pagos y envíos): no tocar la caja aperturada al eliminar
+      if (
+        cajaIdRegistro &&
+        !esCasoEspecial13 &&
+        !esCasoEspecial13Envios &&
+        !esCasoEspecialUSDPagos &&
+        !esCasoEspecialUSDEnvios
+      ) {
+        // Casos especiales 13 y USD puro (20/28): no tocar la caja aperturada al eliminar
         const cajaResult = await db.query(
           'SELECT "CajaMonto", "CajaTipoId" FROM "caja" WHERE "CajaId" = $1',
           [cajaIdRegistro]
@@ -253,7 +266,7 @@ exports.delete = async (req, res) => {
               const cajaTipoId = Number(cajaActual.CajaTipoId);
               let nuevoMonto;
 
-              if (esCasoEspecial19 || esCasoEspecial13) {
+              if (esCasoEspecialUSDCotPagos || esCasoEspecial13) {
                 // Casos especiales de PAGOS: revertir la suma de Monto/CambioDolar (restar)
                 const montoConvertido = monto / cambioNumero;
                 let montoAplicar = -montoConvertido; // Revertir: restar
@@ -264,7 +277,7 @@ exports.delete = async (req, res) => {
                 }
 
                 nuevoMonto = cajaMontoActual + montoAplicar;
-              } else if (esCasoEspecial24 || esCasoEspecial13Envios) {
+              } else if (esCasoEspecialUSDCotEnvios || esCasoEspecial13Envios) {
                 // Casos especiales de ENVÍOS: revertir la resta de Monto/CambioDolar (sumar)
                 const montoConvertido = monto / cambioNumero;
                 let montoAplicar = montoConvertido; // Revertir: sumar (opuesto a pagos)
@@ -308,9 +321,17 @@ exports.delete = async (req, res) => {
 
                 nuevoMonto = cajaMontoActual + montoAplicar;
               } else {
-                // Caso normal: revertir la operación según la nueva lógica
+                // Caso normal: revertir la operación según la nueva lógica.
+                // Para cajaTipoId=3 (DIVISAS), dividir por cambio sólo si el
+                // movimiento original era en GS con cotización (no para
+                // grupos USD-puros 20/28, donde el monto ya está en USD).
                 let valorAUsar = monto;
-                if (cajaTipoId === 3 && cambio > 0) {
+                if (
+                  cajaTipoId === 3 &&
+                  cambio > 0 &&
+                  !esCasoEspecialUSDPagos &&
+                  !esCasoEspecialUSDEnvios
+                ) {
                   valorAUsar = monto / cambio;
                 }
 

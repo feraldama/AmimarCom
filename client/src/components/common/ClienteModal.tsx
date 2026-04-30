@@ -1,5 +1,5 @@
 import { Plus } from "lucide-react";
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useRef, useEffect } from "react";
 
 import type { Cliente } from "../../types/cliente.types";
 import ClienteFormModal from "./ClienteFormModal";
@@ -31,6 +31,15 @@ const ClienteModal: React.FC<ClienteModalProps> = ({
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const rucRef = useRef<HTMLInputElement>(null);
+
+  // Override Radix's default focus (lands on the first tabbable, which would
+  // be the close button or "Nuevo Cliente"). Move focus to RUC after open.
+  useEffect(() => {
+    if (!show) return;
+    const t = setTimeout(() => rucRef.current?.focus(), 50);
+    return () => clearTimeout(t);
+  }, [show]);
 
   const clientesFiltrados = useMemo(() => {
     return clientes.filter(
@@ -90,6 +99,7 @@ const ClienteModal: React.FC<ClienteModalProps> = ({
               RUC
             </label>
             <input
+              ref={rucRef}
               className="w-full border border-gray-200 rounded px-2 py-1 text-sm"
               placeholder="Buscar"
               value={filtros.ruc}

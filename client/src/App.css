@@ -111,8 +111,15 @@
   }
 }
 
-/* ── Google Font ── */
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+/* ── SweetAlert2 sobre Radix Dialog ──
+   Radix UI Dialog usa react-remove-scroll, que setea pointer-events:none en
+   <body> mientras el modal está abierto. SweetAlert se portala a <body>, así
+   que sus clicks se pierden. Forzamos pointer-events:auto en su contenedor y
+   un z-index por encima del overlay de Radix (z-50). */
+.swal2-container {
+  z-index: 99999 !important;
+  pointer-events: auto !important;
+}
 
 /* ── Accesibilidad: respeta reduced-motion del sistema ── */
 @media (prefers-reduced-motion: reduce) {

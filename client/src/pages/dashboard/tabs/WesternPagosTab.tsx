@@ -115,7 +115,7 @@ export default function WesternPagosTab() {
         setTiposGastoGrupo(tiposGastoGrupoData);
 
         // Obtener cotización del DOLAR para los grupos "USD CON COTIZACION".
-        // PAGOS  -> venta, ENVIOS -> compra (input se ve como readonly).
+        // PAGOS  -> compra, ENVIOS -> venta (input se ve como readonly).
         try {
           const divisasResp = await getDivisas(1, 1000);
           const dolar = (divisasResp.data || []).find(
@@ -123,8 +123,8 @@ export default function WesternPagosTab() {
               (d.DivisaNombre || "").trim().toUpperCase() === "DOLAR"
           );
           if (dolar) {
-            setCambioDolarPagos(Number(dolar.DivisaVentaMonto) || 0);
-            setCambioDolarEnvios(Number(dolar.DivisaCompraMonto) || 0);
+            setCambioDolarPagos(Number(dolar.DivisaCompraMonto) || 0);
+            setCambioDolarEnvios(Number(dolar.DivisaVentaMonto) || 0);
           }
         } catch (err) {
           console.error("Error al cargar cotización del dólar:", err);
@@ -173,7 +173,7 @@ export default function WesternPagosTab() {
 
   // Calcular monto automáticamente para pagos cuando TipoGastoId=1 y TipoGastoGrupoId=19
   useEffect(() => {
-    if (tipoGastoIdPagos === 1 && tipoGastoGrupoIdPagos === 19) {
+    if (tipoGastoIdPagos === 1 && tipoGastoGrupoIdPagos === 8) {
       if (valorEspecialPagos !== "" && cambioDolarPagos !== "" && cambioDolarPagos !== 0) {
         const montoCalculado = Number(valorEspecialPagos) * Number(cambioDolarPagos);
         setMontoPagos(montoCalculado);
@@ -185,7 +185,7 @@ export default function WesternPagosTab() {
 
   // Calcular monto automáticamente para envíos cuando TipoGastoId=2 y TipoGastoGrupoId=24
   useEffect(() => {
-    if (tipoGastoIdEnvios === 2 && tipoGastoGrupoIdEnvios === 24) {
+    if (tipoGastoIdEnvios === 2 && tipoGastoGrupoIdEnvios === 15) {
       if (valorEspecialEnvios !== "" && cambioDolarEnvios !== "" && cambioDolarEnvios !== 0) {
         const montoCalculado = Number(valorEspecialEnvios) * Number(cambioDolarEnvios);
         setMontoEnvios(montoCalculado);
@@ -235,6 +235,12 @@ export default function WesternPagosTab() {
         tipoGastoGrupoIdPagos
       );
 
+      // El cambio sólo aplica al grupo USD CON COTIZACION (8). Para los demás
+      // grupos (incluido 20 USD-puro) se persiste 0 para que el reverso no
+      // intente convertir un monto que ya está en su moneda final.
+      const cambioPersistirPagos =
+        tipoGastoGrupoIdPagos === 8 ? Number(cambioDolarPagos) || 0 : 0;
+
       // Crear el registro diario de caja
       await createRegistroDiarioCaja({
         CajaId: cajaIdPagos,
@@ -244,7 +250,7 @@ export default function WesternPagosTab() {
         RegistroDiarioCajaDetalle: detallePagos,
         RegistroDiarioCajaMonto: montoPagos,
         UsuarioId: user.id,
-        RegistroDiarioCajaCambio: cambioDolarPagos || 0,
+        RegistroDiarioCajaCambio: cambioPersistirPagos,
         RegistroDiarioCajaMTCN: mtcnPagos || 0,
         RegistroDiarioCajaCargoEnvio: 0, // No se usa en Pagos
       });
@@ -255,7 +261,7 @@ export default function WesternPagosTab() {
         WesternEnvioFecha: fechaPagos,
         TipoGastoId: tipoGastoIdPagos, // 1 para pagos
         TipoGastoGrupoId: tipoGastoGrupoIdPagos,
-        WesternEnvioCambio: cambioDolarPagos || 0,
+        WesternEnvioCambio: cambioPersistirPagos,
         WesternEnvioDetalle: detallePagos,
         WesternEnvioMTCN: mtcnPagos || 0,
         WesternEnvioCargoEnvio: 0,
@@ -279,13 +285,15 @@ export default function WesternPagosTab() {
       const cajaIdNumero = Number(cajaIdPagos);
 
       // Verificar casos especiales
-      const esCasoEspecial19 = tipoGastoIdPagos === 1 && tipoGastoGrupoIdPagos === 19;
+      const esCasoEspecialUSDCotizacion = tipoGastoIdPagos === 1 && tipoGastoGrupoIdPagos === 8;
       const esCasoEspecial13 = tipoGastoIdPagos === 1 && tipoGastoGrupoIdPagos === 13;
       const esCasoEspecial4 = tipoGastoIdPagos === 1 && tipoGastoGrupoIdPagos === 4; // PAGOS: sumar a demás cajas
+      const esCasoEspecialUSD = tipoGastoIdPagos === 1 && tipoGastoGrupoIdPagos === 20; // PAGOS USD puro: no tocar aperturada (en GS)
 
       // Actualizar la caja aperturada (mantener lógica actual)
-      if (!esCasoEspecial13) {
-        // Caso especial 13: no tocar la caja aperturada
+      if (!esCasoEspecial13 && !esCasoEspecialUSD) {
+        // Casos especiales 13 y USD (20): no tocar la caja aperturada
+        // (en USD puro, la aperturada en GS no participa).
         // Otros casos: restar el monto (Egreso)
         const cajaAperturadaActual = await getCajaById(cajaIdNumero);
         const cajaAperturadaMontoActual = Number(cajaAperturadaActual.CajaMonto);
@@ -311,8 +319,8 @@ export default function WesternPagosTab() {
             const cajaMontoActual = Number(cajaActual.CajaMonto);
             const cajaTipoId = cajaActual.CajaTipoId;
 
-            if (esCasoEspecial19 || esCasoEspecial13) {
-              // Casos especiales 19 y 13: sumar Monto/CambioDolar
+            if (esCasoEspecialUSDCotizacion || esCasoEspecial13) {
+              // Casos especiales USD CON COTIZACION (8) y 13: sumar Monto/CambioDolar
               const montoConvertido = montoNumero / cambioDolarNumero;
               // Si CajaTipoId=3, hacer operación opuesta (restar en lugar de sumar)
               const montoAplicar = cajaTipoId === 3 ? -montoConvertido : montoConvertido;
@@ -329,9 +337,10 @@ export default function WesternPagosTab() {
                 cajaMontoActual + montoAplicar
               );
             } else {
-              // Caso normal: restar el monto (Egreso)
-              // Si CajaTipoId=3, hacer operación opuesta (sumar en lugar de restar)
-              const montoAplicar = cajaTipoId === 3 ? montoNumero : -montoNumero;
+              // Caso normal PAGOS: la caja aperturada egresó la plata, así que
+              // las demás cajas (contraparte vía cajagasto) la RECIBEN: SUMAR.
+              // Si CajaTipoId=3, operación opuesta (restar en lugar de sumar).
+              const montoAplicar = cajaTipoId === 3 ? -montoNumero : montoNumero;
               await updateCajaMonto(
                 cajaIdParaActualizar,
                 cajaMontoActual + montoAplicar
@@ -395,6 +404,12 @@ export default function WesternPagosTab() {
         tipoGastoGrupoIdEnvios
       );
 
+      // El cambio sólo aplica al grupo USD CON COTIZACION (15). Para los demás
+      // grupos (incluido 28 USD-puro) se persiste 0 para que el reverso no
+      // intente convertir un monto que ya está en su moneda final.
+      const cambioPersistirEnvios =
+        tipoGastoGrupoIdEnvios === 15 ? Number(cambioDolarEnvios) || 0 : 0;
+
       // Crear el registro diario de caja
       await createRegistroDiarioCaja({
         CajaId: cajaIdEnvios,
@@ -404,7 +419,7 @@ export default function WesternPagosTab() {
         RegistroDiarioCajaDetalle: detalleEnvios,
         RegistroDiarioCajaMonto: montoEnvios,
         UsuarioId: user.id,
-        RegistroDiarioCajaCambio: cambioDolarEnvios || 0,
+        RegistroDiarioCajaCambio: cambioPersistirEnvios,
         RegistroDiarioCajaMTCN: mtcnEnvios || 0,
         RegistroDiarioCajaCargoEnvio: cargoEnvioEnvios || 0,
       });
@@ -415,7 +430,7 @@ export default function WesternPagosTab() {
         WesternEnvioFecha: fechaEnvios,
         TipoGastoId: tipoGastoIdEnvios, // 2 para envíos
         TipoGastoGrupoId: tipoGastoGrupoIdEnvios,
-        WesternEnvioCambio: cambioDolarEnvios || 0,
+        WesternEnvioCambio: cambioPersistirEnvios,
         WesternEnvioDetalle: detalleEnvios,
         WesternEnvioMTCN: mtcnEnvios || 0,
         WesternEnvioCargoEnvio: cargoEnvioEnvios || 0,
@@ -439,13 +454,15 @@ export default function WesternPagosTab() {
       const cajaIdNumero = Number(cajaIdEnvios);
 
       // Verificar casos especiales (opuestos a los de pagos)
-      const esCasoEspecial24 = tipoGastoIdEnvios === 2 && tipoGastoGrupoIdEnvios === 24;
+      const esCasoEspecialUSDCotizacion = tipoGastoIdEnvios === 2 && tipoGastoGrupoIdEnvios === 15;
       const esCasoEspecial13 = tipoGastoIdEnvios === 2 && tipoGastoGrupoIdEnvios === 13;
       const esCasoEspecial5 = tipoGastoIdEnvios === 2 && tipoGastoGrupoIdEnvios === 5; // ENVÍOS: restar a demás cajas
+      const esCasoEspecialUSD = tipoGastoIdEnvios === 2 && tipoGastoGrupoIdEnvios === 28; // ENVÍOS USD puro: no tocar aperturada (en GS)
 
       // Actualizar la caja aperturada (mantener lógica actual)
-      if (!esCasoEspecial13) {
-        // Caso especial 13: no tocar la caja aperturada
+      if (!esCasoEspecial13 && !esCasoEspecialUSD) {
+        // Casos especiales 13 y USD (28): no tocar la caja aperturada
+        // (en USD puro, la aperturada en GS no participa).
         // Otros casos: sumar el monto (Ingreso)
         const cajaAperturadaActual = await getCajaById(cajaIdNumero);
         const cajaAperturadaMontoActual = Number(cajaAperturadaActual.CajaMonto);
@@ -471,8 +488,8 @@ export default function WesternPagosTab() {
             const cajaMontoActual = Number(cajaActual.CajaMonto);
             const cajaTipoId = cajaActual.CajaTipoId;
 
-            if (esCasoEspecial24 || esCasoEspecial13) {
-              // Casos especiales 24 y 13: restar Monto/CambioDolar (opuesto a pagos que suma)
+            if (esCasoEspecialUSDCotizacion || esCasoEspecial13) {
+              // Casos especiales USD CON COTIZACION (15) y 13: restar Monto/CambioDolar (opuesto a pagos que suma)
               const montoConvertido = montoNumero / cambioDolarNumero;
               // Si CajaTipoId=3, hacer operación opuesta (sumar en lugar de restar)
               const montoAplicar = cajaTipoId === 3 ? montoConvertido : -montoConvertido;
@@ -489,9 +506,10 @@ export default function WesternPagosTab() {
                 cajaMontoActual + montoAplicar
               );
             } else {
-              // Caso normal: sumar el monto (Ingreso)
-              // Si CajaTipoId=3, hacer operación opuesta (restar en lugar de sumar)
-              const montoAplicar = cajaTipoId === 3 ? -montoNumero : montoNumero;
+              // Caso normal ENVÍOS: la caja aperturada ingresó plata, así que
+              // las demás cajas (contraparte vía cajagasto) la ENTREGAN: RESTAR.
+              // Si CajaTipoId=3, operación opuesta (sumar en lugar de restar).
+              const montoAplicar = cajaTipoId === 3 ? montoNumero : -montoNumero;
               await updateCajaMonto(
                 cajaIdParaActualizar,
                 cajaMontoActual + montoAplicar
@@ -611,10 +629,12 @@ export default function WesternPagosTab() {
     setValorEspecial: (value: number | "") => void = () => {},
     autoFocusGrupo: boolean = false
   ) => {
-    // Determinar si debe mostrar el input especial
+    // Determinar si debe mostrar el input especial (Monto en Dólares)
+    // PAGOS  (TipoGastoId=1) -> grupo 8  ("USD CON COTIZACION")
+    // ENVIOS (TipoGastoId=2) -> grupo 15 ("USD CON COTIZACION")
     const mostrarInputEspecial =
-      (tipoGastoId === 1 && tipoGastoGrupoId === 19) ||
-      (tipoGastoId === 2 && tipoGastoGrupoId === 24);
+      (tipoGastoId === 1 && tipoGastoGrupoId === 8) ||
+      (tipoGastoId === 2 && tipoGastoGrupoId === 15);
 
     // Mostrar Cambio Dolar solo en grupos "USD CON COTIZACION":
     // PAGOS  (TipoGastoId=1) -> grupo 8
@@ -742,11 +762,11 @@ export default function WesternPagosTab() {
             </div>
           )}
 
-          {/* Input Especial - Solo para casos específicos */}
+          {/* Monto en Dólares — solo cuando el grupo es USD CON COTIZACION */}
           {mostrarInputEspecial && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Dólares (se calculará Monto = Dólares × Cambio Dolar)
+                Monto en Dólares
               </label>
               <input
                 type="text"
@@ -762,6 +782,9 @@ export default function WesternPagosTab() {
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 inputMode="numeric"
               />
+              <p className="mt-1 text-xs text-gray-500">
+                Monto = Dólares × Cambio Dolar
+              </p>
             </div>
           )}
 

@@ -56,7 +56,10 @@ export default function CajaGastosList({ cajaId }: CajaGastosListProps) {
     getAllTipoGastoGrupo().then(setGruposGasto);
   }, [cajaId, fetchGastos]);
 
-  const handleDelete = async (id: string | number, e?: React.MouseEvent) => {
+  const handleDelete = async (
+    gasto: CajaGasto,
+    e?: React.MouseEvent
+  ) => {
     if (e) {
       e.stopPropagation();
       e.preventDefault();
@@ -73,9 +76,16 @@ export default function CajaGastosList({ cajaId }: CajaGastosListProps) {
     });
     if (!confirm.isConfirmed) return;
     try {
-      await deleteCajaGasto(id);
-      // Actualizar el estado local directamente, similar a handleAddGasto
-      setGastos((prev) => prev.filter((g) => g.CajaGastoId !== id));
+      await deleteCajaGasto(gasto.CajaId, gasto.CajaGastoId);
+      setGastos((prev) =>
+        prev.filter(
+          (g) =>
+            !(
+              String(g.CajaId) === String(gasto.CajaId) &&
+              String(g.CajaGastoId) === String(gasto.CajaGastoId)
+            )
+        )
+      );
       Swal.fire({
         icon: "success",
         title: "Gasto eliminado exitosamente",
@@ -88,7 +98,6 @@ export default function CajaGastosList({ cajaId }: CajaGastosListProps) {
         icon: "error",
         title: "Error al eliminar gasto",
       });
-      // Recargar en caso de error para mantener consistencia
       fetchGastos();
     }
   };
@@ -192,7 +201,7 @@ export default function CajaGastosList({ cajaId }: CajaGastosListProps) {
         columns={columns}
         data={gastosWithId}
         // onEdit={handleEdit}
-        onDelete={(g, e) => handleDelete(g.CajaGastoId, e)}
+        onDelete={(g, e) => handleDelete(g, e)}
         emptyMessage="No hay gastos registrados"
       />
       {/* Inputs para agregar nuevo gasto */}

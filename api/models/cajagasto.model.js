@@ -68,10 +68,10 @@ const CajaGasto = {
     return gasto;
   },
 
-  delete: async (id) => {
+  delete: async (cajaId, cajaGastoId) => {
     const result = await db.query(
-      'DELETE FROM "cajagasto" WHERE "CajaGastoId" = $1',
-      [id]
+      'DELETE FROM "cajagasto" WHERE "CajaId" = $1 AND "CajaGastoId" = $2',
+      [cajaId, cajaGastoId]
     );
     return result.rowCount > 0;
   },

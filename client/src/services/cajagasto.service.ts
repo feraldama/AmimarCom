@@ -97,9 +97,12 @@ export const updateCajaGasto = async (
   }
 };
 
-export const deleteCajaGasto = async (id: string | number) => {
+export const deleteCajaGasto = async (
+  cajaId: string | number,
+  cajaGastoId: string | number
+) => {
   try {
-    const response = await api.delete(`/cajagasto/${id}`);
+    const response = await api.delete(`/cajagasto/${cajaId}/${cajaGastoId}`);
     return response.data;
   } catch (error) {
     const axiosError = error as AxiosError<{ message?: string }>;

@@ -71,7 +71,8 @@ exports.update = async (req, res) => {
 
 exports.delete = async (req, res) => {
   try {
-    const success = await CajaGasto.delete(req.params.id);
+    const { cajaId, cajaGastoId } = req.params;
+    const success = await CajaGasto.delete(cajaId, cajaGastoId);
     if (!success) {
       return res.status(404).json({ message: "Gasto de caja no encontrado" });
     }
