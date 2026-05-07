@@ -318,6 +318,7 @@ export default function EmpresasTransporteTab() {
                 value={transporteIdPago}
                 onChange={(e) => setTransporteIdPago(Number(e.target.value))}
                 required
+                autoFocus
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
               >
                 <option value="">Seleccione...</option>

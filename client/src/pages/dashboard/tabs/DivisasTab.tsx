@@ -659,12 +659,13 @@ export default function DivisasTab() {
     divisaId: number | "",
     setDivisaId: (value: number | "") => void,
     cambio: number | "",
-    setCambio: (value: number | "") => void,
+    _setCambio: (value: number | "") => void,
     cantidad: number | "",
     setCantidad: (value: number | "") => void,
     monto: number,
     onSubmit: (e: React.FormEvent) => void,
-    onCancel: () => void
+    onCancel: () => void,
+    autoFocusDivisa: boolean = false
   ) => (
     <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-6">
       <h2 className="text-2xl font-bold text-success-700 mb-6 border-b-2 border-green-500 pb-2">
@@ -710,6 +711,7 @@ export default function DivisasTab() {
               value={divisaId}
               onChange={(e) => setDivisaId(Number(e.target.value))}
               required
+              autoFocus={autoFocusDivisa}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
             >
               <option value="">Seleccione...</option>
@@ -723,7 +725,7 @@ export default function DivisasTab() {
             </select>
           </div>
 
-          {/* Cambio */}
+          {/* Cambio — readonly, viene de la cotización de la divisa */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Cambio
@@ -731,17 +733,15 @@ export default function DivisasTab() {
             <input
               type="text"
               value={cambio !== "" ? formatMiles(cambio) : ""}
-              onChange={(e) => {
-                const raw = e.target.value
-                  .replace(/\./g, "")
-                  .replace(/,/g, ".");
-                const num = Number(raw);
-                setCambio(isNaN(num) ? "" : num);
-              }}
+              readOnly
+              tabIndex={-1}
               required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-100 text-gray-700 cursor-not-allowed"
               inputMode="numeric"
             />
+            <p className="mt-1 text-xs text-gray-500">
+              Cotización tomada de Divisas (compra/venta).
+            </p>
           </div>
 
           {/* Cantidad */}
@@ -832,7 +832,8 @@ export default function DivisasTab() {
             setCantidadCompra,
             montoCompra,
             handleSubmitCompra,
-            handleCancelCompra
+            handleCancelCompra,
+            true // autoFocus en Divisa al montar el tab
           )}
         </div>
 

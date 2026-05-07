@@ -3,7 +3,7 @@ const RegistroDiarioCaja = require("../models/registrodiariocaja.model");
 const CajaGasto = require("../models/cajagasto.model");
 const db = require("../config/db");
 
-const CAJA_JSI_ID = 23;
+const CAJA_JSI_ID = 14;
 
 // Obtener todos los cobros con paginación
 exports.getAll = async (req, res) => {

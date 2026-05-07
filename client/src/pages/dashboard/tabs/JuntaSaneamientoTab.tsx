@@ -48,7 +48,7 @@ interface CajaGasto {
   [key: string]: unknown;
 }
 
-const CAJA_JSI_ID = 23;
+const CAJA_JSI_ID = 14;
 
 export default function JuntaSaneamientoTab() {
   const { user } = useAuth();

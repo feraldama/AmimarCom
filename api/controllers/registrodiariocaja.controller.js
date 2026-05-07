@@ -140,6 +140,17 @@ exports.delete = async (req, res) => {
     const monto = Number(RegistroDiarioCajaMonto) || 0;
     const cambio = Number(RegistroDiarioCajaCambio) || 0;
 
+    // Detectar si el registro proviene de un movimiento de divisa
+    // (DivisasTab COMPRA/VENTA). En esos casos las cajas DIVISA (TipoId=3)
+    // siguen una convención opuesta a Western: la creación SUMA cantidad a
+    // la DIVISA al COMPRAR y RESTA al VENDER, así que el reverso debe
+    // RESTAR/SUMAR sin la inversión de signo extra que aplica el flujo
+    // Western.
+    const detalleNorm = (RegistroDiarioCajaDetalle || "").trim();
+    const esDivisaMovimiento =
+      detalleNorm.startsWith("Compra DivisaMovimientoId:") ||
+      detalleNorm.startsWith("Venta DivisaMovimientoId:");
+
     // Conjunto de IDs de cajas a actualizar
     const cajasIdsParaActualizar = new Set();
 
@@ -352,7 +363,11 @@ exports.delete = async (req, res) => {
                   }
                 }
 
-                if (cajaTipoId === 3) {
+                // Inversión para cajaTipoId=3 sólo aplica al flujo Western
+                // (donde la DIVISA pierde plata al crear). En divisamovimiento
+                // la convención es opuesta (DIVISA gana al comprar / pierde al
+                // vender), así que NO invertimos el signo.
+                if (cajaTipoId === 3 && !esDivisaMovimiento) {
                   // Operación opuesta para CajaTipoId=3
                   montoAplicar = -montoAplicar;
                 }

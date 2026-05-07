@@ -6,7 +6,6 @@ import { createRegistroDiarioCaja } from "../../../services/registros.service";
 import { getTiposGasto } from "../../../services/tipogasto.service";
 import { getTiposGastoGrupo } from "../../../services/tipogastogrupo.service";
 import { updateCajaMonto } from "../../../services/cajas.service";
-import { getCajaGastosByTipoGastoAndGrupo } from "../../../services/cajagasto.service";
 import Swal from "sweetalert2";
 import { formatMiles } from "../../../utils/utils";
 
@@ -37,22 +36,22 @@ export default function PaseCajasTab() {
   const [tiposGastoGrupo, setTiposGastoGrupo] = useState<TipoGastoGrupo[]>([]);
   const [cajasTipo1, setCajasTipo1] = useState<Caja[]>([]);
 
-  // Formulario Egreso (tipogastoid = 1, tipogastogrupoid = 21)
+  // Formulario Egreso: aperturada → destino. TipoGastoId fijo en 1.
+  // El TipoGastoGrupoId se resuelve dinámicamente según la caja seleccionada
+  // (convención: descripción "PASE <CajaDescripcion>").
   const [cajaIdEgreso, setCajaIdEgreso] = useState<string | number>("");
   const [fechaEgreso, setFechaEgreso] = useState("");
   const tipoGastoIdEgreso = 1; // Fijo en 1 (Egreso)
-  const tipoGastoGrupoIdEgreso = 21; // Fijo en 21
   const [detalleEgreso, setDetalleEgreso] = useState("");
   const [montoEgreso, setMontoEgreso] = useState<number | "">("");
   const [cajaSeleccionadaEgreso, setCajaSeleccionadaEgreso] = useState<
     string | number
   >("");
 
-  // Formulario Ingreso (tipogastoid = 2, tipogastogrupoid = 26)
+  // Formulario Ingreso: origen → aperturada. TipoGastoId fijo en 2.
   const [cajaIdIngreso, setCajaIdIngreso] = useState<string | number>("");
   const [fechaIngreso, setFechaIngreso] = useState("");
   const tipoGastoIdIngreso = 2; // Fijo en 2 (Ingreso)
-  const tipoGastoGrupoIdIngreso = 26; // Fijo en 26
   const [detalleIngreso, setDetalleIngreso] = useState("");
   const [montoIngreso, setMontoIngreso] = useState<number | "">("");
   const [cajaSeleccionadaIngreso, setCajaSeleccionadaIngreso] = useState<
@@ -104,14 +103,45 @@ export default function PaseCajasTab() {
     fetchData();
   }, [user]);
 
-  // Obtener el grupo de egreso (ID 21)
-  const grupoEgreso = tiposGastoGrupo.find(
-    (g) => g.TipoGastoGrupoId === tipoGastoGrupoIdEgreso
+  // Mapeo override para cajas que NO siguen la convención "PASE <descripcion>".
+  // Ej: CAJA AMIL usa el grupo "PASE JEFE" en vez de "PASE CAJA AMIL".
+  const PASE_GRUPO_OVERRIDE: Record<string, string> = {
+    "CAJA AMIL": "PASE JEFE",
+  };
+
+  // Resuelve el grupo PASE para una caja dada y un TipoGastoId (1=Egreso, 2=Ingreso).
+  // Convención por defecto: descripción del grupo === "PASE <CajaDescripcion>".
+  // Si la caja está en PASE_GRUPO_OVERRIDE, usa ese nombre.
+  const getPaseGrupo = (
+    caja: Caja | undefined,
+    tipoGastoId: number
+  ): TipoGastoGrupo | undefined => {
+    if (!caja) return undefined;
+    const desc = caja.CajaDescripcion.trim().toUpperCase();
+    const target = PASE_GRUPO_OVERRIDE[desc] ?? `PASE ${desc}`;
+    return tiposGastoGrupo.find(
+      (g) =>
+        g.TipoGastoId === tipoGastoId &&
+        g.TipoGastoGrupoDescripcion.trim().toUpperCase() === target
+    );
+  };
+
+  // Una caja participa del Pase de Cajas sólo si tiene grupo PASE en
+  // ambos TipoGastoId (puede ser origen y destino).
+  const cajasConPase = cajasTipo1.filter(
+    (c) =>
+      getPaseGrupo(c, 1) !== undefined && getPaseGrupo(c, 2) !== undefined
   );
 
-  // Obtener el grupo de ingreso (ID 26)
-  const grupoIngreso = tiposGastoGrupo.find(
-    (g) => g.TipoGastoGrupoId === tipoGastoGrupoIdIngreso
+  const grupoEgresoForm = getPaseGrupo(
+    cajasTipo1.find((c) => Number(c.CajaId) === Number(cajaSeleccionadaEgreso)),
+    1
+  );
+  const grupoIngresoForm = getPaseGrupo(
+    cajasTipo1.find(
+      (c) => Number(c.CajaId) === Number(cajaSeleccionadaIngreso)
+    ),
+    2
   );
 
   const handleSubmitEgreso = async (e: React.FormEvent) => {
@@ -127,12 +157,6 @@ export default function PaseCajasTab() {
     }
 
     try {
-      // Obtener todas las cajas que tengan este TipoGastoId y TipoGastoGrupoId asignado
-      const todasLasCajasConGasto = await getCajaGastosByTipoGastoAndGrupo(
-        tipoGastoIdEgreso,
-        tipoGastoGrupoIdEgreso
-      );
-
       if (!cajaSeleccionadaEgreso) {
         Swal.fire({
           icon: "warning",
@@ -143,14 +167,33 @@ export default function PaseCajasTab() {
         return;
       }
 
+      // Resolver grupos PASE dinámicamente según las cajas involucradas:
+      //  - aperturada (origen del egreso) -> grupo "PASE <destino>" en TipoGasto=1
+      //  - destino (recibe el ingreso)    -> grupo "PASE <aperturada>" en TipoGasto=2
+      const cajaDestino = cajasTipo1.find(
+        (c) => Number(c.CajaId) === Number(cajaSeleccionadaEgreso)
+      );
+      const grupoEgresoAperturada = getPaseGrupo(cajaDestino, 1);
+      const grupoIngresoDestino = getPaseGrupo(cajaAperturada, 2);
+
+      if (!grupoEgresoAperturada || !grupoIngresoDestino) {
+        Swal.fire({
+          icon: "warning",
+          title: "Grupo PASE no configurado",
+          text: "Falta el grupo 'PASE <CajaDescripcion>' en tipogastogrupo para una de las cajas involucradas.",
+          confirmButtonColor: "#2563eb",
+        });
+        return;
+      }
+
       const montoNumero = Number(montoEgreso);
 
-      // Crear el registro de egreso de la caja aperturada
+      // Registro EGRESO en la caja aperturada
       await createRegistroDiarioCaja({
         CajaId: cajaIdEgreso,
         RegistroDiarioCajaFecha: fechaEgreso,
         TipoGastoId: tipoGastoIdEgreso,
-        TipoGastoGrupoId: tipoGastoGrupoIdEgreso,
+        TipoGastoGrupoId: grupoEgresoAperturada.TipoGastoGrupoId,
         RegistroDiarioCajaDetalle: detalleEgreso,
         RegistroDiarioCajaMonto: montoEgreso,
         UsuarioId: user.id,
@@ -159,12 +202,12 @@ export default function PaseCajasTab() {
         RegistroDiarioCajaCargoEnvio: 0,
       });
 
-      // Crear el registro de ingreso para la caja seleccionada
+      // Registro INGRESO en la caja destino
       await createRegistroDiarioCaja({
         CajaId: cajaSeleccionadaEgreso,
         RegistroDiarioCajaFecha: fechaEgreso,
-        TipoGastoId: tipoGastoIdIngreso, // 2 (Ingreso)
-        TipoGastoGrupoId: tipoGastoGrupoIdIngreso, // 26
+        TipoGastoId: tipoGastoIdIngreso,
+        TipoGastoGrupoId: grupoIngresoDestino.TipoGastoGrupoId,
         RegistroDiarioCajaDetalle: detalleEgreso,
         RegistroDiarioCajaMonto: montoEgreso,
         UsuarioId: user.id,
@@ -173,36 +216,14 @@ export default function PaseCajasTab() {
         RegistroDiarioCajaCargoEnvio: 0,
       });
 
-      // Obtener IDs únicos de todas las cajas a actualizar
-      const cajasIdsParaActualizar = new Set<number>();
+      // Ajuste de saldos: aperturada -monto, destino +monto
+      const cajaAperturadaActual = await getCajaById(Number(cajaIdEgreso));
+      const cajaAperturadaMontoActual = Number(cajaAperturadaActual.CajaMonto);
+      await updateCajaMonto(
+        Number(cajaIdEgreso),
+        cajaAperturadaMontoActual - montoNumero
+      );
 
-      // Agregar todas las cajas que tengan el gasto asignado
-      todasLasCajasConGasto.forEach((cajaGasto: { CajaId: number }) => {
-        cajasIdsParaActualizar.add(Number(cajaGasto.CajaId));
-      });
-
-      // Agregar también la caja aperturada
-      cajasIdsParaActualizar.add(Number(cajaIdEgreso));
-
-      // Actualizar el monto de todas las cajas con el gasto asignado (restar)
-      if (cajasIdsParaActualizar.size > 0) {
-        const actualizaciones = Array.from(cajasIdsParaActualizar).map(
-          async (cajaIdParaActualizar: number) => {
-            const cajaActual = await getCajaById(cajaIdParaActualizar);
-            const cajaMontoActual = Number(cajaActual.CajaMonto);
-
-            // tipoGastoIdEgreso siempre es 1 (Egreso): restar el monto
-            await updateCajaMonto(
-              cajaIdParaActualizar,
-              cajaMontoActual - montoNumero
-            );
-          }
-        );
-
-        await Promise.all(actualizaciones);
-      }
-
-      // Actualizar el monto de la caja seleccionada (sumar)
       const cajaSeleccionadaActual = await getCajaById(cajaSeleccionadaEgreso);
       const cajaSeleccionadaMontoActual = Number(
         cajaSeleccionadaActual.CajaMonto
@@ -251,17 +272,30 @@ export default function PaseCajasTab() {
     }
 
     try {
-      // Obtener todas las cajas que tengan este TipoGastoId y TipoGastoGrupoId asignado
-      const todasLasCajasConGasto = await getCajaGastosByTipoGastoAndGrupo(
-        tipoGastoIdIngreso,
-        tipoGastoGrupoIdIngreso
-      );
-
       if (!cajaSeleccionadaIngreso) {
         Swal.fire({
           icon: "warning",
           title: "Caja no seleccionada",
-          text: "Debes seleccionar una caja destino.",
+          text: "Debes seleccionar una caja origen.",
+          confirmButtonColor: "#2563eb",
+        });
+        return;
+      }
+
+      // Resolver grupos PASE dinámicamente según las cajas involucradas:
+      //  - aperturada (recibe el ingreso) -> grupo "PASE <origen>" en TipoGasto=2
+      //  - origen (egresa la plata)       -> grupo "PASE <aperturada>" en TipoGasto=1
+      const cajaOrigen = cajasTipo1.find(
+        (c) => Number(c.CajaId) === Number(cajaSeleccionadaIngreso)
+      );
+      const grupoIngresoAperturada = getPaseGrupo(cajaOrigen, 2);
+      const grupoEgresoOrigen = getPaseGrupo(cajaAperturada, 1);
+
+      if (!grupoIngresoAperturada || !grupoEgresoOrigen) {
+        Swal.fire({
+          icon: "warning",
+          title: "Grupo PASE no configurado",
+          text: "Falta el grupo 'PASE <CajaDescripcion>' en tipogastogrupo para una de las cajas involucradas.",
           confirmButtonColor: "#2563eb",
         });
         return;
@@ -269,12 +303,12 @@ export default function PaseCajasTab() {
 
       const montoNumero = Number(montoIngreso);
 
-      // Crear el registro de ingreso de la caja aperturada
+      // Registro INGRESO en la caja aperturada
       await createRegistroDiarioCaja({
         CajaId: cajaIdIngreso,
         RegistroDiarioCajaFecha: fechaIngreso,
         TipoGastoId: tipoGastoIdIngreso,
-        TipoGastoGrupoId: tipoGastoGrupoIdIngreso,
+        TipoGastoGrupoId: grupoIngresoAperturada.TipoGastoGrupoId,
         RegistroDiarioCajaDetalle: detalleIngreso,
         RegistroDiarioCajaMonto: montoIngreso,
         UsuarioId: user.id,
@@ -283,12 +317,12 @@ export default function PaseCajasTab() {
         RegistroDiarioCajaCargoEnvio: 0,
       });
 
-      // Crear el registro de egreso para la caja seleccionada
+      // Registro EGRESO en la caja origen
       await createRegistroDiarioCaja({
         CajaId: cajaSeleccionadaIngreso,
         RegistroDiarioCajaFecha: fechaIngreso,
-        TipoGastoId: tipoGastoIdEgreso, // 1 (Egreso)
-        TipoGastoGrupoId: tipoGastoGrupoIdEgreso, // 21
+        TipoGastoId: tipoGastoIdEgreso,
+        TipoGastoGrupoId: grupoEgresoOrigen.TipoGastoGrupoId,
         RegistroDiarioCajaDetalle: detalleIngreso,
         RegistroDiarioCajaMonto: montoIngreso,
         UsuarioId: user.id,
@@ -297,36 +331,14 @@ export default function PaseCajasTab() {
         RegistroDiarioCajaCargoEnvio: 0,
       });
 
-      // Obtener IDs únicos de todas las cajas a actualizar
-      const cajasIdsParaActualizar = new Set<number>();
+      // Ajuste de saldos: aperturada +monto, origen -monto
+      const cajaAperturadaActual = await getCajaById(Number(cajaIdIngreso));
+      const cajaAperturadaMontoActual = Number(cajaAperturadaActual.CajaMonto);
+      await updateCajaMonto(
+        Number(cajaIdIngreso),
+        cajaAperturadaMontoActual + montoNumero
+      );
 
-      // Agregar todas las cajas que tengan el gasto asignado
-      todasLasCajasConGasto.forEach((cajaGasto: { CajaId: number }) => {
-        cajasIdsParaActualizar.add(Number(cajaGasto.CajaId));
-      });
-
-      // Agregar también la caja aperturada
-      cajasIdsParaActualizar.add(Number(cajaIdIngreso));
-
-      // Actualizar el monto de todas las cajas con el gasto asignado (sumar)
-      if (cajasIdsParaActualizar.size > 0) {
-        const actualizaciones = Array.from(cajasIdsParaActualizar).map(
-          async (cajaIdParaActualizar: number) => {
-            const cajaActual = await getCajaById(cajaIdParaActualizar);
-            const cajaMontoActual = Number(cajaActual.CajaMonto);
-
-            // tipoGastoIdIngreso siempre es 2 (Ingreso): sumar el monto
-            await updateCajaMonto(
-              cajaIdParaActualizar,
-              cajaMontoActual + montoNumero
-            );
-          }
-        );
-
-        await Promise.all(actualizaciones);
-      }
-
-      // Actualizar el monto de la caja seleccionada (restar)
       const cajaSeleccionadaActual = await getCajaById(cajaSeleccionadaIngreso);
       const cajaSeleccionadaMontoActual = Number(
         cajaSeleccionadaActual.CajaMonto
@@ -402,10 +414,12 @@ export default function PaseCajasTab() {
     setCajaSeleccionada: (value: string | number) => void,
     cajaAperturadaId: string | number | "",
     onSubmit: (e: React.FormEvent) => void,
-    onCancel: () => void
+    onCancel: () => void,
+    autoFocusCaja: boolean = false
   ) => {
-    // Filtrar cajas excluyendo la caja aperturada
-    const cajasDisponibles = cajasTipo1.filter(
+    // Sólo cajas con grupo PASE configurado (en ambos sentidos), excluyendo la
+    // caja aperturada del usuario.
+    const cajasDisponibles = cajasConPase.filter(
       (caja) => Number(caja.CajaId) !== Number(cajaAperturadaId)
     );
 
@@ -471,6 +485,7 @@ export default function PaseCajasTab() {
               value={cajaSeleccionada}
               onChange={(e) => setCajaSeleccionada(Number(e.target.value))}
               required
+              autoFocus={autoFocusCaja}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
             >
               <option value="">Seleccione una caja...</option>
@@ -565,7 +580,7 @@ export default function PaseCajasTab() {
             fechaEgreso,
             setFechaEgreso,
             tipoGastoIdEgreso,
-            grupoEgreso?.TipoGastoGrupoDescripcion || "",
+            grupoEgresoForm?.TipoGastoGrupoDescripcion || "",
             detalleEgreso,
             setDetalleEgreso,
             montoEgreso,
@@ -574,7 +589,8 @@ export default function PaseCajasTab() {
             setCajaSeleccionadaEgreso,
             cajaIdEgreso,
             handleSubmitEgreso,
-            handleCancelEgreso
+            handleCancelEgreso,
+            true // autoFocus en Caja Destino al montar el tab
           )}
         </div>
 
@@ -585,7 +601,7 @@ export default function PaseCajasTab() {
             fechaIngreso,
             setFechaIngreso,
             tipoGastoIdIngreso,
-            grupoIngreso?.TipoGastoGrupoDescripcion || "",
+            grupoIngresoForm?.TipoGastoGrupoDescripcion || "",
             detalleIngreso,
             setDetalleIngreso,
             montoIngreso,
