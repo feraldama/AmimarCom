@@ -48,7 +48,7 @@ export default function DocumentTitle() {
 
   useEffect(() => {
     const pageTitle = routeTitles[location.pathname] || "Página no encontrada";
-    document.title = pageTitle ? `${DEFAULT_TITLE} - ${pageTitle}` : DEFAULT_TITLE;
+    document.title = pageTitle ? `${pageTitle}` : DEFAULT_TITLE;
   }, [location.pathname]);
 
   return null;
