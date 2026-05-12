@@ -198,105 +198,15 @@ export default function DivisasTab() {
         RegistroDiarioCajaCargoEnvio: 0,
       });
 
-      // Obtener IDs únicos de todas las cajas a actualizar
-      const cajasIdsParaActualizar = new Set<number>();
-
-      // Procesar cada gasto de la divisa
-      for (const divisaGasto of divisaGastosData) {
-        const tipoGastoId = divisaGasto.TipoGastoId;
-        const tipoGastoGrupoId = divisaGasto.TipoGastoGrupoId;
-
-        if (!tipoGastoId || !tipoGastoGrupoId) continue;
-
-        // Obtener todas las cajas que tengan este TipoGastoId y TipoGastoGrupoId
-        const cajasConGasto = await getCajaGastosByTipoGastoAndGrupo(
-          tipoGastoId,
-          tipoGastoGrupoId
-        );
-        const cajasConGastoData = cajasConGasto.data || cajasConGasto || [];
-
-        // Agregar todas las cajas que tengan el gasto asignado
-        cajasConGastoData.forEach((cajaGasto: { CajaId: number }) => {
-          cajasIdsParaActualizar.add(Number(cajaGasto.CajaId));
-        });
-      }
-
-      // Agregar también la caja aperturada
-      cajasIdsParaActualizar.add(Number(cajaAperturada.CajaId));
-
-      // Actualizar el monto de todas las cajas según el TipoGastoId
-      if (cajasIdsParaActualizar.size > 0) {
-        const montoNumero = Number(montoCompra);
-        const cantidadNumero = Number(cantidadCompra);
-
-        // Crear un mapa de cajas con sus TipoGastoId para determinar si sumar o restar
-        const cajasConTipoGasto = new Map<number, number>();
-
-        // Procesar cada gasto para mapear las cajas con su TipoGastoId
-        for (const divisaGasto of divisaGastosData) {
-          const tipoGastoId = divisaGasto.TipoGastoId;
-          const tipoGastoGrupoId = divisaGasto.TipoGastoGrupoId;
-
-          if (!tipoGastoId || !tipoGastoGrupoId) continue;
-
-          const cajasConGasto = await getCajaGastosByTipoGastoAndGrupo(
-            tipoGastoId,
-            tipoGastoGrupoId
-          );
-          const cajasConGastoData = cajasConGasto.data || cajasConGasto || [];
-
-          cajasConGastoData.forEach((cajaGasto: { CajaId: number }) => {
-            const cajaId = Number(cajaGasto.CajaId);
-            // Si la caja ya está mapeada, mantener el TipoGastoId existente
-            if (!cajasConTipoGasto.has(cajaId)) {
-              cajasConTipoGasto.set(cajaId, tipoGastoId);
-            }
-          });
-        }
-
-        // Agregar la caja aperturada con TipoGastoId = 1 (Egreso) para compra
-        // Al comprar divisa, estás gastando dinero de tu caja, por lo que es un egreso
-        cajasConTipoGasto.set(
-          Number(cajaAperturada.CajaId),
-          1 // TipoGastoId = 1 (Egreso) para compra
-        );
-
-        const actualizaciones = Array.from(cajasIdsParaActualizar).map(
-          async (cajaIdParaActualizar: number) => {
-            const cajaActual = await getCajaById(cajaIdParaActualizar);
-            const cajaMontoActual = Number(cajaActual.CajaMonto);
-            const tipoGastoId = cajasConTipoGasto.get(cajaIdParaActualizar);
-            const cajaTipoId = Number(cajaActual.CajaTipoId);
-
-            // IMPORTANTE: Excluir las cajas de divisa (CajaTipoId = 3) de esta actualización
-            // porque se actualizan específicamente más abajo para evitar duplicados
-            if (cajaTipoId === 3) {
-              return; // Saltar la actualización de cajas de divisa aquí
-            }
-
-            // Determinar qué valor usar según CajaTipoId
-            // Si CajaTipoId === 3: usar DivisaMovimientoCantidad
-            // Si CajaTipoId !== 3: usar DivisaMovimientoMonto
-            const valorAUsar = cajaTipoId === 3 ? cantidadNumero : montoNumero;
-
-            if (tipoGastoId === 1) {
-              // Egreso: restar el valor
-              await updateCajaMonto(
-                cajaIdParaActualizar,
-                cajaMontoActual - valorAUsar
-              );
-            } else if (tipoGastoId === 2) {
-              // Ingreso: sumar el valor
-              await updateCajaMonto(
-                cajaIdParaActualizar,
-                cajaMontoActual + valorAUsar
-              );
-            }
-          }
-        );
-
-        await Promise.all(actualizaciones);
-      }
+      // Actualizar SOLO la caja aperturada (egreso en compra).
+      // Las cajas con CajaTipoId=3 se manejan más abajo de forma específica.
+      // Cualquier otra caja que comparta (TipoGasto, Grupo) con divisagasto se ignora.
+      const cajaAperturadaActual = await getCajaById(cajaAperturada.CajaId);
+      const montoCajaAperturadaActual = Number(cajaAperturadaActual.CajaMonto);
+      await updateCajaMonto(
+        cajaAperturada.CajaId,
+        montoCajaAperturadaActual - Number(montoCompra)
+      );
 
       // Actualizar la caja de divisa (CajaTipoId = 3)
       // Al comprar: la caja aperturada disminuye (ya se hizo arriba) y la caja de divisa aumenta
@@ -446,107 +356,15 @@ export default function DivisasTab() {
         RegistroDiarioCajaCargoEnvio: 0,
       });
 
-      // Obtener IDs únicos de todas las cajas a actualizar
-      const cajasIdsParaActualizar = new Set<number>();
-
-      // Procesar cada gasto de la divisa
-      for (const divisaGasto of divisaGastosData) {
-        const tipoGastoId = divisaGasto.TipoGastoId;
-        const tipoGastoGrupoId = divisaGasto.TipoGastoGrupoId;
-
-        if (!tipoGastoId || !tipoGastoGrupoId) continue;
-
-        // Obtener todas las cajas que tengan este TipoGastoId y TipoGastoGrupoId
-        const cajasConGasto = await getCajaGastosByTipoGastoAndGrupo(
-          tipoGastoId,
-          tipoGastoGrupoId
-        );
-        const cajasConGastoData = cajasConGasto.data || cajasConGasto || [];
-
-        // Agregar todas las cajas que tengan el gasto asignado
-        cajasConGastoData.forEach((cajaGasto: { CajaId: number }) => {
-          cajasIdsParaActualizar.add(Number(cajaGasto.CajaId));
-        });
-      }
-
-      // Agregar también la caja aperturada
-      cajasIdsParaActualizar.add(Number(cajaAperturada.CajaId));
-
-      // Actualizar el monto de todas las cajas según el TipoGastoId
-      if (cajasIdsParaActualizar.size > 0) {
-        const montoNumero = Number(montoVenta);
-        const cantidadNumero = Number(cantidadVenta);
-
-        // Crear un mapa de cajas con sus TipoGastoId para determinar si sumar o restar
-        const cajasConTipoGasto = new Map<number, number>();
-
-        // Procesar cada gasto para mapear las cajas con su TipoGastoId
-        for (const divisaGasto of divisaGastosData) {
-          const tipoGastoId = divisaGasto.TipoGastoId;
-          const tipoGastoGrupoId = divisaGasto.TipoGastoGrupoId;
-
-          if (!tipoGastoId || !tipoGastoGrupoId) continue;
-
-          const cajasConGasto = await getCajaGastosByTipoGastoAndGrupo(
-            tipoGastoId,
-            tipoGastoGrupoId
-          );
-          const cajasConGastoData = cajasConGasto.data || cajasConGasto || [];
-
-          cajasConGastoData.forEach((cajaGasto: { CajaId: number }) => {
-            const cajaId = Number(cajaGasto.CajaId);
-            // Si la caja ya está mapeada, mantener el TipoGastoId existente
-            if (!cajasConTipoGasto.has(cajaId)) {
-              cajasConTipoGasto.set(cajaId, tipoGastoId);
-            }
-          });
-        }
-
-        // Agregar la caja aperturada con TipoGastoId = 2 (Ingreso) para venta
-        // Al vender divisa, estás recibiendo dinero en tu caja, por lo que es un ingreso
-        cajasConTipoGasto.set(
-          Number(cajaAperturada.CajaId),
-          2 // TipoGastoId = 2 (Ingreso) para venta
-        );
-
-        const actualizaciones = Array.from(cajasIdsParaActualizar).map(
-          async (cajaIdParaActualizar: number) => {
-            const cajaActual = await getCajaById(cajaIdParaActualizar);
-            const cajaMontoActual = Number(cajaActual.CajaMonto);
-            const tipoGastoId = cajasConTipoGasto.get(cajaIdParaActualizar);
-            const cajaTipoId = Number(cajaActual.CajaTipoId);
-
-            // IMPORTANTE: Excluir las cajas de divisa (CajaTipoId = 3) de esta actualización
-            // porque se actualizan específicamente más abajo para evitar duplicados
-            if (cajaTipoId === 3) {
-              return; // Saltar la actualización de cajas de divisa aquí
-            }
-
-            // Determinar qué valor usar según CajaTipoId
-            // Si CajaTipoId === 3: usar DivisaMovimientoCantidad
-            // Si CajaTipoId !== 3: usar DivisaMovimientoMonto
-            const valorAUsar = cajaTipoId === 3 ? cantidadNumero : montoNumero;
-
-            // En venta: la lógica es opuesta a compra
-            // Al vender: recibes dinero (ingreso), por lo que sumas
-            if (tipoGastoId === 1) {
-              // Egreso: en venta esto no debería pasar normalmente, pero si pasa, restamos
-              await updateCajaMonto(
-                cajaIdParaActualizar,
-                cajaMontoActual - valorAUsar
-              );
-            } else if (tipoGastoId === 2) {
-              // Ingreso: sumar el valor (recibes dinero al vender)
-              await updateCajaMonto(
-                cajaIdParaActualizar,
-                cajaMontoActual + valorAUsar
-              );
-            }
-          }
-        );
-
-        await Promise.all(actualizaciones);
-      }
+      // Actualizar SOLO la caja aperturada (ingreso en venta).
+      // Las cajas con CajaTipoId=3 se manejan más abajo de forma específica.
+      // Cualquier otra caja que comparta (TipoGasto, Grupo) con divisagasto se ignora.
+      const cajaAperturadaActual = await getCajaById(cajaAperturada.CajaId);
+      const montoCajaAperturadaActual = Number(cajaAperturadaActual.CajaMonto);
+      await updateCajaMonto(
+        cajaAperturada.CajaId,
+        montoCajaAperturadaActual + Number(montoVenta)
+      );
 
       // Actualizar la caja de divisa (CajaTipoId = 3)
       // Al vender: la caja aperturada aumenta (ya se hizo arriba) y la caja de divisa disminuye
