@@ -63,7 +63,6 @@ export default function JuntaSaneamientoTab() {
   const [clienteSeleccionado, setClienteSeleccionado] =
     useState<Cliente | null>(null);
   const [jsicobroFecha, setJSICobroFecha] = useState("");
-  const [jsicobroCod, setJSICobroCod] = useState("");
   const [codigoJSI, setCodigoJSI] = useState("");
   const [monto, setMonto] = useState<number | "">("");
   const [mostrarMensajeBusqueda, setMostrarMensajeBusqueda] = useState(false);
@@ -157,7 +156,6 @@ export default function JuntaSaneamientoTab() {
     const hh = String(hoy.getHours()).padStart(2, "0");
     const min = String(hoy.getMinutes()).padStart(2, "0");
     setJSICobroFecha(`${yyyy}-${mm}-${dd}T${hh}:${min}`);
-    setJSICobroCod("");
     setCodigoJSI("");
     setMonto("");
     setClienteSeleccionado(null);
@@ -239,7 +237,6 @@ export default function JuntaSaneamientoTab() {
       // Crear el cobro de JSI usando la caja aperturada del usuario
       const jsicobroData: JSICobro = {
         JSICobroFecha: jsicobroFecha,
-        JSICobroCod: jsicobroCod,
         CajaId: cajaAperturadaId, // Usar la caja aperturada del usuario
         ClienteId: clienteSeleccionado
           ? Number(clienteSeleccionado.ClienteId)
@@ -368,17 +365,35 @@ export default function JuntaSaneamientoTab() {
               />
             </div>
 
-            {/* Código */}
+            {/* Código JSI */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Código
+                Código JSI
               </label>
               <input
                 type="text"
-                value={jsicobroCod}
-                onChange={(e) => setJSICobroCod(e.target.value.toUpperCase())}
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={codigoJSI}
+                onChange={(e) => handleCodigoJSIChange(e.target.value)}
+                onBlur={handleCodigoJSIBlur}
+                placeholder="Escriba el código JSI y presione Tab para buscar cliente"
+                autoFocus
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
               />
+              {mostrarMensajeBusqueda && clienteSeleccionado && codigoJSI && (
+                <p className="mt-1 text-xs text-success-600">
+                  Cliente encontrado: {clienteSeleccionado.ClienteNombre}{" "}
+                  {clienteSeleccionado.ClienteApellido || ""}
+                </p>
+              )}
+              {mostrarMensajeBusqueda &&
+                !clienteSeleccionado &&
+                codigoJSI && (
+                  <p className="mt-1 text-xs text-danger-600">
+                    No se encontró un cliente con este código JSI
+                  </p>
+                )}
             </div>
 
             {/* Monto */}
@@ -422,34 +437,6 @@ export default function JuntaSaneamientoTab() {
                     }`
                   : "Seleccione un cliente..."}
               </button>
-              <div className="mt-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Código JSI
-                </label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={codigoJSI}
-                  onChange={(e) => handleCodigoJSIChange(e.target.value)}
-                  onBlur={handleCodigoJSIBlur}
-                  placeholder="Escriba el código JSI numérico y presione Tab para buscar cliente"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                />
-                {mostrarMensajeBusqueda && clienteSeleccionado && codigoJSI && (
-                  <p className="mt-1 text-xs text-success-600">
-                    Cliente encontrado: {clienteSeleccionado.ClienteNombre}{" "}
-                    {clienteSeleccionado.ClienteApellido || ""}
-                  </p>
-                )}
-                {mostrarMensajeBusqueda &&
-                  !clienteSeleccionado &&
-                  codigoJSI && (
-                    <p className="mt-1 text-xs text-danger-600">
-                      No se encontró un cliente con este código JSI
-                    </p>
-                  )}
-              </div>
             </div>
           </div>
 
