@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useAuth } from "../../../contexts/useAuth";
 import { getEstadoAperturaPorUsuario } from "../../../services/registrodiariocaja.service";
 import { getCajaById, updateCajaMonto } from "../../../services/cajas.service";
@@ -58,6 +58,7 @@ export default function CobranzaColegiosTab() {
   const [cursoNombre, setCursoNombre] = useState("");
   const [importe, setImporte] = useState<number>(0);
   const [mesPagado, setMesPagado] = useState("");
+  const mesPagadoRef = useRef<HTMLInputElement>(null);
   const [mes, setMes] = useState<number>(0);
   const [subtotalCuota, setSubtotalCuota] = useState<number>(0);
   const [diasMora, setDiasMora] = useState<number>(0);
@@ -414,6 +415,7 @@ export default function CobranzaColegiosTab() {
                 Mes Pagado
               </label>
               <input
+                ref={mesPagadoRef}
                 type="text"
                 value={mesPagado}
                 onChange={(e) => setMesPagado(e.target.value.toUpperCase())}
@@ -580,6 +582,7 @@ export default function CobranzaColegiosTab() {
           setNominaSeleccionada(nomina);
           setNominaId(nomina.NominaId);
           setShowNominaModal(false);
+          setTimeout(() => mesPagadoRef.current?.focus(), 0);
         }}
         onCreateNomina={async (nominaData) => {
           try {

@@ -168,31 +168,60 @@ exports.delete = async (req, res) => {
           // Determinar si es ingreso (TipoGastoId === 2) o egreso (TipoGastoId === 1)
           const esIngreso = regTipoGastoId === 2;
           const monto = Number(regMonto) || 0;
+          const regCajaIdNumero = regCajaId ? Number(regCajaId) : null;
 
-          // Conjunto de IDs de cajas a actualizar
-          const cajasIdsParaActualizar = new Set();
+          // La caja aperturada y las demás cajas se movieron en direcciones
+          // OPUESTAS al crear la cobranza (ver CobranzaTab.handleSubmit):
+          //   INGRESO -> aperturada +monto, demás -monto
+          //   EGRESO  -> aperturada -monto, demás +monto
+          // Por eso el reverso debe separar la caja del registro de las demás
+          // y aplicarles el signo contrario al que recibieron al crearse.
 
-          // Agregar la caja del registro
-          if (regCajaId) {
-            cajasIdsParaActualizar.add(Number(regCajaId));
+          // 1) Revertir la caja aperturada (la del registro)
+          if (regCajaIdNumero) {
+            const cajaAperturadaResult = await db.query(
+              'SELECT "CajaMonto" FROM "caja" WHERE "CajaId" = $1',
+              [regCajaIdNumero]
+            );
+            const cajaAperturada =
+              cajaAperturadaResult.rows.length > 0
+                ? cajaAperturadaResult.rows[0]
+                : null;
+
+            if (cajaAperturada) {
+              const montoActual = Number(cajaAperturada.CajaMonto) || 0;
+              // INGRESO sumó -> ahora resta; EGRESO restó -> ahora suma
+              const nuevoMonto = esIngreso
+                ? montoActual - monto
+                : montoActual + monto;
+
+              await db.query(
+                'UPDATE "caja" SET "CajaMonto" = $1 WHERE "CajaId" = $2',
+                [nuevoMonto, regCajaIdNumero]
+              );
+            }
           }
 
-          // Obtener todas las cajas que tienen el mismo TipoGastoId y TipoGastoGrupoId en cajagasto
+          // 2) Revertir las demás cajas (incluida la caja del colegio),
+          //    excluyendo la caja aperturada
+          const cajasIdsDemas = new Set();
           if (regTipoGastoId && regTipoGastoGrupoId) {
             const cajasConGasto = await CajaGasto.getByTipoGastoAndGrupo(
               regTipoGastoId,
               regTipoGastoGrupoId
             );
             cajasConGasto.forEach((cajaGasto) => {
-              if (cajaGasto.CajaId) {
-                cajasIdsParaActualizar.add(Number(cajaGasto.CajaId));
+              if (
+                cajaGasto.CajaId &&
+                Number(cajaGasto.CajaId) !== regCajaIdNumero
+              ) {
+                cajasIdsDemas.add(Number(cajaGasto.CajaId));
               }
             });
           }
 
-          // Actualizar el monto de todas las cajas afectadas
-          if (cajasIdsParaActualizar.size > 0) {
-            const actualizaciones = Array.from(cajasIdsParaActualizar).map(
+          if (cajasIdsDemas.size > 0) {
+            const actualizaciones = Array.from(cajasIdsDemas).map(
               async (cajaIdParaActualizar) => {
                 // Obtener el monto actual de la caja
                 const cajaActualResult = await db.query(
@@ -203,15 +232,13 @@ exports.delete = async (req, res) => {
 
                 if (cajaActual) {
                   const cajaMontoActual = Number(cajaActual.CajaMonto) || 0;
-                  let nuevoMonto;
-
-                  if (esIngreso) {
-                    // Si era ingreso, al eliminar restamos el monto
-                    nuevoMonto = cajaMontoActual - monto;
-                  } else {
-                    // Si era egreso, al eliminar sumamos el monto
-                    nuevoMonto = cajaMontoActual + monto;
-                  }
+                  // En la creación las demás cajas recibieron el signo OPUESTO
+                  // a la aperturada, así que el reverso también es opuesto:
+                  //   INGRESO restó a las demás -> ahora suma
+                  //   EGRESO  sumó a las demás  -> ahora resta
+                  const nuevoMonto = esIngreso
+                    ? cajaMontoActual + monto
+                    : cajaMontoActual - monto;
 
                   // Actualizar el monto de la caja
                   await db.query(

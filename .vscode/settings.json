@@ -1,0 +1,8 @@
+{
+  "postman.settings.dotenv-detection-notification-visibility": false,
+  "github.copilot.chat.commitMessageGeneration.instructions": [
+    {
+      "text": "Genera siempre el mensaje de commit en español, sin importar el idioma del código o de los cambios."
+    }
+  ]
+}
