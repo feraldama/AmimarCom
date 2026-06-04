@@ -32,7 +32,6 @@ const JSICobro = {
       "JSICobroId",
       "CajaId",
       "JSICobroFecha",
-      "JSICobroCod",
       "ClienteId",
       "JSICobroMonto",
       "JSICobroUsuarioId",
@@ -87,7 +86,6 @@ const JSICobro = {
       "JSICobroId",
       "CajaId",
       "JSICobroFecha",
-      "JSICobroCod",
       "ClienteId",
       "JSICobroMonto",
       "JSICobroUsuarioId",
@@ -111,22 +109,20 @@ const JSICobro = {
       FROM "jsicobro" j
       LEFT JOIN "caja" c ON j."CajaId" = c."CajaId"
       LEFT JOIN "clientes" cl ON j."ClienteId" = cl."ClienteId"
-      WHERE j."JSICobroCod" ILIKE $1
-        OR CAST(j."JSICobroId" AS TEXT) ILIKE $2
-        OR CAST(j."CajaId" AS TEXT) ILIKE $3
-        OR CAST(j."ClienteId" AS TEXT) ILIKE $4
-        OR CAST(j."JSICobroMonto" AS TEXT) ILIKE $5
-        OR CAST(j."JSICobroUsuarioId" AS TEXT) ILIKE $6
-        OR TO_CHAR(j."JSICobroFecha", 'DD/MM/YYYY HH24:MI:SS') ILIKE $7
-        OR cl."ClienteNombre" ILIKE $8
-        OR cl."ClienteApellido" ILIKE $9
-        OR c."CajaDescripcion" ILIKE $10
+      WHERE CAST(j."JSICobroId" AS TEXT) ILIKE $1
+        OR CAST(j."CajaId" AS TEXT) ILIKE $2
+        OR CAST(j."ClienteId" AS TEXT) ILIKE $3
+        OR CAST(j."JSICobroMonto" AS TEXT) ILIKE $4
+        OR CAST(j."JSICobroUsuarioId" AS TEXT) ILIKE $5
+        OR TO_CHAR(j."JSICobroFecha", 'DD/MM/YYYY HH24:MI:SS') ILIKE $6
+        OR cl."ClienteNombre" ILIKE $7
+        OR cl."ClienteApellido" ILIKE $8
+        OR c."CajaDescripcion" ILIKE $9
       ORDER BY j."${sortField}" ${order}
-      LIMIT $11 OFFSET $12
+      LIMIT $10 OFFSET $11
     `;
 
     const result = await db.query(searchQuery, [
-      searchValue, // JSICobroCod
       searchValue, // JSICobroId
       searchValue, // CajaId
       searchValue, // ClienteId
@@ -144,20 +140,18 @@ const JSICobro = {
       SELECT COUNT(*) as total FROM "jsicobro" j
       LEFT JOIN "caja" c ON j."CajaId" = c."CajaId"
       LEFT JOIN "clientes" cl ON j."ClienteId" = cl."ClienteId"
-      WHERE j."JSICobroCod" ILIKE $1
-        OR CAST(j."JSICobroId" AS TEXT) ILIKE $2
-        OR CAST(j."CajaId" AS TEXT) ILIKE $3
-        OR CAST(j."ClienteId" AS TEXT) ILIKE $4
-        OR CAST(j."JSICobroMonto" AS TEXT) ILIKE $5
-        OR CAST(j."JSICobroUsuarioId" AS TEXT) ILIKE $6
-        OR TO_CHAR(j."JSICobroFecha", 'DD/MM/YYYY HH24:MI:SS') ILIKE $7
-        OR cl."ClienteNombre" ILIKE $8
-        OR cl."ClienteApellido" ILIKE $9
-        OR c."CajaDescripcion" ILIKE $10
+      WHERE CAST(j."JSICobroId" AS TEXT) ILIKE $1
+        OR CAST(j."CajaId" AS TEXT) ILIKE $2
+        OR CAST(j."ClienteId" AS TEXT) ILIKE $3
+        OR CAST(j."JSICobroMonto" AS TEXT) ILIKE $4
+        OR CAST(j."JSICobroUsuarioId" AS TEXT) ILIKE $5
+        OR TO_CHAR(j."JSICobroFecha", 'DD/MM/YYYY HH24:MI:SS') ILIKE $6
+        OR cl."ClienteNombre" ILIKE $7
+        OR cl."ClienteApellido" ILIKE $8
+        OR c."CajaDescripcion" ILIKE $9
     `;
 
     const countResult = await db.query(countQuery, [
-      searchValue,
       searchValue,
       searchValue,
       searchValue,
@@ -187,18 +181,16 @@ const JSICobro = {
       INSERT INTO "jsicobro" (
         "CajaId",
         "JSICobroFecha",
-        "JSICobroCod",
         "ClienteId",
         "JSICobroMonto",
         "JSICobroUsuarioId"
-      ) VALUES ($1, $2, $3, $4, $5, $6)
+      ) VALUES ($1, $2, $3, $4, $5)
       RETURNING "JSICobroId"
     `;
 
     const values = [
       jsicobroData.CajaId || null,
       jsicobroData.JSICobroFecha || new Date(),
-      jsicobroData.JSICobroCod || null,
       jsicobroData.ClienteId || null,
       jsicobroData.JSICobroMonto || 0,
       jsicobroData.JSICobroUsuarioId || null,
@@ -219,7 +211,6 @@ const JSICobro = {
     const camposActualizables = [
       "CajaId",
       "JSICobroFecha",
-      "JSICobroCod",
       "ClienteId",
       "JSICobroMonto",
       "JSICobroUsuarioId",
