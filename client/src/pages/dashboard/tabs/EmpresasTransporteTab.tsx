@@ -126,7 +126,8 @@ export default function EmpresasTransporteTab() {
     setHora("");
     setAsiento("");
     setMonto("");
-    setCajaId("");
+    // No reseteamos cajaId: corresponde a la caja aperturada de la sesión
+    // y debe persistir entre pagos consecutivos.
     setNumeroBoleto("");
     setTelefono("");
     setClienteSeleccionado(null);
