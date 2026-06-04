@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import CampoFecha from "@/components/common/CampoFecha";
 import { createRegistroDiarioCaja } from "../../services/registros.service";
 import { getTiposGasto } from "../../services/tipogasto.service";
 import { getTiposGastoGrupo } from "../../services/tipogastogrupo.service";
@@ -131,7 +132,7 @@ const PagoModal: React.FC<PagoModalProps> = ({
             <label className="block text-xs font-semibold text-gray-500 mb-1">
               Fecha
             </label>
-            <input
+            <CampoFecha
               type="date"
               value={fecha}
               onChange={(e) => setFecha(e.target.value)}

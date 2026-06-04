@@ -12,7 +12,7 @@ import {
 } from "../../services/registros.service";
 import PageHeader from "../../components/common/PageHeader";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import CampoFecha from "@/components/common/CampoFecha";
 
 // ── Tipos ──
 
@@ -78,11 +78,21 @@ function DateRange({ fechaInicio, fechaFin, onChangeFechaInicio, onChangeFechaFi
     <div className="grid grid-cols-2 gap-3 mb-4">
       <div>
         <label className="block text-xs font-medium text-muted-foreground mb-1">Desde</label>
-        <Input type="date" value={fechaInicio} onChange={(e) => onChangeFechaInicio(e.target.value)} />
+        <CampoFecha
+          type="date"
+          value={fechaInicio}
+          onChange={(e) => onChangeFechaInicio(e.target.value)}
+          className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 transition-colors"
+        />
       </div>
       <div>
         <label className="block text-xs font-medium text-muted-foreground mb-1">Hasta</label>
-        <Input type="date" value={fechaFin} onChange={(e) => onChangeFechaFin(e.target.value)} />
+        <CampoFecha
+          type="date"
+          value={fechaFin}
+          onChange={(e) => onChangeFechaFin(e.target.value)}
+          className="flex h-9 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 transition-colors"
+        />
       </div>
     </div>
   );

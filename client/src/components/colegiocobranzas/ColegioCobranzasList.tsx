@@ -1,5 +1,6 @@
 import { Plus } from "lucide-react";
 import { useEffect, useState } from "react";
+import CampoFecha from "@/components/common/CampoFecha";
 import SearchButton from "../common/Input/SearchButton";
 import ActionButton from "../common/Button/ActionButton";
 import DataTable from "../common/Table/DataTable";
@@ -418,7 +419,7 @@ export default function ColegioCobranzasList({
                     >
                       Fecha
                     </label>
-                    <input
+                    <CampoFecha
                       type="date"
                       name="ColegioCobranzaFecha"
                       id="ColegioCobranzaFecha"

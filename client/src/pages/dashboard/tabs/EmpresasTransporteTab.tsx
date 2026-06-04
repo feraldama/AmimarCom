@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import CampoFecha from "@/components/common/CampoFecha";
 import { useAuth } from "../../../contexts/useAuth";
 import {
   createPagoTrans,
@@ -306,7 +307,7 @@ export default function EmpresasTransporteTab() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Fecha
               </label>
-              <input
+              <CampoFecha
                 type="datetime-local"
                 value={pagoTransFecha}
                 onChange={(e) => setPagoTransFecha(e.target.value)}
@@ -369,7 +370,7 @@ export default function EmpresasTransporteTab() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Fecha Embarque
               </label>
-              <input
+              <CampoFecha
                 type="date"
                 value={fechaEmbarque}
                 onChange={(e) => setFechaEmbarque(e.target.value)}

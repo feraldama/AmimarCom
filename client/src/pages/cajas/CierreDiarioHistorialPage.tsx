@@ -1,5 +1,6 @@
 import { CalendarCheck, AlertTriangle } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
+import CampoFecha from "@/components/common/CampoFecha";
 import PageHeader from "../../components/common/PageHeader";
 import Pagination from "../../components/common/Pagination";
 import Modal from "../../components/common/Modal";
@@ -204,7 +205,7 @@ export default function CierreDiarioHistorialPage() {
             >
               Desde
             </label>
-            <input
+            <CampoFecha
               id="fechaDesde"
               type="date"
               value={fechaDesde}
@@ -219,7 +220,7 @@ export default function CierreDiarioHistorialPage() {
             >
               Hasta
             </label>
-            <input
+            <CampoFecha
               id="fechaHasta"
               type="date"
               value={fechaHasta}

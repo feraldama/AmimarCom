@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import CampoFecha from "@/components/common/CampoFecha";
 import { useAuth } from "../../../contexts/useAuth";
 import { getEstadoAperturaPorUsuario } from "../../../services/registrodiariocaja.service";
 import { getCajaById, getCajas } from "../../../services/cajas.service";
@@ -448,7 +449,7 @@ export default function PaseCajasTab() {
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Fecha
             </label>
-            <input
+            <CampoFecha
               type="datetime-local"
               value={fecha}
               onChange={(e) => setFecha(e.target.value)}

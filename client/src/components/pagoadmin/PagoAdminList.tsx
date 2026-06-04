@@ -1,5 +1,6 @@
 import { Plus } from "lucide-react";
 import { useState, useEffect } from "react";
+import CampoFecha from "@/components/common/CampoFecha";
 import SearchButton from "../common/Input/SearchButton";
 import ActionButton from "../common/Button/ActionButton";
 import DataTable from "../common/Table/DataTable";
@@ -496,7 +497,7 @@ export default function PagoAdminList({
                     >
                       Fecha
                     </label>
-                    <input
+                    <CampoFecha
                       type="datetime-local"
                       name="PagoAdminFecha"
                       id="PagoAdminFecha"

@@ -1,6 +1,7 @@
 import { Banknote } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import CampoFecha from "@/components/common/CampoFecha";
 import axios from "axios";
 import { js2xml } from "xml-js";
 import Swal from "sweetalert2";
@@ -283,7 +284,7 @@ const CreditoPagosPage = () => {
               <label className="block text-sm font-medium text-gray-700">
                 Fecha
               </label>
-              <input
+              <CampoFecha
                 type="date"
                 value={fecha}
                 onChange={(e) => setFecha(e.target.value)}

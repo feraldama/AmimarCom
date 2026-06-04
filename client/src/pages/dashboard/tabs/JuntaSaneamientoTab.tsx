@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import CampoFecha from "@/components/common/CampoFecha";
 import { useAuth } from "../../../contexts/useAuth";
 import {
   createJSICobro,
@@ -361,7 +362,7 @@ export default function JuntaSaneamientoTab() {
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 Fecha <span className="text-destructive">*</span>
               </label>
-              <input
+              <CampoFecha
                 type="datetime-local"
                 value={jsicobroFecha}
                 onChange={(e) => setJSICobroFecha(e.target.value)}
