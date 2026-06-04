@@ -18,6 +18,9 @@ export interface PagoAdmin {
   CajaOrigenId: string | number;
   CajaDescripcion?: string;
   CajaOrigenDescripcion?: string;
+  // Saldo en que quedó cada caja al momento de la operación (histórico, no el saldo actual)
+  MontoCajaOrigen?: number | null;
+  MontoCajaDestino?: number | null;
   [key: string]: unknown;
 }
 
@@ -217,11 +220,12 @@ export default function PagoAdminList({
       key: "MontoCajaOrigen",
       label: "Monto Caja Origen",
       render: (item: PagoAdmin) => {
-        const cajaOrigen = cajas.find(
-          (c) => c.CajaId === Number(item.CajaOrigenId)
-        );
-        const monto = cajaOrigen?.CajaMonto ?? 0;
-        return `Gs. ${formatMiles(monto)}`;
+        // Saldo en que quedó la caja origen al momento de la operación.
+        // Registros antiguos no tienen este dato guardado (null) → "-".
+        if (item.MontoCajaOrigen === null || item.MontoCajaOrigen === undefined) {
+          return "-";
+        }
+        return `Gs. ${formatMiles(Number(item.MontoCajaOrigen))}`;
       },
     },
     {
@@ -232,11 +236,12 @@ export default function PagoAdminList({
       key: "MontoCajaDestino",
       label: "Monto Caja Destino",
       render: (item: PagoAdmin) => {
-        const cajaDestino = cajas.find(
-          (c) => c.CajaId === Number(item.CajaId)
-        );
-        const monto = cajaDestino?.CajaMonto ?? 0;
-        return `Gs. ${formatMiles(monto)}`;
+        // Saldo en que quedó la caja destino al momento de la operación.
+        // Registros antiguos no tienen este dato guardado (null) → "-".
+        if (item.MontoCajaDestino === null || item.MontoCajaDestino === undefined) {
+          return "-";
+        }
+        return `Gs. ${formatMiles(Number(item.MontoCajaDestino))}`;
       },
     },
     {

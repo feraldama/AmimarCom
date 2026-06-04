@@ -49,6 +49,9 @@ export default function DivisasTab() {
   const [cantidadVenta, setCantidadVenta] = useState<number | "">("");
   const [montoVenta, setMontoVenta] = useState<number>(0);
 
+  const [isSubmittingCompra, setIsSubmittingCompra] = useState(false);
+  const [isSubmittingVenta, setIsSubmittingVenta] = useState(false);
+
   useEffect(() => {
     const fetchData = async () => {
       if (!user?.id) return;
@@ -133,6 +136,7 @@ export default function DivisasTab() {
 
   const handleSubmitCompra = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingCompra) return;
     if (!cajaAperturada || !user) {
       Swal.fire({
         icon: "warning",
@@ -153,6 +157,7 @@ export default function DivisasTab() {
       return;
     }
 
+    setIsSubmittingCompra(true);
     try {
       const fechaFormateada = fechaCompra.split("T")[0];
 
@@ -281,11 +286,14 @@ export default function DivisasTab() {
       const errorMsg =
         err instanceof Error ? err.message : "No se pudo registrar la compra";
       Swal.fire("Error", errorMsg, "error");
+    } finally {
+      setIsSubmittingCompra(false);
     }
   };
 
   const handleSubmitVenta = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingVenta) return;
     if (!cajaAperturada || !user) {
       Swal.fire({
         icon: "warning",
@@ -306,6 +314,7 @@ export default function DivisasTab() {
       return;
     }
 
+    setIsSubmittingVenta(true);
     try {
       const fechaFormateada = fechaVenta.split("T")[0];
 
@@ -439,6 +448,8 @@ export default function DivisasTab() {
       const errorMsg =
         err instanceof Error ? err.message : "No se pudo registrar la venta";
       Swal.fire("Error", errorMsg, "error");
+    } finally {
+      setIsSubmittingVenta(false);
     }
   };
 
@@ -483,7 +494,8 @@ export default function DivisasTab() {
     monto: number,
     onSubmit: (e: React.FormEvent) => void,
     onCancel: () => void,
-    autoFocusDivisa: boolean = false
+    autoFocusDivisa: boolean = false,
+    isSubmitting: boolean = false
   ) => (
     <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-6">
       <h2 className="text-2xl font-bold text-success-700 mb-6 border-b-2 border-green-500 pb-2">
@@ -623,9 +635,10 @@ export default function DivisasTab() {
           </button>
           <button
             type="submit"
-            className="px-6 py-2 bg-success-500 text-white rounded-lg hover:bg-success-600 transition font-medium"
+            disabled={isSubmitting}
+            className="px-6 py-2 bg-success-500 text-white rounded-lg hover:bg-success-600 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            CONFIRMAR
+            {isSubmitting ? "PROCESANDO..." : "CONFIRMAR"}
           </button>
         </div>
       </form>
@@ -651,7 +664,8 @@ export default function DivisasTab() {
             montoCompra,
             handleSubmitCompra,
             handleCancelCompra,
-            true // autoFocus en Divisa al montar el tab
+            true, // autoFocus en Divisa al montar el tab
+            isSubmittingCompra
           )}
         </div>
 
@@ -669,7 +683,9 @@ export default function DivisasTab() {
             setCantidadVenta,
             montoVenta,
             handleSubmitVenta,
-            handleCancelVenta
+            handleCancelVenta,
+            false, // autoFocus
+            isSubmittingVenta
           )}
         </div>
       </div>

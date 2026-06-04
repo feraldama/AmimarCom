@@ -93,6 +93,10 @@ export default function WesternPagosTab() {
   const [montoEnvios, setMontoEnvios] = useState<number | "">("");
   const [valorEspecialEnvios, setValorEspecialEnvios] = useState<number | "">("");
 
+  // Estados para prevenir doble envío al hacer clic múltiples veces en CONFIRMAR
+  const [isSubmittingPagos, setIsSubmittingPagos] = useState(false);
+  const [isSubmittingEnvios, setIsSubmittingEnvios] = useState(false);
+
   useEffect(() => {
     const fetchData = async () => {
       if (!user?.id) return;
@@ -218,6 +222,7 @@ export default function WesternPagosTab() {
 
   const handleSubmitPagos = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingPagos) return;
     if (!cajaAperturada || !user) {
       Swal.fire({
         icon: "warning",
@@ -228,6 +233,7 @@ export default function WesternPagosTab() {
       return;
     }
 
+    setIsSubmittingPagos(true);
     try {
       // Obtener todas las cajas que tengan este TipoGastoId y TipoGastoGrupoId asignado
       const todasLasCajasConGasto = await getCajaGastosByTipoGastoAndGrupo(
@@ -382,11 +388,14 @@ export default function WesternPagosTab() {
       const errorMsg =
         err instanceof Error ? err.message : "No se pudo registrar el pago";
       Swal.fire("Error", errorMsg, "error");
+    } finally {
+      setIsSubmittingPagos(false);
     }
   };
 
   const handleSubmitEnvios = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingEnvios) return;
     if (!cajaAperturada || !user) {
       Swal.fire({
         icon: "warning",
@@ -397,6 +406,7 @@ export default function WesternPagosTab() {
       return;
     }
 
+    setIsSubmittingEnvios(true);
     try {
       // Obtener todas las cajas que tengan este TipoGastoId y TipoGastoGrupoId asignado
       const todasLasCajasConGasto = await getCajaGastosByTipoGastoAndGrupo(
@@ -551,6 +561,8 @@ export default function WesternPagosTab() {
       const errorMsg =
         err instanceof Error ? err.message : "No se pudo registrar el envío";
       Swal.fire("Error", errorMsg, "error");
+    } finally {
+      setIsSubmittingEnvios(false);
     }
   };
 
@@ -627,7 +639,8 @@ export default function WesternPagosTab() {
     mostrarCargoEnvio: boolean = true,
     valorEspecial: number | "" = "",
     setValorEspecial: (value: number | "") => void = () => {},
-    autoFocusGrupo: boolean = false
+    autoFocusGrupo: boolean = false,
+    isSubmitting: boolean = false
   ) => {
     // Determinar si debe mostrar el input especial (Monto en Dólares)
     // PAGOS  (TipoGastoId=1) -> grupo 8  ("USD CON COTIZACION")
@@ -888,9 +901,10 @@ export default function WesternPagosTab() {
           </button>
           <button
             type="submit"
-            className="px-6 py-2 bg-success-500 text-white rounded-lg hover:bg-success-600 transition font-medium"
+            disabled={isSubmitting}
+            className="px-6 py-2 bg-success-500 text-white rounded-lg hover:bg-success-600 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            CONFIRMAR
+            {isSubmitting ? "PROCESANDO..." : "CONFIRMAR"}
           </button>
         </div>
       </form>
@@ -985,7 +999,8 @@ export default function WesternPagosTab() {
             false, // No mostrar Cargo Envío para Pagos
             valorEspecialPagos,
             setValorEspecialPagos,
-            true // autoFocus en Grupo al montar el tab
+            true, // autoFocus en Grupo al montar el tab
+            isSubmittingPagos
           )}
         </div>
 
@@ -1023,7 +1038,9 @@ export default function WesternPagosTab() {
             true, // MTCN requerido para Envíos
             true, // Mostrar Cargo Envío para Envíos
             valorEspecialEnvios,
-            setValorEspecialEnvios
+            setValorEspecialEnvios,
+            false, // autoFocus
+            isSubmittingEnvios
           )}
         </div>
       </div>

@@ -58,6 +58,9 @@ export default function PaseCajasTab() {
     string | number
   >("");
 
+  const [isSubmittingEgreso, setIsSubmittingEgreso] = useState(false);
+  const [isSubmittingIngreso, setIsSubmittingIngreso] = useState(false);
+
   useEffect(() => {
     const fetchData = async () => {
       if (!user?.id) return;
@@ -146,6 +149,7 @@ export default function PaseCajasTab() {
 
   const handleSubmitEgreso = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingEgreso) return;
     if (!cajaAperturada || !user) {
       Swal.fire({
         icon: "warning",
@@ -156,6 +160,7 @@ export default function PaseCajasTab() {
       return;
     }
 
+    setIsSubmittingEgreso(true);
     try {
       if (!cajaSeleccionadaEgreso) {
         Swal.fire({
@@ -256,11 +261,14 @@ export default function PaseCajasTab() {
       const errorMsg =
         err instanceof Error ? err.message : "No se pudo registrar el egreso";
       Swal.fire("Error", errorMsg, "error");
+    } finally {
+      setIsSubmittingEgreso(false);
     }
   };
 
   const handleSubmitIngreso = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingIngreso) return;
     if (!cajaAperturada || !user) {
       Swal.fire({
         icon: "warning",
@@ -271,6 +279,7 @@ export default function PaseCajasTab() {
       return;
     }
 
+    setIsSubmittingIngreso(true);
     try {
       if (!cajaSeleccionadaIngreso) {
         Swal.fire({
@@ -371,6 +380,8 @@ export default function PaseCajasTab() {
       const errorMsg =
         err instanceof Error ? err.message : "No se pudo registrar el ingreso";
       Swal.fire("Error", errorMsg, "error");
+    } finally {
+      setIsSubmittingIngreso(false);
     }
   };
 
@@ -415,7 +426,8 @@ export default function PaseCajasTab() {
     cajaAperturadaId: string | number | "",
     onSubmit: (e: React.FormEvent) => void,
     onCancel: () => void,
-    autoFocusCaja: boolean = false
+    autoFocusCaja: boolean = false,
+    isSubmitting: boolean = false
   ) => {
     // Sólo cajas con grupo PASE configurado (en ambos sentidos), excluyendo la
     // caja aperturada del usuario.
@@ -559,9 +571,10 @@ export default function PaseCajasTab() {
           </button>
           <button
             type="submit"
-            className="px-6 py-2 bg-success-500 text-white rounded-lg hover:bg-success-600 transition font-medium"
+            disabled={isSubmitting}
+            className="px-6 py-2 bg-success-500 text-white rounded-lg hover:bg-success-600 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            CONFIRMAR
+            {isSubmitting ? "PROCESANDO..." : "CONFIRMAR"}
           </button>
         </div>
       </form>
@@ -590,7 +603,8 @@ export default function PaseCajasTab() {
             cajaIdEgreso,
             handleSubmitEgreso,
             handleCancelEgreso,
-            true // autoFocus en Caja Destino al montar el tab
+            true, // autoFocus en Caja Destino al montar el tab
+            isSubmittingEgreso
           )}
         </div>
 
@@ -610,7 +624,9 @@ export default function PaseCajasTab() {
             setCajaSeleccionadaIngreso,
             cajaIdIngreso,
             handleSubmitIngreso,
-            handleCancelIngreso
+            handleCancelIngreso,
+            false, // autoFocus
+            isSubmittingIngreso
           )}
         </div>
       </div>

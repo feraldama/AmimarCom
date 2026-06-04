@@ -66,6 +66,7 @@ export default function JuntaSaneamientoTab() {
   const [codigoJSI, setCodigoJSI] = useState("");
   const [monto, setMonto] = useState<number | "">("");
   const [mostrarMensajeBusqueda, setMostrarMensajeBusqueda] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -194,6 +195,7 @@ export default function JuntaSaneamientoTab() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!cajaAperturadaId || !user) {
       Swal.fire({
         icon: "warning",
@@ -224,6 +226,7 @@ export default function JuntaSaneamientoTab() {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       // El cobro es un ingreso, TipoGastoId debe ser 2
       const tipoGastoIdIngreso = 2;
@@ -322,6 +325,8 @@ export default function JuntaSaneamientoTab() {
           ? err.message
           : "No se pudo registrar el cobro de JSI";
       Swal.fire("Error", errorMsg, "error");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -451,9 +456,10 @@ export default function JuntaSaneamientoTab() {
             </button>
             <button
               type="submit"
-              className="px-6 py-2 bg-success-500 text-white rounded-lg hover:bg-success-600 transition font-medium"
+              disabled={isSubmitting}
+              className="px-6 py-2 bg-success-500 text-white rounded-lg hover:bg-success-600 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              CONFIRMAR
+              {isSubmitting ? "PROCESANDO..." : "CONFIRMAR"}
             </button>
           </div>
         </form>

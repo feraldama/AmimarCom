@@ -67,6 +67,7 @@ export default function EmpresasTransporteTab() {
   const [numeroBoleto, setNumeroBoleto] = useState("");
   const [telefono, setTelefono] = useState("");
   const [clienteRUC, setClienteRUC] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -134,6 +135,7 @@ export default function EmpresasTransporteTab() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!cajaAperturada || !user) {
       Swal.fire({
         icon: "warning",
@@ -154,6 +156,7 @@ export default function EmpresasTransporteTab() {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       // Obtener el transporte para saber su TipoGastoId y TipoGastoGrupoId
       const transporte = await getTransporteById(transporteIdPago);
@@ -279,6 +282,8 @@ export default function EmpresasTransporteTab() {
           ? err.message
           : "No se pudo registrar el pago de transporte";
       Swal.fire("Error", errorMsg, "error");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -493,9 +498,10 @@ export default function EmpresasTransporteTab() {
             </button>
             <button
               type="submit"
-              className="px-6 py-2 bg-success-500 text-white rounded-lg hover:bg-success-600 transition font-medium"
+              disabled={isSubmitting}
+              className="px-6 py-2 bg-success-500 text-white rounded-lg hover:bg-success-600 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              CONFIRMAR
+              {isSubmitting ? "PROCESANDO..." : "CONFIRMAR"}
             </button>
           </div>
         </form>

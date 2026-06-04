@@ -46,6 +46,7 @@ export default function CobranzaTab() {
   const [mtcn, setMtcn] = useState<number | "">("");
   const [cargoEnvio, setCargoEnvio] = useState<number | "">("");
   const [monto, setMonto] = useState<number | "">("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -161,6 +162,7 @@ export default function CobranzaTab() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!cajaAperturada || !user) {
       Swal.fire({
         icon: "warning",
@@ -181,6 +183,7 @@ export default function CobranzaTab() {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       // Obtener todas las cajas que tengan este TipoGastoId y TipoGastoGrupoId asignado
       const todasLasCajasConGasto = await getCajaGastosByTipoGastoAndGrupo(
@@ -290,6 +293,8 @@ export default function CobranzaTab() {
       const errorMsg =
         err instanceof Error ? err.message : "No se pudo registrar la cobranza";
       Swal.fire("Error", errorMsg, "error");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -490,9 +495,10 @@ export default function CobranzaTab() {
             </button>
             <button
               type="submit"
-              className="px-6 py-2 bg-success-500 text-white rounded-lg hover:bg-success-600 transition font-medium"
+              disabled={isSubmitting}
+              className="px-6 py-2 bg-success-500 text-white rounded-lg hover:bg-success-600 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              CONFIRMAR
+              {isSubmitting ? "PROCESANDO..." : "CONFIRMAR"}
             </button>
           </div>
         </form>

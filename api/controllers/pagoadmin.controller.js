@@ -105,6 +105,22 @@ exports.create = async (req, res) => {
     const monto = Number(PagoAdminMonto) || 0;
     const fecha = PagoAdminFecha || new Date();
 
+    // Calcular el saldo en que queda cada caja tras esta operación.
+    // Estos valores se guardan en el pago admin para que el historial
+    // refleje el monto del momento de la operación y no el saldo actual.
+    const cajaOrigenMontoActual = Number(cajaOrigen.CajaMonto) || 0;
+    const cajaOrigenTipoId = Number(cajaOrigen.CajaTipoId);
+
+    // Si CajaTipoId === 1, CajaTipoId === 3 o CajaTipoId === 9, restar (comportamiento normal)
+    // Si CajaTipoId es otro valor, hacer operación opuesta (sumar en lugar de restar)
+    const nuevoMontoOrigen =
+      cajaOrigenTipoId === 1 || cajaOrigenTipoId === 3 || cajaOrigenTipoId === 9
+        ? cajaOrigenMontoActual - monto // Restar (comportamiento normal)
+        : cajaOrigenMontoActual + monto; // Sumar (operación opuesta)
+
+    const cajaDestinoMontoActual = Number(cajaDestino.CajaMonto) || 0;
+    const nuevoMontoDestino = cajaDestinoMontoActual + monto;
+
     // Crear el pago admin
     const pagoAdmin = await PagoAdmin.create({
       CajaOrigenId,
@@ -113,14 +129,16 @@ exports.create = async (req, res) => {
       PagoAdminDetalle,
       PagoAdminMonto: monto,
       UsuarioId,
+      MontoCajaOrigen: nuevoMontoOrigen,
+      MontoCajaDestino: nuevoMontoDestino,
     });
 
-    // Crear registro de egreso para la caja origen (TipoGastoId=1, TipoGastoGrupoId=21)
+    // Crear registro de egreso para la caja origen (TipoGastoId=1, TipoGastoGrupoId=90 = "PASE PAGO ADMINISTRADOR")
     await RegistroDiarioCaja.create({
       CajaId: CajaOrigenId,
       RegistroDiarioCajaFecha: fecha,
       TipoGastoId: 1,
-      TipoGastoGrupoId: 21,
+      TipoGastoGrupoId: 90,
       RegistroDiarioCajaDetalle: `PAGO ADMIN PagoAdminId:${pagoAdmin.PagoAdminId} - ${PagoAdminDetalle || "Sin detalle"} - A: ${CajaDestinoDescripcion}`,
       RegistroDiarioCajaMonto: monto,
       UsuarioId,
@@ -133,12 +151,12 @@ exports.create = async (req, res) => {
       RegistroDiarioCajaCargoEnvio: 0,
     });
 
-    // Crear registro de ingreso para la caja destino (TipoGastoId=2, TipoGastoGrupoId=26)
+    // Crear registro de ingreso para la caja destino (TipoGastoId=2, TipoGastoGrupoId=37 = "PASE PAGO ADMINISTRADOR")
     await RegistroDiarioCaja.create({
       CajaId: CajaId,
       RegistroDiarioCajaFecha: fecha,
       TipoGastoId: 2,
-      TipoGastoGrupoId: 26,
+      TipoGastoGrupoId: 37,
       RegistroDiarioCajaDetalle: `PAGO ADMIN PagoAdminId:${pagoAdmin.PagoAdminId} - ${PagoAdminDetalle || "Sin detalle"} - DE: ${CajaOrigenDescripcion}`,
       RegistroDiarioCajaMonto: monto,
       UsuarioId,
@@ -151,26 +169,16 @@ exports.create = async (req, res) => {
       RegistroDiarioCajaCargoEnvio: 0,
     });
 
-    // Actualizar monto de la caja origen
-    const cajaOrigenMontoActual = Number(cajaOrigen.CajaMonto) || 0;
-    const cajaOrigenTipoId = Number(cajaOrigen.CajaTipoId);
-    
-    // Si CajaTipoId === 1, CajaTipoId === 3 o CajaTipoId === 9, restar (comportamiento normal)
-    // Si CajaTipoId es otro valor, hacer operación opuesta (sumar en lugar de restar)
-    const nuevoMontoOrigen = (cajaOrigenTipoId === 1 || cajaOrigenTipoId === 3 || cajaOrigenTipoId === 9)
-      ? cajaOrigenMontoActual - monto  // Restar (comportamiento normal)
-      : cajaOrigenMontoActual + monto; // Sumar (operación opuesta)
-    
+    // Actualizar monto de la caja origen (saldo ya calculado arriba)
     await db.query(
       'UPDATE "caja" SET "CajaMonto" = $1 WHERE "CajaId" = $2',
       [nuevoMontoOrigen, CajaOrigenId]
     );
 
     // Actualizar monto de la caja destino (sumar - es ingreso)
-    const cajaDestinoMontoActual = Number(cajaDestino.CajaMonto) || 0;
     await db.query(
       'UPDATE "caja" SET "CajaMonto" = $1 WHERE "CajaId" = $2',
-      [cajaDestinoMontoActual + monto, CajaId]
+      [nuevoMontoDestino, CajaId]
     );
 
     res.status(201).json({

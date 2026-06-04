@@ -163,8 +163,10 @@ const PagoAdmin = {
         "PagoAdminFecha",
         "PagoAdminDetalle",
         "PagoAdminMonto",
-        "UsuarioId"
-      ) VALUES ($1, $2, $3, $4, $5, $6)
+        "UsuarioId",
+        "MontoCajaOrigen",
+        "MontoCajaDestino"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING "PagoAdminId"
     `;
 
@@ -175,6 +177,8 @@ const PagoAdmin = {
       pagoAdminData.PagoAdminDetalle,
       pagoAdminData.PagoAdminMonto,
       pagoAdminData.UsuarioId,
+      pagoAdminData.MontoCajaOrigen ?? null,
+      pagoAdminData.MontoCajaDestino ?? null,
     ];
 
     const result = await db.query(query, values);

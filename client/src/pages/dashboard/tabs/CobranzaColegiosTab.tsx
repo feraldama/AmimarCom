@@ -66,6 +66,7 @@ export default function CobranzaColegiosTab() {
   const [examen, setExamen] = useState<number | "">("");
   const [descuento, setDescuento] = useState<number | "">("");
   const [total, setTotal] = useState<number>(0);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -168,6 +169,7 @@ export default function CobranzaColegiosTab() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!cajaAperturada || !user) {
       Swal.fire({
         icon: "warning",
@@ -188,6 +190,7 @@ export default function CobranzaColegiosTab() {
       return;
     }
 
+    setIsSubmitting(true);
     try {
       // Obtener el colegio para saber su TipoGastoId y TipoGastoGrupoId
       const colegio = await getColegioById(colegioId);
@@ -296,6 +299,8 @@ export default function CobranzaColegiosTab() {
       const errorMsg =
         err instanceof Error ? err.message : "No se pudo registrar la cobranza";
       Swal.fire("Error", errorMsg, "error");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -567,9 +572,10 @@ export default function CobranzaColegiosTab() {
             </button>
             <button
               type="submit"
-              className="px-6 py-2 bg-success-500 text-white rounded-lg hover:bg-success-600 transition font-medium"
+              disabled={isSubmitting}
+              className="px-6 py-2 bg-success-500 text-white rounded-lg hover:bg-success-600 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              CONFIRMAR
+              {isSubmitting ? "PROCESANDO..." : "CONFIRMAR"}
             </button>
           </div>
         </form>
