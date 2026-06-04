@@ -163,10 +163,15 @@ export default function CajasList({
         // DIVISAS (TipoId=3): mostrar decimales sólo si los hay (formatMilesSmart).
         // Otros tipos: enteros con separador de miles.
         const monto = Number(caja.CajaMonto);
-        if (caja.CajaTipoId === 3) {
-          return `Gs. ${formatMilesSmart(monto)}`;
-        }
-        return `Gs. ${formatMiles(monto)}`;
+        const texto =
+          caja.CajaTipoId === 3
+            ? `Gs. ${formatMilesSmart(monto)}`
+            : `Gs. ${formatMiles(monto)}`;
+        return (
+          <span className={monto < 0 ? "text-red-600 font-medium" : ""}>
+            {texto}
+          </span>
+        );
       },
     },
     {
