@@ -64,7 +64,6 @@ export default function JSICobroList({
     JSICobroId: undefined,
     CajaId: undefined,
     JSICobroFecha: "",
-    JSICobroCod: "",
     ClienteId: undefined,
     JSICobroMonto: 0,
     JSICobroUsuarioId: undefined,
@@ -97,7 +96,6 @@ export default function JSICobroList({
         JSICobroFecha: currentJSICobro.JSICobroFecha
           ? new Date(currentJSICobro.JSICobroFecha).toISOString().slice(0, 16)
           : "",
-        JSICobroCod: currentJSICobro.JSICobroCod || "",
         ClienteId: currentJSICobro.ClienteId,
         JSICobroMonto: currentJSICobro.JSICobroMonto || 0,
         JSICobroUsuarioId: currentJSICobro.JSICobroUsuarioId,
@@ -114,7 +112,6 @@ export default function JSICobroList({
         JSICobroId: undefined,
         CajaId: undefined,
         JSICobroFecha: `${yyyy}-${mm}-${dd}T${hh}:${min}`,
-        JSICobroCod: "",
         ClienteId: undefined,
         JSICobroMonto: 0,
         JSICobroUsuarioId: undefined,
@@ -165,10 +162,6 @@ export default function JSICobroList({
       key: "JSICobroFecha",
       label: "Fecha",
       render: (row: JSICobro) => formatDate(row.JSICobroFecha || ""),
-    },
-    {
-      key: "JSICobroCod",
-      label: "Código",
     },
     {
       key: "ClienteNombre",
@@ -303,22 +296,6 @@ export default function JSICobroList({
                       onChange={handleInputChange}
                       className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
                       required
-                    />
-                  </div>
-                  <div className="col-span-6 sm:col-span-3">
-                    <label
-                      htmlFor="JSICobroCod"
-                      className="block mb-2 text-sm font-medium text-gray-900"
-                    >
-                      Código
-                    </label>
-                    <input
-                      type="text"
-                      name="JSICobroCod"
-                      id="JSICobroCod"
-                      value={formData.JSICobroCod || ""}
-                      onChange={handleInputChange}
-                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
                     />
                   </div>
                   <div className="col-span-6 sm:col-span-3">

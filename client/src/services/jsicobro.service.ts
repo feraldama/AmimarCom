@@ -6,7 +6,6 @@ export interface JSICobro {
   JSICobroId?: number;
   CajaId?: number;
   JSICobroFecha?: string;
-  JSICobroCod?: string;
   ClienteId?: number;
   JSICobroMonto?: number;
   JSICobroUsuarioId?: number;
