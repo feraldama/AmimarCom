@@ -198,7 +198,7 @@ const JSICobro = {
     const values = [
       jsicobroData.CajaId || null,
       jsicobroData.JSICobroFecha || new Date(),
-      jsicobroData.JSICobroCod || "",
+      jsicobroData.JSICobroCod || null,
       jsicobroData.ClienteId || null,
       jsicobroData.JSICobroMonto || 0,
       jsicobroData.JSICobroUsuarioId || null,
