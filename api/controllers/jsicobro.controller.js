@@ -143,60 +143,72 @@ exports.delete = async (req, res) => {
             CajaId: regCajaId,
           } = registroCompleto;
 
-          // Determinar si es ingreso (TipoGastoId === 2) o egreso (TipoGastoId === 1)
-          const esIngreso = regTipoGastoId === 2;
           const monto = Number(regMonto) || 0;
+          const regCajaIdNumero = regCajaId ? Number(regCajaId) : null;
 
-          // Conjunto de IDs de cajas a actualizar
-          const cajasIdsParaActualizar = new Set();
+          // Al crear el cobro JSI (ver JuntaSaneamientoTab.handleSubmit) las
+          // cajas se movieron así:
+          //   caja aperturada            -> +monto
+          //   demás cajas con el gasto   -> -monto (excluyendo la aperturada)
+          // Al eliminar el movimiento aplicamos exactamente lo opuesto:
+          //   caja aperturada            -> -monto
+          //   demás cajas con el gasto   -> +monto
 
-          // Agregar la caja del registro
-          if (regCajaId) {
-            cajasIdsParaActualizar.add(Number(regCajaId));
+          // 1) Revertir la caja aperturada (la del registro): RESTAR el monto
+          if (regCajaIdNumero) {
+            const cajaAperturadaResult = await db.query(
+              'SELECT "CajaMonto" FROM "caja" WHERE "CajaId" = $1',
+              [regCajaIdNumero]
+            );
+            const cajaAperturada =
+              cajaAperturadaResult.rows.length > 0
+                ? cajaAperturadaResult.rows[0]
+                : null;
+
+            if (cajaAperturada) {
+              const montoActual = Number(cajaAperturada.CajaMonto) || 0;
+              await db.query(
+                'UPDATE "caja" SET "CajaMonto" = $1 WHERE "CajaId" = $2',
+                [montoActual - monto, regCajaIdNumero]
+              );
+            }
           }
 
-          // Obtener todas las cajas que tienen el mismo TipoGastoId y TipoGastoGrupoId en cajagasto
+          // 2) Revertir las demás cajas con el gasto (excluyendo la
+          //    aperturada): SUMAR el monto
+          const cajasIdsDemas = new Set();
           if (regTipoGastoId && regTipoGastoGrupoId) {
             const cajasConGasto = await CajaGasto.getByTipoGastoAndGrupo(
               regTipoGastoId,
               regTipoGastoGrupoId
             );
             cajasConGasto.forEach((cajaGasto) => {
-              if (cajaGasto.CajaId) {
-                cajasIdsParaActualizar.add(Number(cajaGasto.CajaId));
+              if (
+                cajaGasto.CajaId &&
+                Number(cajaGasto.CajaId) !== regCajaIdNumero
+              ) {
+                cajasIdsDemas.add(Number(cajaGasto.CajaId));
               }
             });
           }
 
-          // Actualizar el monto de todas las cajas afectadas
-          if (cajasIdsParaActualizar.size > 0) {
-            const actualizaciones = Array.from(cajasIdsParaActualizar).map(
+          if (cajasIdsDemas.size > 0) {
+            const actualizaciones = Array.from(cajasIdsDemas).map(
               async (cajaIdParaActualizar) => {
-                // Obtener el monto actual y CajaTipoId de la caja
                 const cajaActualResult = await db.query(
-                  'SELECT "CajaMonto", "CajaTipoId" FROM "caja" WHERE "CajaId" = $1',
+                  'SELECT "CajaMonto" FROM "caja" WHERE "CajaId" = $1',
                   [cajaIdParaActualizar]
                 );
-                const cajaActual = cajaActualResult.rows.length > 0 ? cajaActualResult.rows[0] : null;
+                const cajaActual =
+                  cajaActualResult.rows.length > 0
+                    ? cajaActualResult.rows[0]
+                    : null;
 
                 if (cajaActual) {
                   const cajaMontoActual = Number(cajaActual.CajaMonto) || 0;
-                  const cajaTipoId = Number(cajaActual.CajaTipoId);
-                  let nuevoMonto;
-
-                  // Lógica según CajaTipoId
-                  if (cajaTipoId === 1) {
-                    // Si CajaTipoId === 1: RESTAR el monto
-                    nuevoMonto = cajaMontoActual - monto;
-                  } else {
-                    // Si CajaTipoId !== 1: SUMAR el monto
-                    nuevoMonto = cajaMontoActual + monto;
-                  }
-
-                  // Actualizar el monto de la caja
                   await db.query(
                     'UPDATE "caja" SET "CajaMonto" = $1 WHERE "CajaId" = $2',
-                    [nuevoMonto, cajaIdParaActualizar]
+                    [cajaMontoActual + monto, cajaIdParaActualizar]
                   );
                 }
               }
