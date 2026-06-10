@@ -573,18 +573,18 @@ export default function CobranzaColegiosTab() {
           {/* Botones */}
           <div className="flex justify-end gap-4 pt-4 border-t border-gray-200">
             <button
-              type="button"
-              onClick={handleCancel}
-              className="px-6 py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
-            >
-              CANCELAR
-            </button>
-            <button
               type="submit"
               disabled={isSubmitting}
               className="px-6 py-2 bg-success-500 text-white rounded-lg hover:bg-success-600 transition font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isSubmitting ? "PROCESANDO..." : "CONFIRMAR"}
+            </button>
+            <button
+              type="button"
+              onClick={handleCancel}
+              className="px-6 py-2 bg-white border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+            >
+              CANCELAR
             </button>
           </div>
         </form>
