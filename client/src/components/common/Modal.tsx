@@ -18,6 +18,8 @@ interface ModalProps {
   size?: ModalSize;
   hideClose?: boolean;
   footer?: React.ReactNode;
+  onOpenAutoFocus?: (event: Event) => void;
+  bodyClassName?: string;
 }
 
 const sizeClasses: Record<ModalSize, string> = {
@@ -38,17 +40,22 @@ export default function Modal({
   children,
   size = "2xl",
   footer,
+  onOpenAutoFocus,
+  bodyClassName,
 }: ModalProps) {
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className={sizeClasses[size]}>
+      <DialogContent
+        className={sizeClasses[size]}
+        onOpenAutoFocus={onOpenAutoFocus}
+      >
         {title && (
           <DialogHeader>
             <DialogTitle>{title}</DialogTitle>
             <DialogDescription />
           </DialogHeader>
         )}
-        <DialogBody>{children}</DialogBody>
+        <DialogBody className={bodyClassName}>{children}</DialogBody>
         {footer && <DialogFooter>{footer}</DialogFooter>}
       </DialogContent>
     </Dialog>

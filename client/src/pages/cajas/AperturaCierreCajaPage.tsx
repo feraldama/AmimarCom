@@ -36,6 +36,10 @@ interface RegistroDiarioCaja {
   RegistroDiarioCajaMonto: number;
   TipoGastoId: number;
   TipoGastoGrupoId: number;
+  TipoGastoDescripcion?: string;
+  TipoGastoGrupoDescripcion?: string;
+  RegistroDiarioCajaDetalle?: string;
+  RegistroDiarioCajaCambio?: number;
 }
 
 interface Pendiente {
@@ -189,7 +193,7 @@ export default function AperturaCierreCajaPage() {
         icon: "warning",
         title: "Aviso",
         text: error,
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       setError(null);
     }
@@ -234,7 +238,7 @@ export default function AperturaCierreCajaPage() {
             icon: "warning",
             title: "No hay registros",
             text: "No se han cargado los registros de caja. Intente descargar el PDF manualmente.",
-            confirmButtonColor: "#2563eb",
+            confirmButtonColor: "#0d9488",
           });
           return;
         }
@@ -243,7 +247,7 @@ export default function AperturaCierreCajaPage() {
           icon: "warning",
           title: "Error al cargar registros",
           text: "No se pudieron cargar los registros de caja.",
-          confirmButtonColor: "#2563eb",
+          confirmButtonColor: "#0d9488",
         });
         return;
       }
@@ -264,7 +268,7 @@ export default function AperturaCierreCajaPage() {
         icon: "warning",
         title: "No se encontró apertura",
         text: "No se encontró una apertura de caja para este usuario.",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       return;
     }
@@ -278,7 +282,7 @@ export default function AperturaCierreCajaPage() {
         icon: "warning",
         title: "No se encontró cierre",
         text: "No se encontró un cierre de caja para este usuario.",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       return;
     }
@@ -288,7 +292,7 @@ export default function AperturaCierreCajaPage() {
         icon: "warning",
         title: "Error en registros",
         text: "El cierre debe ser posterior a la apertura.",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       return;
     }
@@ -318,7 +322,49 @@ export default function AperturaCierreCajaPage() {
     } else {
       txtSobranteFaltante = "Sobrante/Faltante: 0";
     }
-    const diferencia = ingresos - egresos;
+    // Totales del encabezado: ingresos incluye la apertura, egresos no incluye
+    // el cierre, y la diferencia es el saldo teórico (apertura + ingresos - egresos).
+    const totalIngresos = ingresos + apertura;
+    const diferencia = totalIngresos - egresos;
+
+    // Desglose de egresos e ingresos por concepto (grupo de gasto), sumando los
+    // montos de cada grupo y acumulando el equivalente en U$D cuando hay cotización.
+    const agruparMovimientos = (
+      filtro: (reg: RegistroDiarioCaja) => boolean,
+    ) => {
+      const mapa = new Map<
+        string,
+        { label: string; monto: number; usd: number }
+      >();
+      registrosFiltrados
+        .filter(filtro)
+        .slice()
+        .sort((a, b) => a.RegistroDiarioCajaId - b.RegistroDiarioCajaId)
+        .forEach((reg) => {
+          const label =
+            (reg.TipoGastoGrupoDescripcion || "").trim() ||
+            (reg.TipoGastoDescripcion || "").trim() ||
+            (reg.RegistroDiarioCajaDetalle || "").trim() ||
+            "OTROS";
+          const monto = Number(reg.RegistroDiarioCajaMonto) || 0;
+          const cambio = Number(reg.RegistroDiarioCajaCambio) || 0;
+          const usd = cambio > 0 ? monto / cambio : 0;
+          const actual = mapa.get(label) || { label, monto: 0, usd: 0 };
+          actual.monto += monto;
+          actual.usd += usd;
+          mapa.set(label, actual);
+        });
+      return Array.from(mapa.values());
+    };
+
+    const egresosAgrupados = agruparMovimientos(
+      (reg) => reg.TipoGastoId === 1 && reg.TipoGastoGrupoId !== 2,
+    );
+    const ingresosAgrupados = agruparMovimientos(
+      (reg) => reg.TipoGastoId === 2 && reg.TipoGastoGrupoId !== 2,
+    );
+    const totalEgresosSeccion = cierre + egresos;
+    const totalIngresosSeccion = apertura + ingresos;
 
     const billetesTicket =
       datosCierre?.billetes ??
@@ -341,7 +387,7 @@ export default function AperturaCierreCajaPage() {
     const lineasPendientes = pendientesConContenido.length || 1;
 
     const ALTURA_MINIMA = 0;
-    const MARGEN_INFERIOR = 0;
+    const MARGEN_INFERIOR = 10;
     const calcularAlturaTicket = () => {
       let h = 10;
       h += 6 + 6;
@@ -353,8 +399,10 @@ export default function AperturaCierreCajaPage() {
       h += 5 + monedasTicket.length * 4 + 5;
       h += 6 + 6 + 6;
       h += 5 + lineasPendientes * 4 + 4 + 4 + 6 + 6 + 6;
-      h += 5 + 5 + 5 + 5 + 5 + 6 + 6 + 6;
-      h += 5 + 5 + 5 + 5;
+      // EGRESOS: header + línea + CIERRE CAJA + grupos + línea + TOTAL + líneas
+      h += 5 + 5 + 5 + egresosAgrupados.length * 5 + 5 + 6 + 6 + 6;
+      // INGRESOS: header + línea + APERTURA CAJA + grupos + línea + TOTAL
+      h += 5 + 5 + 5 + ingresosAgrupados.length * 5 + 5 + 5;
       return Math.max(ALTURA_MINIMA, h + MARGEN_INFERIOR);
     };
     const alturaPagina = calcularAlturaTicket();
@@ -393,7 +441,7 @@ export default function AperturaCierreCajaPage() {
 
     doc.text(`Egresos: ${formatMiles(egresos)}`, margin, y);
     y += 5;
-    doc.text(`Ingresos: ${formatMiles(ingresos)}`, margin, y);
+    doc.text(`Ingresos: ${formatMiles(totalIngresos)}`, margin, y);
     y += 5;
     doc.text(`Diferencia: ${formatMiles(diferencia)}`, margin, y);
     y += 5;
@@ -474,9 +522,15 @@ export default function AperturaCierreCajaPage() {
     y += 5;
     doc.text(`CIERRE CAJA: ${formatMiles(cierre)}`, margin, y);
     y += 5;
+    egresosAgrupados.forEach((g) => {
+      const sufijoUsd =
+        g.usd > 0 ? ` - U$D: ${formatMiles(Math.round(g.usd))}` : "";
+      doc.text(`${g.label}: ${formatMiles(g.monto)}${sufijoUsd}`, margin, y);
+      y += 5;
+    });
     doc.line(margin, y, pageW - margin, y);
     y += 5;
-    doc.text(`TOTAL EGRESOS: ${formatMiles(cierre)}`, margin, y);
+    doc.text(`TOTAL EGRESOS: ${formatMiles(totalEgresosSeccion)}`, margin, y);
     y += 6;
     doc.setLineWidth(0.3);
     doc.line(margin, y, pageW - margin, y);
@@ -487,7 +541,17 @@ export default function AperturaCierreCajaPage() {
     y += 5;
     doc.line(margin, y, pageW - margin, y);
     y += 5;
-    doc.text(`TOTAL INGRESOS: ${formatMiles(ingresos)}`, margin, y);
+    doc.text(`APERTURA CAJA: ${formatMiles(apertura)}`, margin, y);
+    y += 5;
+    ingresosAgrupados.forEach((g) => {
+      const sufijoUsd =
+        g.usd > 0 ? ` - U$D: ${formatMiles(Math.round(g.usd))}` : "";
+      doc.text(`${g.label}: ${formatMiles(g.monto)}${sufijoUsd}`, margin, y);
+      y += 5;
+    });
+    doc.line(margin, y, pageW - margin, y);
+    y += 5;
+    doc.text(`TOTAL INGRESOS: ${formatMiles(totalIngresosSeccion)}`, margin, y);
 
     const pdfBlob = doc.output("blob");
     const pdfUrl = URL.createObjectURL(pdfBlob);
@@ -542,7 +606,7 @@ export default function AperturaCierreCajaPage() {
           title: "Apertura exitosa",
           text: result.message || "La caja se aperturó correctamente",
           confirmButtonText: "Ir a cobros",
-          confirmButtonColor: "#2563eb",
+          confirmButtonColor: "#0d9488",
         });
         navigate("/ventas");
       } else {
@@ -604,7 +668,7 @@ export default function AperturaCierreCajaPage() {
         "Solo se puede hacer una vez por día.",
       icon: "question",
       showCancelButton: true,
-      confirmButtonColor: "#2563eb",
+      confirmButtonColor: "#0d9488",
       cancelButtonColor: "#6b7280",
       confirmButtonText: "Sí, registrar",
       cancelButtonText: "Cancelar",
@@ -618,7 +682,7 @@ export default function AperturaCierreCajaPage() {
         icon: "success",
         title: "Cierre diario registrado",
         text: result.message,
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
     } catch (err) {
       const e = err as { message?: string };
@@ -626,7 +690,7 @@ export default function AperturaCierreCajaPage() {
         icon: "warning",
         title: "No se pudo registrar",
         text: e?.message || "Error desconocido",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
     } finally {
       setSnapshotting(false);

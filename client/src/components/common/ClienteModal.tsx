@@ -75,8 +75,14 @@ const ClienteModal: React.FC<ClienteModalProps> = ({
   };
 
   return (
-    <Modal isOpen={show} onClose={onClose} title="Buscar Cliente" size="4xl">
-      <div className="flex justify-end mb-4">
+    <Modal
+      isOpen={show}
+      onClose={onClose}
+      title="Buscar Cliente"
+      size="4xl"
+      bodyClassName="flex flex-col overflow-hidden"
+    >
+      <div className="flex justify-end mb-4 flex-shrink-0">
         {onCreateCliente && (
           <button
             type="button"

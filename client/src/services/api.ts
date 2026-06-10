@@ -41,7 +41,7 @@ api.interceptors.response.use(
           title: "Sesión expirada",
           text: "Tu sesión ha expirado. Por favor, inicia sesión nuevamente.",
           confirmButtonText: "Ir al login",
-          confirmButtonColor: "#3085d6",
+          confirmButtonColor: "#0d9488",
         }).then(() => {
           isSessionExpired = false;
           window.location.href = "/login";

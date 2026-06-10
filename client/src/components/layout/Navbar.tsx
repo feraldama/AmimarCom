@@ -8,6 +8,7 @@ import { Menu as MenuIcon, LogOut } from "lucide-react";
 import { useAuth } from "../../contexts/useAuth";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import type { Dispatch, SetStateAction } from "react";
+import Logo from "../common/Logo";
 
 interface NavbarProps {
   setMobileOpen: Dispatch<SetStateAction<boolean>>;
@@ -37,14 +38,16 @@ export default function Navbar({ setMobileOpen }: NavbarProps) {
           <div className="flex items-center gap-4">
             <button
               type="button"
+              aria-label="Abrir menú de navegación"
               className="rounded-md p-1 text-slate-400 hover:text-white hover:bg-sidebar-hover transition-colors lg:hidden"
               onClick={() => setMobileOpen(true)}
             >
-              <MenuIcon className="size-6" />
+              <MenuIcon className="size-6" aria-hidden="true" />
             </button>
 
-            <Link to="/dashboard" className="text-white font-bold text-lg tracking-wide hidden lg:block">
-              AMIMAR
+            <Link to="/dashboard" className="hidden lg:flex items-center gap-2">
+              <Logo className="size-8" />
+              <span className="text-white font-bold text-lg tracking-wide">Amimar</span>
             </Link>
 
             <div className="hidden sm:flex items-center gap-1 ml-4">

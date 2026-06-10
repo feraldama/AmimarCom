@@ -97,7 +97,7 @@ export default function PagosTab() {
         icon: "warning",
         title: "Caja no aperturada",
         text: "Debes aperturar una caja antes de realizar pagos.",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       return;
     }

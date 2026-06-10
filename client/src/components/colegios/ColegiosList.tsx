@@ -497,6 +497,7 @@ export default function ColegiosList({
                                     type="button"
                                     className="text-primary hover:underline text-xs cursor-pointer"
                                     title="Editar"
+                                    aria-label="Editar"
                                     onClick={() => {
                                       setEditCursoId(c.ColegioCursoId);
                                       setEditCursoNombre(c.ColegioCursoNombre);
@@ -511,13 +512,14 @@ export default function ColegiosList({
                                     type="button"
                                     className="text-danger-600 hover:underline text-xs ml-2 cursor-pointer"
                                     title="Eliminar"
+                                    aria-label="Eliminar"
                                     onClick={async () => {
                                       const confirm = await Swal.fire({
                                         title: "¿Estás seguro?",
                                         text: "¡No podrás revertir esto!",
                                         icon: "warning",
                                         showCancelButton: true,
-                                        confirmButtonColor: "#3085d6",
+                                        confirmButtonColor: "#0d9488",
                                         cancelButtonColor: "#d33",
                                         confirmButtonText: "Sí, eliminar!",
                                         cancelButtonText: "Cancelar",

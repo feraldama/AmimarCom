@@ -156,7 +156,7 @@ export default function PaseCajasTab() {
         icon: "warning",
         title: "Caja no aperturada",
         text: "Debes aperturar una caja antes de realizar egresos.",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       return;
     }
@@ -168,7 +168,7 @@ export default function PaseCajasTab() {
           icon: "warning",
           title: "Caja no seleccionada",
           text: "Debes seleccionar una caja destino.",
-          confirmButtonColor: "#2563eb",
+          confirmButtonColor: "#0d9488",
         });
         return;
       }
@@ -187,7 +187,7 @@ export default function PaseCajasTab() {
           icon: "warning",
           title: "Grupo PASE no configurado",
           text: "Falta el grupo 'PASE <CajaDescripcion>' en tipogastogrupo para una de las cajas involucradas.",
-          confirmButtonColor: "#2563eb",
+          confirmButtonColor: "#0d9488",
         });
         return;
       }
@@ -275,7 +275,7 @@ export default function PaseCajasTab() {
         icon: "warning",
         title: "Caja no aperturada",
         text: "Debes aperturar una caja antes de realizar ingresos.",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       return;
     }
@@ -287,7 +287,7 @@ export default function PaseCajasTab() {
           icon: "warning",
           title: "Caja no seleccionada",
           text: "Debes seleccionar una caja origen.",
-          confirmButtonColor: "#2563eb",
+          confirmButtonColor: "#0d9488",
         });
         return;
       }
@@ -306,7 +306,7 @@ export default function PaseCajasTab() {
           icon: "warning",
           title: "Grupo PASE no configurado",
           text: "Falta el grupo 'PASE <CajaDescripcion>' en tipogastogrupo para una de las cajas involucradas.",
-          confirmButtonColor: "#2563eb",
+          confirmButtonColor: "#0d9488",
         });
         return;
       }

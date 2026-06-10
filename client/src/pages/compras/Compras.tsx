@@ -201,7 +201,7 @@ export default function Compras() {
             icon: "warning",
             title: "Caja no aperturada",
             text: "Debes aperturar una caja antes de realizar compras.",
-            confirmButtonColor: "#2563eb",
+            confirmButtonColor: "#0d9488",
           }).then(() => {
             navigate("/apertura-cierre-caja");
           });
@@ -453,14 +453,14 @@ export default function Compras() {
   };
 
   return (
-    <div className="flex h-screen bg-[#f5f8ff]">
+    <div className="flex h-screen bg-page-bg">
       {/* Lado Izquierdo */}
-      <div className="flex-1 bg-[#f5f8ff] p-4 flex flex-col justify-between">
+      <div className="flex-1 bg-page-bg p-4 flex flex-col justify-between">
         <div className="bg-white rounded-xl shadow-lg p-0 mb-4 flex flex-col max-h-[80vh] overflow-hidden">
           <div className="flex-1 overflow-y-auto">
             <table className="w-full border-separate border-spacing-0">
               <thead>
-                <tr className="text-left bg-[#f5f8ff]">
+                <tr className="text-left bg-page-bg">
                   <th className="py-4 pl-6 font-semibold text-[15px]">
                     Nombre
                   </th>
@@ -488,21 +488,23 @@ export default function Compras() {
                         <img
                           src={p.imagen}
                           alt={p.nombre}
-                          className="w-14 h-14 object-contain rounded-lg bg-[#f5f8ff] shadow"
+                          className="w-14 h-14 object-contain rounded-lg bg-page-bg shadow"
                         />
                         <div>
-                          <div className="font-bold text-[17px] text-[#222] leading-tight">
+                          <div className="font-bold text-[17px] text-gray-900 leading-tight">
                             {p.nombre}
                           </div>
-                          <div
-                            className="text-danger-600 text-sm mt-1 cursor-pointer"
+                          <button
+                            type="button"
+                            aria-label={`Eliminar ${p.nombre}`}
+                            className="text-danger-600 text-sm mt-1 cursor-pointer hover:underline"
                             onClick={(e) => {
                               e.stopPropagation();
                               quitarProducto(p.cartItemId);
                             }}
                           >
                             Eliminar
-                          </div>
+                          </button>
                         </div>
                       </div>
                     </td>
@@ -531,7 +533,7 @@ export default function Compras() {
                             type="number"
                             value={p.cantidad}
                             min={0}
-                            className="w-10 h-8 text-center border border-gray-300 rounded bg-gray-50 text-base font-semibold text-[#222] mx-1"
+                            className="w-10 h-8 text-center border border-gray-300 rounded bg-gray-50 text-base font-semibold text-gray-900 mx-1"
                             readOnly
                             ref={(el) => {
                               cantidadRefs.current[p.cartItemId] = el || null;
@@ -723,10 +725,10 @@ export default function Compras() {
             />
           </div>
           {user && (
-            <div className="ml-6 font-semibold text-[#222] text-[16px] flex items-center gap-2">
+            <div className="ml-6 font-semibold text-gray-900 text-[16px] flex items-center gap-2">
               <span>
                 {user.nombre + " "}
-                <span style={{ color: "#888", fontWeight: 400 }}>
+                <span className="text-gray-500 font-normal">
                   ({user.id})
                 </span>
               </span>
@@ -761,7 +763,18 @@ export default function Compras() {
             }}
           >
             {loading ? (
-              <div>Cargando productos...</div>
+              <div className="col-span-full flex items-center justify-center gap-2 py-10 text-gray-500">
+                <svg
+                  className="size-5 animate-spin motion-reduce:animate-none"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Cargando productos...
+              </div>
             ) : (
               productos
                 .filter(

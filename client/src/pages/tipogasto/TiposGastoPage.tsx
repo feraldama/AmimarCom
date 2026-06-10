@@ -85,7 +85,7 @@ export default function TiposGastoPage() {
       text: "No podras revertir esto!",
       icon: "warning",
       showCancelButton: true,
-      confirmButtonColor: "#2563eb",
+      confirmButtonColor: "#0d9488",
       cancelButtonColor: "#6b7280",
       confirmButtonText: "Si, eliminar",
       cancelButtonText: "Cancelar",

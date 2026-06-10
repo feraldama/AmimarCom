@@ -296,7 +296,7 @@ const ReportesPage: React.FC = () => {
       body: rows,
       startY: 32,
       theme: "striped",
-      headStyles: { fillColor: [79, 70, 229] },
+      headStyles: { fillColor: [13, 148, 136] },
       styles: { fontSize: 9 },
       margin: { left: 14, right: 14 },
       didParseCell: (data) => {
@@ -333,7 +333,7 @@ const ReportesPage: React.FC = () => {
           (r.DivisaNombre || "").trim(), formatMiles(Number(r.CantCompra)), formatMiles(Number(r.MontoCompra)),
           formatMiles(Number(r.CantVenta)), formatMiles(Number(r.MontoVenta)), r.CantOperaciones,
         ]),
-        startY: 38, theme: "striped", headStyles: { fillColor: [79, 70, 229] }, styles: { fontSize: 9 },
+        startY: 38, theme: "striped", headStyles: { fillColor: [13, 148, 136] }, styles: { fontSize: 9 },
       });
     }
 

@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import type { Dispatch, SetStateAction } from "react";
+import Logo from "../common/Logo";
 
 interface NavigationChild {
   name: string;
@@ -222,13 +223,21 @@ export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
       >
         <div className="flex h-full flex-col bg-sidebar">
           <div className="flex h-14 items-center justify-between px-4 border-b border-white/10">
-            <span className="text-white font-bold text-lg tracking-wide">AMIMAR</span>
+            <Link
+              to="/dashboard"
+              onClick={() => setMobileOpen(false)}
+              className="flex items-center gap-2"
+            >
+              <Logo className="size-8" />
+              <span className="text-white font-bold text-lg tracking-wide">Amimar</span>
+            </Link>
             <button
               type="button"
+              aria-label="Cerrar menú de navegación"
               className="rounded-md p-1 text-slate-400 hover:text-white hover:bg-sidebar-hover transition-colors"
               onClick={() => setMobileOpen(false)}
             >
-              <X className="size-5" />
+              <X className="size-5" aria-hidden="true" />
             </button>
           </div>
           <div className="flex-1 overflow-y-auto">{sidebarContent}</div>

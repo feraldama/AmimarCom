@@ -96,7 +96,7 @@ export default function Sales() {
             title: "Caja no aperturada",
             text: "Debes aperturar una caja antes de realizar cobros.",
             confirmButtonText: "Ir a aperturar caja",
-            confirmButtonColor: "#4f46e5",
+            confirmButtonColor: "#0d9488",
           });
           navigate("/apertura-cierre-caja");
         }
@@ -107,7 +107,7 @@ export default function Sales() {
           title: "Caja no aperturada",
           text: "Debes aperturar una caja antes de realizar cobros.",
           confirmButtonText: "Ir a aperturar caja",
-          confirmButtonColor: "#4f46e5",
+          confirmButtonColor: "#0d9488",
         });
         navigate("/apertura-cierre-caja");
       }
@@ -189,17 +189,19 @@ export default function Sales() {
           {canScrollLeft && (
             <button
               onClick={() => scrollTabs("left")}
+              aria-label="Desplazar pestañas a la izquierda"
               className="absolute left-0 top-0 bottom-0 z-10 w-8 bg-gradient-to-r from-white to-transparent flex items-center justify-center cursor-pointer"
             >
-              <ChevronLeft className="size-4 text-muted-foreground" />
+              <ChevronLeft className="size-4 text-muted-foreground" aria-hidden="true" />
             </button>
           )}
           {canScrollRight && (
             <button
               onClick={() => scrollTabs("right")}
+              aria-label="Desplazar pestañas a la derecha"
               className="absolute right-0 top-0 bottom-0 z-10 w-8 bg-gradient-to-l from-white to-transparent flex items-center justify-center cursor-pointer"
             >
-              <ChevronRight className="size-4 text-muted-foreground" />
+              <ChevronRight className="size-4 text-muted-foreground" aria-hidden="true" />
             </button>
           )}
 

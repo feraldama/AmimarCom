@@ -157,7 +157,7 @@ export const generatePresupuestoPDF = async (
     body: body,
     startY: 45,
     headStyles: {
-      fillColor: [41, 128, 185],
+      fillColor: [13, 148, 136],
       textColor: 255,
       fontStyle: "bold",
     },

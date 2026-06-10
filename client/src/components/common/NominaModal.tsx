@@ -1,5 +1,5 @@
 import { Plus } from "lucide-react";
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import ActionButton from "./Button/ActionButton";
 import { getColegios } from "../../services/colegio.service";
 import { getColegioCursos } from "../../services/colegio.service";
@@ -49,6 +49,7 @@ const NominaModal: React.FC<NominaModalProps> = ({
   const [page, setPage] = useState(1);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const nombreInputRef = useRef<HTMLInputElement>(null);
   const [colegios, setColegios] = useState<Colegio[]>([]);
   const [cursos, setCursos] = useState<ColegioCurso[]>([]);
   const [formData, setFormData] = useState<Nomina>({
@@ -161,8 +162,18 @@ const NominaModal: React.FC<NominaModalProps> = ({
   };
 
   return (
-    <Modal isOpen={show} onClose={onClose} title="Buscar Nómina" size="4xl">
-      <div className="flex justify-end mb-4">
+    <Modal
+      isOpen={show}
+      onClose={onClose}
+      title="Buscar Nómina"
+      size="4xl"
+      bodyClassName="flex flex-col overflow-hidden"
+      onOpenAutoFocus={(e) => {
+        e.preventDefault();
+        nombreInputRef.current?.focus();
+      }}
+    >
+      <div className="flex justify-end mb-4 flex-shrink-0">
         {onCreateNomina && (
           <button
             type="button"
@@ -185,6 +196,7 @@ const NominaModal: React.FC<NominaModalProps> = ({
               Nombre
             </label>
             <input
+              ref={nombreInputRef}
               className="w-full border border-gray-200 rounded px-2 py-1 text-sm"
               placeholder="Buscar"
               value={filtros.nombre}

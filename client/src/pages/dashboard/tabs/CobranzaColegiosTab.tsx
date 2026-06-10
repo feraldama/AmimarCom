@@ -60,6 +60,7 @@ export default function CobranzaColegiosTab() {
   const [importe, setImporte] = useState<number>(0);
   const [mesPagado, setMesPagado] = useState("");
   const mesPagadoRef = useRef<HTMLInputElement>(null);
+  const nominaButtonRef = useRef<HTMLButtonElement>(null);
   const [mes, setMes] = useState<number>(0);
   const [subtotalCuota, setSubtotalCuota] = useState<number>(0);
   const [diasMora, setDiasMora] = useState<number>(0);
@@ -101,6 +102,12 @@ export default function CobranzaColegiosTab() {
     };
     fetchData();
   }, [user]);
+
+  // Enfocar el campo Nómina al entrar al tab
+  useEffect(() => {
+    const timer = setTimeout(() => nominaButtonRef.current?.focus(), 0);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Cuando se selecciona una nómina, cargar colegio y curso
   useEffect(() => {
@@ -176,7 +183,7 @@ export default function CobranzaColegiosTab() {
         icon: "warning",
         title: "Caja no aperturada",
         text: "Debes aperturar una caja antes de realizar cobranzas.",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       return;
     }
@@ -186,7 +193,7 @@ export default function CobranzaColegiosTab() {
         icon: "warning",
         title: "Datos incompletos",
         text: "Debes seleccionar una nómina válida.",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       return;
     }
@@ -200,7 +207,7 @@ export default function CobranzaColegiosTab() {
           icon: "warning",
           title: "Error",
           text: "El colegio no tiene TipoGastoId y TipoGastoGrupoId asignados.",
-          confirmButtonColor: "#2563eb",
+          confirmButtonColor: "#0d9488",
         });
         return;
       }
@@ -359,6 +366,7 @@ export default function CobranzaColegiosTab() {
                 Nómina
               </label>
               <button
+                ref={nominaButtonRef}
                 type="button"
                 onClick={(e) => {
                   e.preventDefault();

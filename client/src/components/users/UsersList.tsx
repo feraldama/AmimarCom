@@ -458,12 +458,13 @@ export default function UsuariosList({
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
+                          aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
                           className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-500"
                         >
                           {showPassword ? (
-                            <EyeOff className="size-5" />
+                            <EyeOff className="size-5" aria-hidden="true" />
                           ) : (
-                            <Eye className="size-5" />
+                            <Eye className="size-5" aria-hidden="true" />
                           )}
                         </button>
                       </div>

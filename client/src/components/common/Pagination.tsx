@@ -71,7 +71,8 @@ const Pagination = ({
           size="icon"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className="size-8"
+          aria-label="Página anterior"
+          className="size-9"
         >
           <ChevronLeft className="size-4" />
         </Button>
@@ -102,7 +103,8 @@ const Pagination = ({
           size="icon"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className="size-8"
+          aria-label="Página siguiente"
+          className="size-9"
         >
           <ChevronRight className="size-4" />
         </Button>

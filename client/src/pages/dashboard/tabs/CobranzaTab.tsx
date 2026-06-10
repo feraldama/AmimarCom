@@ -169,7 +169,7 @@ export default function CobranzaTab() {
         icon: "warning",
         title: "Caja no aperturada",
         text: "Debes aperturar una caja antes de realizar cobranzas.",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       return;
     }
@@ -179,7 +179,7 @@ export default function CobranzaTab() {
         icon: "warning",
         title: "Datos incompletos",
         text: "Debes seleccionar un tipo de gasto y grupo.",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       return;
     }

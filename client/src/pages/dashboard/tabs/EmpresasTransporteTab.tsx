@@ -143,7 +143,7 @@ export default function EmpresasTransporteTab() {
         icon: "warning",
         title: "Caja no aperturada",
         text: "Debes aperturar una caja antes de realizar pagos de transporte.",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       return;
     }
@@ -153,7 +153,7 @@ export default function EmpresasTransporteTab() {
         icon: "warning",
         title: "Datos incompletos",
         text: "Debes seleccionar un transporte.",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       return;
     }
@@ -171,7 +171,7 @@ export default function EmpresasTransporteTab() {
           icon: "warning",
           title: "Error",
           text: "El transporte no tiene TipoGastoId y TipoGastoGrupoId asignados.",
-          confirmButtonColor: "#2563eb",
+          confirmButtonColor: "#0d9488",
         });
         return;
       }

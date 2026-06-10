@@ -71,7 +71,7 @@ const CreditoPagosPage = () => {
             icon: "warning",
             title: "Caja no aperturada",
             text: "Debes aperturar una caja antes de registrar un pago.",
-            confirmButtonColor: "#2563eb",
+            confirmButtonColor: "#0d9488",
           }).then(() => {
             navigate("/apertura-cierre-caja");
           });

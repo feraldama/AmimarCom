@@ -162,7 +162,8 @@ function DataTable<T extends DataTableRow>({
                             size="icon"
                             onClick={() => onEdit(item)}
                             title="Editar"
-                            className="size-8 text-primary hover:text-primary"
+                            aria-label="Editar"
+                            className="size-9 text-primary hover:text-primary"
                           >
                             <Pencil className="size-4" />
                           </Button>
@@ -173,7 +174,8 @@ function DataTable<T extends DataTableRow>({
                             size="icon"
                             onClick={() => onViewCredit(item)}
                             title="Ver Detalles de Credito"
-                            className="size-8 text-emerald-600 hover:text-emerald-600"
+                            aria-label="Ver detalles de crédito"
+                            className="size-9 text-emerald-600 hover:text-emerald-600"
                           >
                             <CreditCard className="size-4" />
                           </Button>
@@ -187,7 +189,8 @@ function DataTable<T extends DataTableRow>({
                               onDelete(item, e);
                             }}
                             title="Eliminar"
-                            className="size-8 text-destructive hover:text-destructive"
+                            aria-label="Eliminar"
+                            className="size-9 text-destructive hover:text-destructive"
                           >
                             <Trash2 className="size-4" />
                           </Button>

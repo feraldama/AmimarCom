@@ -3,6 +3,7 @@ import type { ChangeEvent, FormEvent } from "react";
 import { useAuth } from "../../../contexts/useAuth";
 import { useNavigate } from "react-router-dom";
 import { Eye, EyeOff, AlertTriangle, X } from "lucide-react";
+import Logo from "../../../components/common/Logo";
 
 interface Credentials {
   email: string;
@@ -47,28 +48,75 @@ function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-page-bg px-4">
-      <div className="w-full max-w-sm">
-        {/* Logo / Branding */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-14 h-14 rounded-xl bg-primary-600 mb-4">
-            <span className="text-white font-bold text-2xl">A</span>
-          </div>
-          <h1 className="text-2xl font-bold text-gray-900">AMIMAR</h1>
-          <p className="text-sm text-gray-500 mt-1">Inicia sesión en tu cuenta</p>
+    <div className="flex min-h-dvh">
+      {/* ───────────────── Panel de marca (desktop) ───────────────── */}
+      <aside className="relative hidden w-1/2 flex-col justify-between overflow-hidden bg-gradient-to-br from-brand-700 via-brand-800 to-brand-900 p-12 text-white lg:flex">
+        {/* Formas decorativas */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-24 -top-24 size-80 rounded-full bg-white/10 blur-3xl"
+        />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -bottom-32 -left-20 size-96 rounded-full bg-brand-400/20 blur-3xl"
+        />
+
+        {/* Logo + nombre */}
+        <div className="relative flex items-center gap-3">
+          <Logo className="size-12" />
+          <span className="text-xl font-bold tracking-tight">Amimar</span>
         </div>
 
-        {/* Card */}
-        <div className="bg-white rounded-xl shadow-card p-6 space-y-5">
+        {/* Mensaje principal */}
+        <div className="relative max-w-md">
+          <h1 className="text-4xl font-bold leading-tight">
+            Gestión financiera, clara y bajo control.
+          </h1>
+          <p className="mt-4 text-base text-white/70">
+            Administrá cajas, cobros y pagos desde un solo lugar, con la
+            precisión que tu negocio necesita.
+          </p>
+        </div>
+
+        {/* Pie */}
+        <p className="relative text-sm text-white/50">
+          © 2026 Amimar. Todos los derechos reservados.
+        </p>
+      </aside>
+
+      {/* ───────────────── Panel del formulario ───────────────── */}
+      <main className="flex flex-1 items-center justify-center bg-white px-6 py-12">
+        <div className="mx-auto flex w-full max-w-sm flex-col">
+          {/* Logo móvil (panel de marca oculto en mobile) */}
+          <div className="mb-8 flex flex-col items-center lg:hidden">
+            <Logo className="size-14" />
+            <span className="mt-3 text-2xl font-bold tracking-tight text-gray-900">
+              Amimar
+            </span>
+          </div>
+
+          {/* Encabezado */}
+          <div className="mb-8 text-center lg:text-left">
+            <h2 className="text-2xl font-bold text-gray-900">
+              Bienvenido de vuelta
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Inicia sesión para acceder a tu cuenta
+            </p>
+          </div>
+
           {/* Error */}
           {error && (
             <div
               role="alert"
               aria-live="assertive"
-              className="flex items-start gap-3 p-3 bg-danger-50 border border-danger-100 rounded-lg text-sm"
+              className="mb-5 flex items-start gap-3 rounded-lg border border-danger-100 bg-danger-50 p-3 text-sm"
             >
-              <AlertTriangle className="size-5 text-danger-500 flex-shrink-0 mt-0.5" aria-hidden="true" />
-              <span className="text-danger-600 flex-1">{error}</span>
+              <AlertTriangle
+                className="size-5 flex-shrink-0 mt-0.5 text-danger-500"
+                aria-hidden="true"
+              />
+              <span className="flex-1 text-danger-600">{error}</span>
               <button
                 type="button"
                 onClick={() => setError("")}
@@ -100,7 +148,7 @@ function Login() {
                 autoComplete="username"
                 placeholder="Ingresa tu usuario"
                 className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900
-                  placeholder:text-gray-400 focus:ring-2 focus:ring-primary-300 focus:border-primary-500 transition-colors"
+                  placeholder:text-gray-400 focus:ring-2 focus:ring-brand-300 focus:border-brand-500 transition-colors"
               />
             </div>
 
@@ -123,13 +171,15 @@ function Login() {
                   autoComplete="current-password"
                   placeholder="Ingresa tu contraseña"
                   className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2 pr-10 text-sm text-gray-900
-                    placeholder:text-gray-400 focus:ring-2 focus:ring-primary-300 focus:border-primary-500 transition-colors"
+                    placeholder:text-gray-400 focus:ring-2 focus:ring-brand-300 focus:border-brand-500 transition-colors"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 hover:text-gray-600 cursor-pointer"
-                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  aria-label={
+                    showPassword ? "Ocultar contraseña" : "Mostrar contraseña"
+                  }
                 >
                   {showPassword ? (
                     <EyeOff className="size-[18px]" aria-hidden="true" />
@@ -145,10 +195,11 @@ function Login() {
               type="submit"
               disabled={loading}
               className={`flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-semibold text-white
-                transition-colors focus:outline-none focus:ring-2 focus:ring-primary-300 focus:ring-offset-1
-                ${loading
-                  ? "bg-primary-400 cursor-not-allowed"
-                  : "bg-primary-600 hover:bg-primary-700 cursor-pointer"
+                transition-colors focus:outline-none focus:ring-2 focus:ring-brand-300 focus:ring-offset-1
+                ${
+                  loading
+                    ? "bg-brand-400 cursor-not-allowed"
+                    : "bg-brand-600 hover:bg-brand-700 cursor-pointer"
                 }`}
             >
               {loading ? (
@@ -159,8 +210,19 @@ function Login() {
                     viewBox="0 0 24 24"
                     aria-hidden="true"
                   >
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                    />
                   </svg>
                   Ingresando...
                 </>
@@ -170,7 +232,7 @@ function Login() {
             </button>
           </form>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { X } from "lucide-react";
 import { formatMiles } from "../../utils/utils";
 
 interface PaymentModalProps {
@@ -230,113 +231,46 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
 
   if (!show) return null;
 
+  // Clases compartidas de los inputs de monto: activo resalta con la marca.
+  const inputClass = (activo: boolean) =>
+    `w-[120px] rounded-md border px-2.5 py-1.5 text-right text-base outline-none transition-colors focus:ring-2 focus:ring-brand-300 ${
+      activo ? "border-brand-300 bg-brand-50" : "border-gray-300 bg-gray-50"
+    }`;
+  const labelClass = "mr-2 flex-1 text-right text-base text-gray-700";
+
   return (
     <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        width: "100vw",
-        height: "100vh",
-        background: "rgba(0,0,0,0.15)",
-        zIndex: 1000,
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-      }}
+      className="fixed inset-0 z-[1000] flex items-center justify-center bg-black/40 p-4"
       onKeyPress={handleKeyPress}
       tabIndex={0}
     >
-      <div
-        style={{
-          background: "#fff",
-          borderRadius: 12,
-          width: 800,
-          maxWidth: "98vw",
-          boxShadow: "0 8px 32px #0002",
-          padding: 32,
-          position: "relative",
-        }}
-      >
+      <div className="relative w-[800px] max-w-[98vw] rounded-xl bg-white p-8 shadow-2xl">
         <button
+          type="button"
           onClick={handleClose}
-          style={{
-            position: "absolute",
-            top: 16,
-            right: 20,
-            fontSize: 28,
-            color: "#888",
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-          }}
+          aria-label="Cerrar"
+          className="absolute right-4 top-4 rounded text-gray-400 transition-colors hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-brand-300 cursor-pointer"
         >
-          ×
+          <X className="size-6" aria-hidden="true" />
         </button>
-        <h2
-          style={{
-            fontWeight: 700,
-            fontSize: 26,
-            marginBottom: 24,
-            color: "#2d3748",
-          }}
-        >
+        <h2 className="mb-6 text-2xl font-bold text-gray-800">
           Seleccione un método de pago
         </h2>
-        <div style={{ display: "flex", gap: 24 }}>
+        <div className="flex gap-6">
           {/* Columna izquierda */}
-          <div style={{ flex: 1 }}>
+          <div className="flex-1">
             {/* TOTAL */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                marginBottom: 18,
-              }}
-            >
-              <div
-                style={{
-                  background: "#e9eef7",
-                  borderRadius: 6,
-                  padding: "8px 22px",
-                  fontWeight: 700,
-                  fontSize: 22,
-                  color: "#3b4256",
-                  marginRight: 8,
-                }}
-              >
+            <div className="mb-[18px] flex items-center">
+              <div className="mr-2 rounded-md bg-slate-100 px-[22px] py-2 text-[22px] font-bold text-slate-600">
                 Total
               </div>
-              <div
-                style={{
-                  fontWeight: 700,
-                  fontSize: 28,
-                  color: "#2ecc40",
-                  background: "#f7fafc",
-                  borderRadius: 6,
-                  padding: "8px 22px",
-                }}
-              >
+              <div className="rounded-md bg-slate-50 px-[22px] py-2 text-[28px] font-bold text-success-600">
                 Gs. {formatMiles(totalCost)}
               </div>
             </div>
             {/* Efectivo */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                marginBottom: 10,
-              }}
-            >
-              <label
-                style={{
-                  flex: 1,
-                  fontSize: 16,
-                  color: "#444",
-                  textAlign: "right",
-                  marginRight: 8,
-                }}
-              >
+            <div className="mb-2.5 flex items-center">
+              <label htmlFor="efectivo-input" className={labelClass}>
                 Efectivo:
               </label>
               <input
@@ -364,41 +298,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     voucher;
                   setTotalRest(totalResto);
                 }}
-                style={{
-                  width: 120,
-                  padding: "6px 10px",
-                  border:
-                    pagoTipo === "E"
-                      ? "2px solid #a5b4fc"
-                      : "1px solid #cbd5e1",
-                  borderRadius: 6,
-                  fontSize: 16,
-                  textAlign: "right",
-                  background: pagoTipo === "E" ? "#f0f6ff" : "#f9fafb",
-                  outline: "none",
-                }}
+                className={inputClass(pagoTipo === "E")}
               />
             </div>
             {/* Transferencia */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                marginBottom: 10,
-              }}
-            >
-              <label
-                style={{
-                  flex: 1,
-                  fontSize: 16,
-                  color: "#444",
-                  textAlign: "right",
-                  marginRight: 8,
-                }}
-              >
+            <div className="mb-2.5 flex items-center">
+              <label htmlFor="transferencia-input" className={labelClass}>
                 Transferencia:
               </label>
               <input
+                id="transferencia-input"
                 type="text"
                 value={formatMiles(banco)}
                 onFocus={(e) => {
@@ -422,41 +331,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     voucher;
                   setTotalRest(totalResto);
                 }}
-                style={{
-                  width: 120,
-                  padding: "6px 10px",
-                  border:
-                    pagoTipo === "B"
-                      ? "2px solid #a5b4fc"
-                      : "1px solid #cbd5e1",
-                  borderRadius: 6,
-                  fontSize: 16,
-                  textAlign: "right",
-                  background: pagoTipo === "B" ? "#f0f6ff" : "#f9fafb",
-                  outline: "none",
-                }}
+                className={inputClass(pagoTipo === "B")}
               />
             </div>
             {/* Tarjeta Débito */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                marginBottom: 10,
-              }}
-            >
-              <label
-                style={{
-                  flex: 1,
-                  fontSize: 16,
-                  color: "#444",
-                  textAlign: "right",
-                  marginRight: 8,
-                }}
-              >
+            <div className="mb-2.5 flex items-center">
+              <label htmlFor="debito-input" className={labelClass}>
                 Tarjeta Débito (3% adicional):
               </label>
               <input
+                id="debito-input"
                 type="text"
                 value={formatMiles(bancoDebito)}
                 onFocus={(e) => {
@@ -480,41 +364,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     voucher;
                   setTotalRest(totalResto);
                 }}
-                style={{
-                  width: 120,
-                  padding: "6px 10px",
-                  border:
-                    pagoTipo === "D"
-                      ? "2px solid #a5b4fc"
-                      : "1px solid #cbd5e1",
-                  borderRadius: 6,
-                  fontSize: 16,
-                  textAlign: "right",
-                  background: pagoTipo === "D" ? "#f0f6ff" : "#f9fafb",
-                  outline: "none",
-                }}
+                className={inputClass(pagoTipo === "D")}
               />
             </div>
             {/* Tarjeta Crédito */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                marginBottom: 10,
-              }}
-            >
-              <label
-                style={{
-                  flex: 1,
-                  fontSize: 16,
-                  color: "#444",
-                  textAlign: "right",
-                  marginRight: 8,
-                }}
-              >
+            <div className="mb-2.5 flex items-center">
+              <label htmlFor="credito-input" className={labelClass}>
                 Tarjeta Crédito (5% adicional):
               </label>
               <input
+                id="credito-input"
                 type="text"
                 value={formatMiles(bancoCredito)}
                 onFocus={(e) => {
@@ -538,41 +397,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     voucher;
                   setTotalRest(totalResto);
                 }}
-                style={{
-                  width: 120,
-                  padding: "6px 10px",
-                  border:
-                    pagoTipo === "CR"
-                      ? "2px solid #a5b4fc"
-                      : "1px solid #cbd5e1",
-                  borderRadius: 6,
-                  fontSize: 16,
-                  textAlign: "right",
-                  background: pagoTipo === "CR" ? "#f0f6ff" : "#f9fafb",
-                  outline: "none",
-                }}
+                className={inputClass(pagoTipo === "CR")}
               />
             </div>
             {/* Cuenta Cliente */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                marginBottom: 10,
-              }}
-            >
-              <label
-                style={{
-                  flex: 1,
-                  fontSize: 16,
-                  color: "#444",
-                  textAlign: "right",
-                  marginRight: 8,
-                }}
-              >
+            <div className="mb-2.5 flex items-center">
+              <label htmlFor="cuenta-input" className={labelClass}>
                 Cuenta de cliente:
               </label>
               <input
+                id="cuenta-input"
                 type="text"
                 value={formatMiles(cuentaCliente)}
                 onFocus={(e) => {
@@ -596,41 +430,16 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     voucher;
                   setTotalRest(totalResto);
                 }}
-                style={{
-                  width: 120,
-                  padding: "6px 10px",
-                  border:
-                    pagoTipo === "C"
-                      ? "2px solid #a5b4fc"
-                      : "1px solid #cbd5e1",
-                  borderRadius: 6,
-                  fontSize: 16,
-                  textAlign: "right",
-                  background: pagoTipo === "C" ? "#f0f6ff" : "#f9fafb",
-                  outline: "none",
-                }}
+                className={inputClass(pagoTipo === "C")}
               />
             </div>
             {/* Voucher */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                marginBottom: 10,
-              }}
-            >
-              <label
-                style={{
-                  flex: 1,
-                  fontSize: 16,
-                  color: "#444",
-                  textAlign: "right",
-                  marginRight: 8,
-                }}
-              >
+            <div className="mb-2.5 flex items-center">
+              <label htmlFor="voucher-input" className={labelClass}>
                 Voucher:
               </label>
               <input
+                id="voucher-input"
                 type="text"
                 value={formatMiles(voucher)}
                 onFocus={(e) => {
@@ -654,86 +463,40 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
                     newValue;
                   setTotalRest(totalResto);
                 }}
-                style={{
-                  width: 120,
-                  padding: "6px 10px",
-                  border:
-                    pagoTipo === "V"
-                      ? "2px solid #a5b4fc"
-                      : "1px solid #cbd5e1",
-                  borderRadius: 6,
-                  fontSize: 16,
-                  textAlign: "right",
-                  background: pagoTipo === "V" ? "#f0f6ff" : "#f9fafb",
-                  outline: "none",
-                }}
+                className={inputClass(pagoTipo === "V")}
               />
             </div>
             {/* Vuelto */}
-            <div
-              style={{
-                fontWeight: 700,
-                fontSize: 28,
-                color: "#374151",
-                marginTop: 24,
-              }}
-            >
+            <div className="mt-6 text-[28px] font-bold text-gray-700">
               Vuelto:{" "}
-              <span style={{ color: totalRest < 0 ? "red" : "#000" }}>
+              <span className={totalRest < 0 ? "text-danger-600" : "text-gray-900"}>
                 {totalRest < 0 ? formatMiles(totalRest * -1) : "0"}
               </span>
             </div>
-            <div
-              style={{
-                marginTop: 18,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-              }}
-            >
+            <div className="mt-[18px] flex items-center gap-2">
               <input
                 type="checkbox"
                 checked={printTicket}
                 onChange={(e) => setPrintTicket(e.target.checked)}
                 id="imprimir"
+                className="size-4 cursor-pointer accent-brand-600 focus:ring-2 focus:ring-brand-300"
               />
               <label
                 htmlFor="imprimir"
-                style={{ fontSize: 17, color: "#6b7280", fontWeight: 500 }}
+                className="cursor-pointer text-[17px] font-medium text-gray-500"
               >
                 Imprimir ticket
               </label>
             </div>
           </div>
           {/* Columna derecha: Pad numérico */}
-          <div
-            style={{
-              flex: 1,
-              display: "flex",
-              flexDirection: "column",
-              gap: 12,
-            }}
-          >
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(3, 1fr)",
-                gap: 10,
-                marginBottom: 10,
-              }}
-            >
+          <div className="flex flex-1 flex-col gap-3">
+            <div className="mb-2.5 grid grid-cols-3 gap-2.5">
               {buttonsPago.flat().map((label, idx) => (
                 <button
                   key={idx}
-                  style={{
-                    height: 54,
-                    fontSize: 22,
-                    background: "#f8fafc",
-                    border: "1px solid #e5e7eb",
-                    borderRadius: 8,
-                    cursor: "pointer",
-                    fontWeight: 600,
-                  }}
+                  type="button"
+                  className="h-[54px] cursor-pointer rounded-lg border border-gray-200 bg-slate-50 text-[22px] font-semibold text-gray-700 transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-300"
                   onClick={() => onNumberClickModal(label)}
                 >
                   {label}
@@ -741,51 +504,30 @@ const PaymentModal: React.FC<PaymentModalProps> = ({
               ))}
             </div>
             <button
-              style={{
-                height: 48,
-                fontSize: 18,
-                background: "#f8fafc",
-                border: "1px solid #e5e7eb",
-                borderRadius: 8,
-                cursor: "pointer",
-                fontWeight: 500,
-              }}
+              type="button"
+              className="h-12 cursor-pointer rounded-lg border border-gray-200 bg-slate-50 text-lg font-medium text-gray-700 transition-colors hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-300"
               onClick={cerarCantidadModal}
             >
-              Cerar
+              Borrar
             </button>
           </div>
         </div>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: 12,
-            marginTop: 32,
-          }}
-        >
+        <div className="mt-8 flex justify-end gap-3">
           <button
-            style={{
-              background: "#e5e7eb",
-              color: "#374151",
-              fontWeight: 600,
-              fontSize: 18,
-              borderRadius: 8,
-              padding: "10px 32px",
-              border: "none",
-              cursor: "pointer",
-            }}
+            type="button"
+            className="cursor-pointer rounded-lg bg-gray-200 px-8 py-2.5 text-lg font-semibold text-gray-700 transition-colors hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-400 disabled:cursor-not-allowed disabled:opacity-50"
             onClick={handleClose}
             disabled={isSubmitting}
           >
             Cancelar
           </button>
           <button
-            className={`px-8 py-2.5 rounded-lg font-bold text-lg border-none transition-colors duration-200
+            type="button"
+            className={`rounded-lg px-8 py-2.5 text-lg font-bold text-white transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-brand-300 focus:ring-offset-1
               ${
                 isSubmitting || totalRest > 0
-                  ? "bg-primary-200 text-white cursor-not-allowed"
-                  : "bg-primary hover:bg-primary-700 text-white cursor-pointer"
+                  ? "bg-primary-200 cursor-not-allowed"
+                  : "bg-primary hover:bg-primary-700 cursor-pointer"
               }
             `}
             onClick={handleSendRequest}

@@ -143,7 +143,7 @@ export default function DivisasTab() {
         icon: "warning",
         title: "Caja no aperturada",
         text: "Debes aperturar una caja antes de realizar compras de divisa.",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       return;
     }
@@ -153,7 +153,7 @@ export default function DivisasTab() {
         icon: "warning",
         title: "Campos incompletos",
         text: "Debes completar todos los campos requeridos.",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       return;
     }
@@ -300,7 +300,7 @@ export default function DivisasTab() {
         icon: "warning",
         title: "Caja no aperturada",
         text: "Debes aperturar una caja antes de realizar ventas de divisa.",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       return;
     }
@@ -310,7 +310,7 @@ export default function DivisasTab() {
         icon: "warning",
         title: "Campos incompletos",
         text: "Debes completar todos los campos requeridos.",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       return;
     }

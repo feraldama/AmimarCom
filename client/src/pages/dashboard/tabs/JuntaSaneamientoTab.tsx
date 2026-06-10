@@ -86,7 +86,7 @@ export default function JuntaSaneamientoTab() {
             icon: "warning",
             title: "Caja no aperturada",
             text: "Debes aperturar una caja antes de realizar cobros de JSI.",
-            confirmButtonColor: "#2563eb",
+            confirmButtonColor: "#0d9488",
           });
         }
 
@@ -112,7 +112,7 @@ export default function JuntaSaneamientoTab() {
             icon: "warning",
             title: "Configuración incompleta",
             text: "La caja J.S.I. no tiene TipoGastoId y TipoGastoGrupoId asignados.",
-            confirmButtonColor: "#2563eb",
+            confirmButtonColor: "#0d9488",
           });
         }
 
@@ -202,7 +202,7 @@ export default function JuntaSaneamientoTab() {
         icon: "warning",
         title: "Caja no disponible",
         text: "Debes tener una caja aperturada para realizar cobros de JSI.",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       return;
     }
@@ -212,7 +212,7 @@ export default function JuntaSaneamientoTab() {
         icon: "warning",
         title: "Configuración incompleta",
         text: "La caja J.S.I. no tiene TipoGastoId y TipoGastoGrupoId asignados.",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       return;
     }
@@ -222,7 +222,7 @@ export default function JuntaSaneamientoTab() {
         icon: "warning",
         title: "Datos incompletos",
         text: "Debes ingresar un monto válido.",
-        confirmButtonColor: "#2563eb",
+        confirmButtonColor: "#0d9488",
       });
       return;
     }
