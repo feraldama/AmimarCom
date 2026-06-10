@@ -98,6 +98,13 @@ export default function WesternPagosTab() {
   const [isSubmittingPagos, setIsSubmittingPagos] = useState(false);
   const [isSubmittingEnvios, setIsSubmittingEnvios] = useState(false);
 
+  // Cotización WESTERN USD cargada de Divisas. Se guarda aparte para poder
+  // re-aplicarla cada vez que se selecciona el grupo "USD CON COTIZACION"
+  // (incluso en pagos/envíos consecutivos tras limpiar el formulario).
+  // PAGOS -> compra, ENVIOS -> venta.
+  const [cotizacionCompra, setCotizacionCompra] = useState<number | "">("");
+  const [cotizacionVenta, setCotizacionVenta] = useState<number | "">("");
+
   useEffect(() => {
     const fetchData = async () => {
       if (!user?.id) return;
@@ -128,8 +135,12 @@ export default function WesternPagosTab() {
               (d.DivisaNombre || "").trim().toUpperCase() === "WESTERN USD"
           );
           if (westernUsd) {
-            setCambioDolarPagos(Number(westernUsd.DivisaCompraMonto) || 0);
-            setCambioDolarEnvios(Number(westernUsd.DivisaVentaMonto) || 0);
+            const compra = Number(westernUsd.DivisaCompraMonto) || 0;
+            const venta = Number(westernUsd.DivisaVentaMonto) || 0;
+            setCotizacionCompra(compra);
+            setCotizacionVenta(venta);
+            setCambioDolarPagos(compra);
+            setCambioDolarEnvios(venta);
           }
         } catch (err) {
           console.error("Error al cargar cotización de WESTERN USD:", err);
@@ -160,21 +171,29 @@ export default function WesternPagosTab() {
   useEffect(() => {
     setValorEspecialPagos("");
     setMontoPagos("");
-    // Limpiar cambio dolar cuando es grupo 13
-    if (tipoGastoIdPagos === 1 && tipoGastoGrupoIdPagos === 13) {
+    if (tipoGastoIdPagos === 1 && tipoGastoGrupoIdPagos === 8) {
+      // Grupo "USD CON COTIZACION": re-aplicar la cotización de compra cargada
+      // de Divisas (necesario en pagos consecutivos tras limpiar el formulario).
+      setCambioDolarPagos(cotizacionCompra);
+    } else if (tipoGastoIdPagos === 1 && tipoGastoGrupoIdPagos === 13) {
+      // Limpiar cambio dolar cuando es grupo 13
       setCambioDolarPagos("");
     }
-  }, [tipoGastoGrupoIdPagos, tipoGastoIdPagos]);
+  }, [tipoGastoGrupoIdPagos, tipoGastoIdPagos, cotizacionCompra]);
 
   // Limpiar valor especial y monto cuando cambie el grupo en envíos
   useEffect(() => {
     setValorEspecialEnvios("");
     setMontoEnvios("");
-    // Limpiar cambio dolar cuando es grupo 13
-    if (tipoGastoIdEnvios === 2 && tipoGastoGrupoIdEnvios === 13) {
+    if (tipoGastoIdEnvios === 2 && tipoGastoGrupoIdEnvios === 15) {
+      // Grupo "USD CON COTIZACION": re-aplicar la cotización de venta cargada
+      // de Divisas (necesario en envíos consecutivos tras limpiar el formulario).
+      setCambioDolarEnvios(cotizacionVenta);
+    } else if (tipoGastoIdEnvios === 2 && tipoGastoGrupoIdEnvios === 13) {
+      // Limpiar cambio dolar cuando es grupo 13
       setCambioDolarEnvios("");
     }
-  }, [tipoGastoGrupoIdEnvios, tipoGastoIdEnvios]);
+  }, [tipoGastoGrupoIdEnvios, tipoGastoIdEnvios, cotizacionVenta]);
 
   // Calcular monto automáticamente para pagos cuando TipoGastoId=1 y TipoGastoGrupoId=19
   useEffect(() => {
