@@ -119,20 +119,20 @@ export default function WesternPagosTab() {
         const tiposGastoGrupoData = await getTiposGastoGrupo();
         setTiposGastoGrupo(tiposGastoGrupoData);
 
-        // Obtener cotización del DOLAR para los grupos "USD CON COTIZACION".
+        // Obtener cotización de WESTERN USD para los grupos "USD CON COTIZACION".
         // PAGOS  -> compra, ENVIOS -> venta (input se ve como readonly).
         try {
           const divisasResp = await getDivisas(1, 1000);
-          const dolar = (divisasResp.data || []).find(
+          const westernUsd = (divisasResp.data || []).find(
             (d: { DivisaNombre?: string }) =>
-              (d.DivisaNombre || "").trim().toUpperCase() === "DOLAR"
+              (d.DivisaNombre || "").trim().toUpperCase() === "WESTERN USD"
           );
-          if (dolar) {
-            setCambioDolarPagos(Number(dolar.DivisaCompraMonto) || 0);
-            setCambioDolarEnvios(Number(dolar.DivisaVentaMonto) || 0);
+          if (westernUsd) {
+            setCambioDolarPagos(Number(westernUsd.DivisaCompraMonto) || 0);
+            setCambioDolarEnvios(Number(westernUsd.DivisaVentaMonto) || 0);
           }
         } catch (err) {
-          console.error("Error al cargar cotización del dólar:", err);
+          console.error("Error al cargar cotización de WESTERN USD:", err);
         }
 
         // Obtener clientes
