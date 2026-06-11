@@ -109,14 +109,10 @@ exports.create = async (req, res) => {
     // Estos valores se guardan en el pago admin para que el historial
     // refleje el monto del momento de la operación y no el saldo actual.
     const cajaOrigenMontoActual = Number(cajaOrigen.CajaMonto) || 0;
-    const cajaOrigenTipoId = Number(cajaOrigen.CajaTipoId);
 
-    // Si CajaTipoId === 1, CajaTipoId === 3 o CajaTipoId === 9, restar (comportamiento normal)
-    // Si CajaTipoId es otro valor, hacer operación opuesta (sumar en lugar de restar)
-    const nuevoMontoOrigen =
-      cajaOrigenTipoId === 1 || cajaOrigenTipoId === 3 || cajaOrigenTipoId === 9
-        ? cajaOrigenMontoActual - monto // Restar (comportamiento normal)
-        : cajaOrigenMontoActual + monto; // Sumar (operación opuesta)
+    // Un pase pago administrador siempre descuenta del origen, sin importar
+    // el tipo de caja.
+    const nuevoMontoOrigen = cajaOrigenMontoActual - monto;
 
     const cajaDestinoMontoActual = Number(cajaDestino.CajaMonto) || 0;
     const nuevoMontoDestino = cajaDestinoMontoActual + monto;
@@ -248,20 +244,12 @@ exports.delete = async (req, res) => {
       return res.status(404).json({ message: "Pago admin no encontrado" });
     }
 
-    // Revertir el cambio directo en la caja origen
+    // Revertir el cambio directo en la caja origen: al crear siempre se
+    // descontó del origen, así que al eliminar siempre se suma de vuelta.
     if (cajaOrigen) {
       const cajaOrigenMontoActual = Number(cajaOrigen.CajaMonto) || 0;
-      const cajaOrigenTipoId = Number(cajaOrigen.CajaTipoId);
-      
-      let nuevoMontoOrigen;
-      if (cajaOrigenTipoId === 1 || cajaOrigenTipoId === 3 || cajaOrigenTipoId === 9) {
-        // Si CajaTipoId === 1, CajaTipoId === 3 o CajaTipoId === 9: se había restado, al eliminar se suma (revertir normal)
-        nuevoMontoOrigen = cajaOrigenMontoActual + monto;
-      } else {
-        // Si CajaTipoId es otro valor: se había sumado, al eliminar se resta (revertir normal)
-        nuevoMontoOrigen = cajaOrigenMontoActual - monto;
-      }
-      
+      const nuevoMontoOrigen = cajaOrigenMontoActual + monto;
+
       await db.query(
         'UPDATE "caja" SET "CajaMonto" = $1 WHERE "CajaId" = $2',
         [nuevoMontoOrigen, pagoAdmin.CajaOrigenId]
