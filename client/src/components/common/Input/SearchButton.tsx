@@ -25,6 +25,14 @@ export default function SearchButton({
 }: SearchButtonProps) {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFirstRender = useRef(true);
+  const localRef = useRef<HTMLInputElement | null>(null);
+  const resolvedRef = inputRef ?? localRef;
+
+  // Enfocar la búsqueda al entrar al componente.
+  useEffect(() => {
+    resolvedRef.current?.focus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (isFirstRender.current) {
@@ -56,7 +64,7 @@ export default function SearchButton({
             }
             onKeyPress?.(e);
           }}
-          ref={inputRef}
+          ref={resolvedRef}
           className="pl-9"
         />
       </div>

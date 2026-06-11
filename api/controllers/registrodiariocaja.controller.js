@@ -212,12 +212,14 @@ exports.delete = async (req, res) => {
       // Actualizar la caja del registro (caja aperturada)
       if (
         cajaIdRegistro &&
-        !esCasoEspecial13 &&
         !esCasoEspecial13Envios &&
         !esCasoEspecialUSDPagos &&
         !esCasoEspecialUSDEnvios
       ) {
-        // Casos especiales 13 y USD puro (20/28): no tocar la caja aperturada al eliminar
+        // Casos especiales USD puro (20/28): no tocar la caja aperturada al eliminar.
+        // El grupo 13 (EXTRACCIONES) SÍ se revierte aquí: al crearse desde la
+        // pestaña Pago se debita la caja aperturada, por lo que al eliminar hay
+        // que devolverle el monto (antes se salteaba y la plata no volvía).
         const cajaResult = await db.query(
           'SELECT "CajaMonto", "CajaTipoId" FROM "caja" WHERE "CajaId" = $1',
           [cajaIdRegistro]
