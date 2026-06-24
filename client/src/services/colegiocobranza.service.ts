@@ -1,15 +1,34 @@
 import api from "./api";
 import type { AxiosError } from "axios";
 
+export interface ColegioCobranzaFiltros {
+  fechaDesde?: string;
+  fechaHasta?: string;
+  cajaId?: string | number;
+  colegioId?: string | number;
+}
+
+const buildFiltrosParams = (filtros?: ColegioCobranzaFiltros) => {
+  const params: { [key: string]: string | number } = {};
+  if (!filtros) return params;
+  if (filtros.fechaDesde) params.fechaDesde = filtros.fechaDesde;
+  if (filtros.fechaHasta) params.fechaHasta = filtros.fechaHasta;
+  if (filtros.cajaId) params.cajaId = filtros.cajaId;
+  if (filtros.colegioId) params.colegioId = filtros.colegioId;
+  return params;
+};
+
 export const getColegioCobranzas = async (
   page = 1,
   limit = 10,
   sortBy?: string,
-  sortOrder?: "asc" | "desc"
+  sortOrder?: "asc" | "desc",
+  filtros?: ColegioCobranzaFiltros
 ) => {
   const params: { [key: string]: string | number | undefined } = {
     page,
     limit,
+    ...buildFiltrosParams(filtros),
   };
   if (sortBy) params.sortBy = sortBy;
   if (sortOrder) params.sortOrder = sortOrder;
@@ -31,12 +50,14 @@ export const searchColegioCobranzas = async (
   page = 1,
   limit = 10,
   sortBy?: string,
-  sortOrder?: "asc" | "desc"
+  sortOrder?: "asc" | "desc",
+  filtros?: ColegioCobranzaFiltros
 ) => {
   const params: { [key: string]: string | number | undefined } = {
     q: searchTerm,
     page,
     limit,
+    ...buildFiltrosParams(filtros),
   };
   if (sortBy) params.sortBy = sortBy;
   if (sortOrder) params.sortOrder = sortOrder;

@@ -28,7 +28,8 @@ const WesternEnvio = {
     limit,
     offset,
     sortBy = "WesternEnvioId",
-    sortOrder = "DESC"
+    sortOrder = "DESC",
+    filters = {}
   ) => {
     const allowedSortFields = [
       "WesternEnvioId",
@@ -49,6 +50,28 @@ const WesternEnvio = {
       ? sortOrder.toUpperCase()
       : "DESC";
 
+    // Construye los filtros dinámicamente (rango de fechas + categóricos)
+    const { fechaDesde, fechaHasta, cajaId, tipoGastoGrupoId } = filters;
+    const conditions = [];
+    const params = [];
+    if (fechaDesde) {
+      params.push(fechaDesde);
+      conditions.push(`we."WesternEnvioFecha"::date >= $${params.length}::date`);
+    }
+    if (fechaHasta) {
+      params.push(fechaHasta);
+      conditions.push(`we."WesternEnvioFecha"::date <= $${params.length}::date`);
+    }
+    if (cajaId) {
+      params.push(cajaId);
+      conditions.push(`we."CajaId" = $${params.length}`);
+    }
+    if (tipoGastoGrupoId) {
+      params.push(tipoGastoGrupoId);
+      conditions.push(`we."TipoGastoGrupoId" = $${params.length}`);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
     const result = await db.query(
       `SELECT we.*,
         c."CajaDescripcion",
@@ -60,13 +83,15 @@ const WesternEnvio = {
       LEFT JOIN "tipogasto" t ON we."TipoGastoId" = t."TipoGastoId"
       LEFT JOIN "tipogastogrupo" tg ON we."TipoGastoId" = tg."TipoGastoId" AND we."TipoGastoGrupoId" = tg."TipoGastoGrupoId"
       LEFT JOIN "usuario" u ON we."WesternEnvioUsuarioId" = u."UsuarioId"
+      ${where}
       ORDER BY we."${sortField}" ${order}
-      LIMIT $1 OFFSET $2`,
-      [limit, offset]
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, limit, offset]
     );
 
     const countResult = await db.query(
-      'SELECT COUNT(*) as total FROM "westernenvio"'
+      `SELECT COUNT(*) as total FROM "westernenvio" we ${where}`,
+      params
     );
 
     return {
@@ -85,7 +110,8 @@ const WesternEnvio = {
     limit,
     offset,
     sortBy = "WesternEnvioId",
-    sortOrder = "DESC"
+    sortOrder = "DESC",
+    filters = {}
   ) => {
     const allowedSortFields = [
       "WesternEnvioId",
@@ -106,7 +132,43 @@ const WesternEnvio = {
       ? sortOrder.toUpperCase()
       : "DESC";
 
+    // Grupo de búsqueda por texto (un mismo valor en todos los campos)
     const searchValue = `%${term}%`;
+    const params = [searchValue];
+    const searchGroup = `(
+        we."WesternEnvioDetalle" ILIKE $1
+        OR CAST(we."WesternEnvioUsuarioId" AS TEXT) ILIKE $1
+        OR CAST(we."CajaId" AS TEXT) ILIKE $1
+        OR CAST(we."TipoGastoId" AS TEXT) ILIKE $1
+        OR CAST(we."TipoGastoGrupoId" AS TEXT) ILIKE $1
+        OR CAST(we."WesternEnvioMonto" AS TEXT) ILIKE $1
+        OR CAST(we."WesternEnvioMTCN" AS TEXT) ILIKE $1
+        OR CAST(we."WesternEnvioFactura" AS TEXT) ILIKE $1
+        OR CAST(we."WesternEnvioTimbrado" AS TEXT) ILIKE $1
+        OR CAST(we."ClienteId" AS TEXT) ILIKE $1
+        OR TO_CHAR(we."WesternEnvioFecha", 'DD/MM/YYYY HH24:MI:SS') ILIKE $1
+      )`;
+
+    // Filtros adicionales (rango de fechas + categóricos)
+    const { fechaDesde, fechaHasta, cajaId, tipoGastoGrupoId } = filters;
+    const conditions = [searchGroup];
+    if (fechaDesde) {
+      params.push(fechaDesde);
+      conditions.push(`we."WesternEnvioFecha"::date >= $${params.length}::date`);
+    }
+    if (fechaHasta) {
+      params.push(fechaHasta);
+      conditions.push(`we."WesternEnvioFecha"::date <= $${params.length}::date`);
+    }
+    if (cajaId) {
+      params.push(cajaId);
+      conditions.push(`we."CajaId" = $${params.length}`);
+    }
+    if (tipoGastoGrupoId) {
+      params.push(tipoGastoGrupoId);
+      conditions.push(`we."TipoGastoGrupoId" = $${params.length}`);
+    }
+    const where = `WHERE ${conditions.join(" AND ")}`;
 
     const result = await db.query(
       `SELECT we.*,
@@ -119,44 +181,16 @@ const WesternEnvio = {
       LEFT JOIN "tipogasto" t ON we."TipoGastoId" = t."TipoGastoId"
       LEFT JOIN "tipogastogrupo" tg ON we."TipoGastoId" = tg."TipoGastoId" AND we."TipoGastoGrupoId" = tg."TipoGastoGrupoId"
       LEFT JOIN "usuario" u ON we."WesternEnvioUsuarioId" = u."UsuarioId"
-      WHERE we."WesternEnvioDetalle" ILIKE $1
-        OR CAST(we."WesternEnvioUsuarioId" AS TEXT) ILIKE $2
-        OR CAST(we."CajaId" AS TEXT) ILIKE $3
-        OR CAST(we."TipoGastoId" AS TEXT) ILIKE $4
-        OR CAST(we."TipoGastoGrupoId" AS TEXT) ILIKE $5
-        OR CAST(we."WesternEnvioMonto" AS TEXT) ILIKE $6
-        OR CAST(we."WesternEnvioMTCN" AS TEXT) ILIKE $7
-        OR CAST(we."WesternEnvioFactura" AS TEXT) ILIKE $8
-        OR CAST(we."WesternEnvioTimbrado" AS TEXT) ILIKE $9
-        OR CAST(we."ClienteId" AS TEXT) ILIKE $10
-        OR TO_CHAR(we."WesternEnvioFecha", 'DD/MM/YYYY HH24:MI:SS') ILIKE $11
+      ${where}
       ORDER BY we."${sortField}" ${order}
-      LIMIT $12 OFFSET $13`,
-      [
-        searchValue, searchValue, searchValue, searchValue, searchValue,
-        searchValue, searchValue, searchValue, searchValue, searchValue,
-        searchValue, limit, offset,
-      ]
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`,
+      [...params, limit, offset]
     );
 
     const countResult = await db.query(
       `SELECT COUNT(*) as total FROM "westernenvio" we
-      WHERE we."WesternEnvioDetalle" ILIKE $1
-        OR CAST(we."WesternEnvioUsuarioId" AS TEXT) ILIKE $2
-        OR CAST(we."CajaId" AS TEXT) ILIKE $3
-        OR CAST(we."TipoGastoId" AS TEXT) ILIKE $4
-        OR CAST(we."TipoGastoGrupoId" AS TEXT) ILIKE $5
-        OR CAST(we."WesternEnvioMonto" AS TEXT) ILIKE $6
-        OR CAST(we."WesternEnvioMTCN" AS TEXT) ILIKE $7
-        OR CAST(we."WesternEnvioFactura" AS TEXT) ILIKE $8
-        OR CAST(we."WesternEnvioTimbrado" AS TEXT) ILIKE $9
-        OR CAST(we."ClienteId" AS TEXT) ILIKE $10
-        OR TO_CHAR(we."WesternEnvioFecha", 'DD/MM/YYYY HH24:MI:SS') ILIKE $11`,
-      [
-        searchValue, searchValue, searchValue, searchValue, searchValue,
-        searchValue, searchValue, searchValue, searchValue, searchValue,
-        searchValue,
-      ]
+      ${where}`,
+      params
     );
 
     const total = countResult.rows[0]?.total || 0;

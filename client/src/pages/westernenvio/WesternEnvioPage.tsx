@@ -12,9 +12,36 @@ import WesternEnvioList, {
 } from "../../components/westernenvio/WesternEnvioList";
 import Pagination from "../../components/common/Pagination";
 import PageHeader from "../../components/common/PageHeader";
+import FilterPanel, { FilterSelect } from "../../components/common/FilterPanel";
+import { getCajas } from "../../services/cajas.service";
+import { getAllTipoGastoGrupo } from "../../services/tipogastogrupo.service";
 import Swal from "sweetalert2";
 import { usePermiso } from "../../hooks/usePermiso";
 import { useAuth } from "../../contexts/useAuth";
+
+interface CajaOption {
+  CajaId: number;
+  CajaDescripcion: string;
+}
+interface TipoGastoGrupoOption {
+  TipoGastoId: number;
+  TipoGastoGrupoId: number;
+  TipoGastoGrupoDescripcion: string;
+}
+
+interface Filtros {
+  fechaDesde: string;
+  fechaHasta: string;
+  cajaId: string;
+  tipoGastoGrupoId: string;
+}
+
+const FILTROS_VACIOS: Filtros = {
+  fechaDesde: "",
+  fechaHasta: "",
+  cajaId: "",
+  tipoGastoGrupoId: "",
+};
 
 interface Pagination {
   totalItems: number;
@@ -39,6 +66,12 @@ export default function WesternEnvioPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [sortKey, setSortKey] = useState<string>("WesternEnvioId");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const [filtros, setFiltros] = useState<Filtros>(FILTROS_VACIOS);
+  const [appliedFiltros, setAppliedFiltros] = useState<Filtros>(FILTROS_VACIOS);
+  const [cajas, setCajas] = useState<CajaOption[]>([]);
+  const [tiposGastoGrupo, setTiposGastoGrupo] = useState<TipoGastoGrupoOption[]>(
+    []
+  );
   const puedeCrear = usePermiso("WESTERNENVIO", "crear");
   const puedeEditar = usePermiso("WESTERNENVIO", "editar");
   const puedeEliminar = usePermiso("WESTERNENVIO", "eliminar");
@@ -54,14 +87,16 @@ export default function WesternEnvioPage() {
           currentPage,
           itemsPerPage,
           sortKey,
-          sortOrder
+          sortOrder,
+          appliedFiltros
         );
       } else {
         data = await getWesternEnvios(
           currentPage,
           itemsPerPage,
           sortKey,
-          sortOrder
+          sortOrder,
+          appliedFiltros
         );
       }
       setEnviosData({
@@ -77,11 +112,34 @@ export default function WesternEnvioPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, appliedSearchTerm, itemsPerPage, sortKey, sortOrder]);
+  }, [
+    currentPage,
+    appliedSearchTerm,
+    itemsPerPage,
+    sortKey,
+    sortOrder,
+    appliedFiltros,
+  ]);
 
   useEffect(() => {
     fetchEnvios();
   }, [fetchEnvios]);
+
+  useEffect(() => {
+    const cargarOpciones = async () => {
+      try {
+        const [cajasResp, gruposResp] = await Promise.all([
+          getCajas(1, 1000),
+          getAllTipoGastoGrupo(),
+        ]);
+        setCajas(cajasResp.data || []);
+        setTiposGastoGrupo(gruposResp || []);
+      } catch {
+        // Si fallan las opciones, los filtros simplemente quedan vacíos
+      }
+    };
+    cargarOpciones();
+  }, []);
 
   useEffect(() => {
     if (error) {
@@ -104,6 +162,22 @@ export default function WesternEnvioPage() {
       applySearch();
     }
   };
+
+  const handleApplyFilter = () => {
+    setAppliedFiltros(filtros);
+    setCurrentPage(1);
+  };
+
+  const handleClearFilter = () => {
+    setFiltros(FILTROS_VACIOS);
+    setAppliedFiltros(FILTROS_VACIOS);
+    setCurrentPage(1);
+  };
+
+  // Grupos de gasto de envíos western: TipoGastoId fijo = 2
+  const gruposFiltrados = tiposGastoGrupo.filter(
+    (g) => Number(g.TipoGastoId) === 2
+  );
 
   const handleDelete = async (envio: WesternEnvio) => {
     Swal.fire({
@@ -203,6 +277,39 @@ export default function WesternEnvioPage() {
           Error: {error}
         </div>
       )}
+      <FilterPanel
+        fechaDesde={filtros.fechaDesde}
+        fechaHasta={filtros.fechaHasta}
+        onFechaDesdeChange={(v) =>
+          setFiltros((p) => ({ ...p, fechaDesde: v }))
+        }
+        onFechaHastaChange={(v) =>
+          setFiltros((p) => ({ ...p, fechaHasta: v }))
+        }
+        onApply={handleApplyFilter}
+        onClear={handleClearFilter}
+      >
+        <FilterSelect
+          label="Caja"
+          value={filtros.cajaId}
+          onChange={(v) => setFiltros((p) => ({ ...p, cajaId: v }))}
+          options={cajas
+            .slice()
+            .sort((a, b) => a.CajaDescripcion.localeCompare(b.CajaDescripcion))
+            .map((c) => ({ value: c.CajaId, label: c.CajaDescripcion }))}
+        />
+        <FilterSelect
+          label="Grupo Gasto"
+          value={filtros.tipoGastoGrupoId}
+          onChange={(v) =>
+            setFiltros((p) => ({ ...p, tipoGastoGrupoId: v }))
+          }
+          options={gruposFiltrados.map((g) => ({
+            value: g.TipoGastoGrupoId,
+            label: g.TipoGastoGrupoDescripcion,
+          }))}
+        />
+      </FilterPanel>
       <div className={loading ? "opacity-50 pointer-events-none" : ""}>
       <WesternEnvioList
         envios={enviosData.envios}

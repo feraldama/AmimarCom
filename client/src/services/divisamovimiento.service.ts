@@ -1,15 +1,37 @@
 import api from "./api";
 import type { AxiosError } from "axios";
 
+export interface DivisaMovimientoFiltros {
+  fechaDesde?: string;
+  fechaHasta?: string;
+  cajaId?: string | number;
+  divisaId?: string | number;
+  divisaMovimientoTipo?: string;
+}
+
+const buildFiltrosParams = (filtros?: DivisaMovimientoFiltros) => {
+  const params: { [key: string]: string | number } = {};
+  if (!filtros) return params;
+  if (filtros.fechaDesde) params.fechaDesde = filtros.fechaDesde;
+  if (filtros.fechaHasta) params.fechaHasta = filtros.fechaHasta;
+  if (filtros.cajaId) params.cajaId = filtros.cajaId;
+  if (filtros.divisaId) params.divisaId = filtros.divisaId;
+  if (filtros.divisaMovimientoTipo)
+    params.divisaMovimientoTipo = filtros.divisaMovimientoTipo;
+  return params;
+};
+
 export const getDivisaMovimientos = async (
   page = 1,
   limit = 10,
   sortBy?: string,
-  sortOrder?: "asc" | "desc"
+  sortOrder?: "asc" | "desc",
+  filtros?: DivisaMovimientoFiltros
 ) => {
   const params: { [key: string]: string | number | undefined } = {
     page,
     limit,
+    ...buildFiltrosParams(filtros),
   };
   if (sortBy) params.sortBy = sortBy;
   if (sortOrder) params.sortOrder = sortOrder;
@@ -95,12 +117,14 @@ export const searchDivisaMovimientos = async (
   page = 1,
   limit = 10,
   sortBy?: string,
-  sortOrder?: "asc" | "desc"
+  sortOrder?: "asc" | "desc",
+  filtros?: DivisaMovimientoFiltros
 ) => {
   const params: { [key: string]: string | number | undefined } = {
     q: searchTerm,
     page,
     limit,
+    ...buildFiltrosParams(filtros),
   };
   if (sortBy) params.sortBy = sortBy;
   if (sortOrder) params.sortOrder = sortOrder;

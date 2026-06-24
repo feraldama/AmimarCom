@@ -1,5 +1,12 @@
 const Venta = require("../models/venta.model");
 
+// Lee los parámetros de filtro de la query (compartidos por getAllPaginated y search)
+const parseFiltros = (query) => ({
+  fechaDesde: query.fechaDesde || undefined,
+  fechaHasta: query.fechaHasta || undefined,
+  ventaTipo: query.ventaTipo || undefined,
+});
+
 exports.getAll = async (req, res) => {
   try {
     const ventas = await Venta.getAll();
@@ -21,7 +28,8 @@ exports.getAllPaginated = async (req, res) => {
       limit,
       offset,
       sortBy,
-      sortOrder
+      sortOrder,
+      parseFiltros(req.query)
     );
 
     res.json({
@@ -119,7 +127,8 @@ exports.searchVentas = async (req, res) => {
       limit,
       offset,
       sortBy,
-      sortOrder
+      sortOrder,
+      parseFiltros(req.query)
     );
 
     res.json({

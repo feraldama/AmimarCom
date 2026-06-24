@@ -1,5 +1,14 @@
 const DivisaMovimiento = require("../models/divisamovimiento.model");
 
+// Lee los parámetros de filtro de la query (compartidos por getAll y search)
+const parseFiltros = (query) => ({
+  fechaDesde: query.fechaDesde || undefined,
+  fechaHasta: query.fechaHasta || undefined,
+  cajaId: query.cajaId || undefined,
+  divisaId: query.divisaId || undefined,
+  divisaMovimientoTipo: query.divisaMovimientoTipo || undefined,
+});
+
 // Obtener todos los movimientos de divisa con paginación
 exports.getAll = async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
@@ -12,7 +21,8 @@ exports.getAll = async (req, res) => {
       limit,
       offset,
       sortBy,
-      sortOrder
+      sortOrder,
+      parseFiltros(req.query)
     );
     res.json(result);
   } catch (error) {
@@ -42,7 +52,8 @@ exports.search = async (req, res) => {
       limit,
       offset,
       sortBy,
-      sortOrder
+      sortOrder,
+      parseFiltros(req.query)
     );
 
     res.json(result);

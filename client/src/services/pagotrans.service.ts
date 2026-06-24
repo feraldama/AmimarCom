@@ -26,15 +26,34 @@ export interface PagoTrans {
   ClienteApellido?: string;
 }
 
+export interface PagoTransFiltros {
+  fechaDesde?: string;
+  fechaHasta?: string;
+  transporteId?: string | number;
+  cajaId?: string | number;
+}
+
+const buildFiltrosParams = (filtros?: PagoTransFiltros) => {
+  const params: { [key: string]: string | number } = {};
+  if (!filtros) return params;
+  if (filtros.fechaDesde) params.fechaDesde = filtros.fechaDesde;
+  if (filtros.fechaHasta) params.fechaHasta = filtros.fechaHasta;
+  if (filtros.transporteId) params.transporteId = filtros.transporteId;
+  if (filtros.cajaId) params.cajaId = filtros.cajaId;
+  return params;
+};
+
 export const getPagosTrans = async (
   page = 1,
   limit = 10,
   sortBy?: string,
-  sortOrder?: "asc" | "desc"
+  sortOrder?: "asc" | "desc",
+  filtros?: PagoTransFiltros
 ) => {
   const params: { [key: string]: string | number | undefined } = {
     page,
     limit,
+    ...buildFiltrosParams(filtros),
   };
   if (sortBy) params.sortBy = sortBy;
   if (sortOrder) params.sortOrder = sortOrder;
@@ -115,12 +134,14 @@ export const searchPagosTrans = async (
   page = 1,
   limit = 10,
   sortBy?: string,
-  sortOrder?: "asc" | "desc"
+  sortOrder?: "asc" | "desc",
+  filtros?: PagoTransFiltros
 ) => {
   const params: { [key: string]: string | number | undefined } = {
     q: searchTerm,
     page,
     limit,
+    ...buildFiltrosParams(filtros),
   };
   if (sortBy) params.sortBy = sortBy;
   if (sortOrder) params.sortOrder = sortOrder;

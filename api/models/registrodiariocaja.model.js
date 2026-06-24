@@ -44,7 +44,8 @@ const RegistroDiarioCaja = {
     limit,
     offset,
     sortBy = "RegistroDiarioCajaId",
-    sortOrder = "DESC"
+    sortOrder = "DESC",
+    filters = {}
   ) => {
     // Sanitiza sortOrder y sortBy para evitar SQL Injection
     const allowedSortFields = [
@@ -66,6 +67,33 @@ const RegistroDiarioCaja = {
       ? sortOrder.toUpperCase()
       : "DESC";
 
+    // Construye los filtros dinámicamente (rango de fechas + categóricos)
+    const { fechaDesde, fechaHasta, cajaId, tipoGastoId, tipoGastoGrupoId } =
+      filters;
+    const conditions = [];
+    const params = [];
+    if (fechaDesde) {
+      params.push(fechaDesde);
+      conditions.push(`r."RegistroDiarioCajaFecha"::date >= $${params.length}::date`);
+    }
+    if (fechaHasta) {
+      params.push(fechaHasta);
+      conditions.push(`r."RegistroDiarioCajaFecha"::date <= $${params.length}::date`);
+    }
+    if (cajaId) {
+      params.push(cajaId);
+      conditions.push(`r."CajaId" = $${params.length}`);
+    }
+    if (tipoGastoId) {
+      params.push(tipoGastoId);
+      conditions.push(`r."TipoGastoId" = $${params.length}`);
+    }
+    if (tipoGastoGrupoId) {
+      params.push(tipoGastoGrupoId);
+      conditions.push(`r."TipoGastoGrupoId" = $${params.length}`);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
     const query = `
       SELECT r.*,
         c."CajaDescripcion",
@@ -75,14 +103,16 @@ const RegistroDiarioCaja = {
       LEFT JOIN "caja" c ON r."CajaId" = c."CajaId"
       LEFT JOIN "tipogasto" t ON r."TipoGastoId" = t."TipoGastoId"
       LEFT JOIN "tipogastogrupo" tg ON r."TipoGastoId" = tg."TipoGastoId" AND r."TipoGastoGrupoId" = tg."TipoGastoGrupoId"
+      ${where}
       ORDER BY r."${sortField}" ${order}
-      LIMIT $1 OFFSET $2
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
 
-    const result = await db.query(query, [limit, offset]);
+    const result = await db.query(query, [...params, limit, offset]);
 
     const countResult = await db.query(
-      'SELECT COUNT(*) as total FROM "registrodiariocaja"'
+      `SELECT COUNT(*) as total FROM "registrodiariocaja" r ${where}`,
+      params
     );
 
     return {
@@ -101,7 +131,8 @@ const RegistroDiarioCaja = {
     limit,
     offset,
     sortBy = "RegistroDiarioCajaFecha",
-    sortOrder = "DESC"
+    sortOrder = "DESC",
+    filters = {}
   ) => {
     // Sanitiza los campos para evitar SQL Injection
     const allowedSortFields = [
@@ -123,6 +154,45 @@ const RegistroDiarioCaja = {
       ? sortOrder.toUpperCase()
       : "DESC";
 
+    // Grupo de búsqueda por texto (un mismo valor en todos los campos)
+    const searchValue = `%${term}%`;
+    const params = [searchValue];
+    const searchGroup = `(
+        r."RegistroDiarioCajaDetalle" ILIKE $1
+        OR CAST(r."UsuarioId" AS TEXT) ILIKE $1
+        OR CAST(r."CajaId" AS TEXT) ILIKE $1
+        OR CAST(r."TipoGastoId" AS TEXT) ILIKE $1
+        OR CAST(r."TipoGastoGrupoId" AS TEXT) ILIKE $1
+        OR CAST(r."RegistroDiarioCajaMonto" AS TEXT) ILIKE $1
+        OR TO_CHAR(r."RegistroDiarioCajaFecha", 'DD/MM/YYYY HH24:MI:SS') ILIKE $1
+      )`;
+
+    // Filtros adicionales (rango de fechas + categóricos)
+    const { fechaDesde, fechaHasta, cajaId, tipoGastoId, tipoGastoGrupoId } =
+      filters;
+    const conditions = [searchGroup];
+    if (fechaDesde) {
+      params.push(fechaDesde);
+      conditions.push(`r."RegistroDiarioCajaFecha"::date >= $${params.length}::date`);
+    }
+    if (fechaHasta) {
+      params.push(fechaHasta);
+      conditions.push(`r."RegistroDiarioCajaFecha"::date <= $${params.length}::date`);
+    }
+    if (cajaId) {
+      params.push(cajaId);
+      conditions.push(`r."CajaId" = $${params.length}`);
+    }
+    if (tipoGastoId) {
+      params.push(tipoGastoId);
+      conditions.push(`r."TipoGastoId" = $${params.length}`);
+    }
+    if (tipoGastoGrupoId) {
+      params.push(tipoGastoGrupoId);
+      conditions.push(`r."TipoGastoGrupoId" = $${params.length}`);
+    }
+    const where = `WHERE ${conditions.join(" AND ")}`;
+
     const searchQuery = `
       SELECT r.*,
         c."CajaDescripcion",
@@ -132,56 +202,19 @@ const RegistroDiarioCaja = {
       LEFT JOIN "caja" c ON r."CajaId" = c."CajaId"
       LEFT JOIN "tipogasto" t ON r."TipoGastoId" = t."TipoGastoId"
       LEFT JOIN "tipogastogrupo" tg ON r."TipoGastoId" = tg."TipoGastoId" AND r."TipoGastoGrupoId" = tg."TipoGastoGrupoId"
-      WHERE r."RegistroDiarioCajaDetalle" ILIKE $1
-        OR CAST(r."UsuarioId" AS TEXT) ILIKE $2
-        OR CAST(r."CajaId" AS TEXT) ILIKE $3
-        OR CAST(r."TipoGastoId" AS TEXT) ILIKE $4
-        OR CAST(r."TipoGastoGrupoId" AS TEXT) ILIKE $5
-        OR CAST(r."RegistroDiarioCajaMonto" AS TEXT) ILIKE $6
-        OR TO_CHAR(r."RegistroDiarioCajaFecha", 'DD/MM/YYYY HH24:MI:SS') ILIKE $7
+      ${where}
       ORDER BY r."${sortField}" ${order}
-      LIMIT $8 OFFSET $9
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
-    const searchValue = `%${term}%`;
 
-    const result = await db.query(
-      searchQuery,
-      [
-        searchValue, // Detalle
-        searchValue, // UsuarioId
-        searchValue, // CajaId
-        searchValue, // TipoGastoId
-        searchValue, // TipoGastoGrupoId
-        searchValue, // Monto
-        searchValue, // Fecha
-        limit,
-        offset,
-      ]
-    );
+    const result = await db.query(searchQuery, [...params, limit, offset]);
 
     const countQuery = `
-      SELECT COUNT(*) as total FROM "registrodiariocaja"
-      WHERE "RegistroDiarioCajaDetalle" ILIKE $1
-        OR CAST("UsuarioId" AS TEXT) ILIKE $2
-        OR CAST("CajaId" AS TEXT) ILIKE $3
-        OR CAST("TipoGastoId" AS TEXT) ILIKE $4
-        OR CAST("TipoGastoGrupoId" AS TEXT) ILIKE $5
-        OR CAST("RegistroDiarioCajaMonto" AS TEXT) ILIKE $6
-        OR TO_CHAR("RegistroDiarioCajaFecha", 'DD/MM/YYYY HH24:MI:SS') ILIKE $7
+      SELECT COUNT(*) as total FROM "registrodiariocaja" r
+      ${where}
     `;
 
-    const countResult = await db.query(
-      countQuery,
-      [
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-      ]
-    );
+    const countResult = await db.query(countQuery, params);
 
     const total = countResult.rows[0]?.total || 0;
 

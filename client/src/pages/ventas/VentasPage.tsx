@@ -5,6 +5,7 @@ import {
   getVentasPaginated,
   searchVentas,
   type Venta,
+  type VentaFiltros,
   getProductosByVentaId,
   type VentaProducto,
   deleteVenta,
@@ -15,6 +16,7 @@ import { getAlmacenById } from "../../services/almacenes.service";
 import VentasList from "../../components/ventas/VentasList";
 import Pagination from "../../components/common/Pagination";
 import PageHeader from "../../components/common/PageHeader";
+import FilterPanel, { FilterSelect } from "../../components/common/FilterPanel";
 import { formatCurrency } from "../../utils/utils";
 import Swal from "sweetalert2";
 import axios from "axios";
@@ -26,6 +28,22 @@ interface Pagination {
   itemsPerPage?: number;
   [key: string]: unknown;
 }
+
+type Filtros = VentaFiltros;
+
+const FILTROS_VACIOS: Filtros = {
+  fechaDesde: "",
+  fechaHasta: "",
+  ventaTipo: "",
+};
+
+// Opciones fijas de tipo de venta (códigos CO/CR/PO/TR con etiquetas legibles)
+const TIPO_VENTA_OPCIONES = [
+  { value: "CO", label: "Contado" },
+  { value: "CR", label: "Crédito" },
+  { value: "PO", label: "POS" },
+  { value: "TR", label: "Transfer" },
+];
 
 export default function VentasPage() {
   const [ventasData, setVentasData] = useState<{
@@ -40,6 +58,8 @@ export default function VentasPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [sortKey, setSortKey] = useState<string>("VentaId");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const [filtros, setFiltros] = useState<Filtros>(FILTROS_VACIOS);
+  const [appliedFiltros, setAppliedFiltros] = useState<Filtros>(FILTROS_VACIOS);
 
   const puedeCrear = usePermiso("VENTAS", "crear");
   const puedeLeer = usePermiso("VENTAS", "leer");
@@ -79,14 +99,16 @@ export default function VentasPage() {
           currentPage,
           itemsPerPage,
           sortKey,
-          sortOrder
+          sortOrder,
+          appliedFiltros
         );
       } else {
         data = await getVentasPaginated(
           currentPage,
           itemsPerPage,
           sortKey,
-          sortOrder
+          sortOrder,
+          appliedFiltros
         );
       }
       const ventasConClientes = await loadClientesData(data.data);
@@ -104,7 +126,14 @@ export default function VentasPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, appliedSearchTerm, itemsPerPage, sortKey, sortOrder]);
+  }, [
+    currentPage,
+    appliedSearchTerm,
+    itemsPerPage,
+    sortKey,
+    sortOrder,
+    appliedFiltros,
+  ]);
 
   useEffect(() => {
     fetchVentas();
@@ -130,6 +159,17 @@ export default function VentasPage() {
     if (e.key === "Enter") {
       applySearch();
     }
+  };
+
+  const handleApplyFilter = () => {
+    setAppliedFiltros(filtros);
+    setCurrentPage(1);
+  };
+
+  const handleClearFilter = () => {
+    setFiltros(FILTROS_VACIOS);
+    setAppliedFiltros(FILTROS_VACIOS);
+    setCurrentPage(1);
   };
 
   const handleViewDetails = async (venta: Venta) => {
@@ -399,6 +439,25 @@ export default function VentasPage() {
           Error: {error}
         </div>
       )}
+      <FilterPanel
+        fechaDesde={filtros.fechaDesde}
+        fechaHasta={filtros.fechaHasta}
+        onFechaDesdeChange={(v) =>
+          setFiltros((p) => ({ ...p, fechaDesde: v }))
+        }
+        onFechaHastaChange={(v) =>
+          setFiltros((p) => ({ ...p, fechaHasta: v }))
+        }
+        onApply={handleApplyFilter}
+        onClear={handleClearFilter}
+      >
+        <FilterSelect
+          label="Tipo de venta"
+          value={filtros.ventaTipo ?? ""}
+          onChange={(v) => setFiltros((p) => ({ ...p, ventaTipo: v }))}
+          options={TIPO_VENTA_OPCIONES}
+        />
+      </FilterPanel>
       <div className={loading ? "opacity-50 pointer-events-none" : ""}>
       <VentasList
         ventas={ventasData.ventas}

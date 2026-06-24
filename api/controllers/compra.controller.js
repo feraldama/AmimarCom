@@ -1,6 +1,14 @@
 const Compra = require("../models/compra.model");
 const CompraProducto = require("../models/compraproducto.model");
 
+// Lee los parámetros de filtro de la query (compartidos por getAll y search)
+const parseFiltros = (query) => ({
+  fechaDesde: query.fechaDesde || undefined,
+  fechaHasta: query.fechaHasta || undefined,
+  proveedorId: query.proveedorId || undefined,
+  compraTipo: query.compraTipo || undefined,
+});
+
 // getAllCompras
 exports.getAllCompras = async (req, res) => {
   try {
@@ -14,7 +22,8 @@ exports.getAllCompras = async (req, res) => {
       limit,
       offset,
       sortBy,
-      sortOrder
+      sortOrder,
+      parseFiltros(req.query)
     );
 
     res.json({
@@ -52,7 +61,8 @@ exports.searchCompras = async (req, res) => {
       limit,
       offset,
       sortBy,
-      sortOrder
+      sortOrder,
+      parseFiltros(req.query)
     );
 
     res.json({

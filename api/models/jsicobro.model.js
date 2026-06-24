@@ -25,7 +25,8 @@ const JSICobro = {
     limit,
     offset,
     sortBy = "JSICobroId",
-    sortOrder = "DESC"
+    sortOrder = "DESC",
+    filters = {}
   ) => {
     // Sanitiza sortOrder y sortBy para evitar SQL Injection
     const allowedSortFields = [
@@ -45,6 +46,28 @@ const JSICobro = {
       ? sortOrder.toUpperCase()
       : "DESC";
 
+    // Construye los filtros dinámicamente (rango de fechas + categóricos)
+    const { fechaDesde, fechaHasta, cajaId, clienteId } = filters;
+    const conditions = [];
+    const params = [];
+    if (fechaDesde) {
+      params.push(fechaDesde);
+      conditions.push(`j."JSICobroFecha"::date >= $${params.length}::date`);
+    }
+    if (fechaHasta) {
+      params.push(fechaHasta);
+      conditions.push(`j."JSICobroFecha"::date <= $${params.length}::date`);
+    }
+    if (cajaId) {
+      params.push(cajaId);
+      conditions.push(`j."CajaId" = $${params.length}`);
+    }
+    if (clienteId) {
+      params.push(clienteId);
+      conditions.push(`j."ClienteId" = $${params.length}`);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
     const query = `
       SELECT j.*,
         c."CajaDescripcion",
@@ -53,14 +76,16 @@ const JSICobro = {
       FROM "jsicobro" j
       LEFT JOIN "caja" c ON j."CajaId" = c."CajaId"
       LEFT JOIN "clientes" cl ON j."ClienteId" = cl."ClienteId"
+      ${where}
       ORDER BY j."${sortField}" ${order}
-      LIMIT $1 OFFSET $2
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
 
-    const result = await db.query(query, [limit, offset]);
+    const result = await db.query(query, [...params, limit, offset]);
 
     const countResult = await db.query(
-      'SELECT COUNT(*) as total FROM "jsicobro"'
+      `SELECT COUNT(*) as total FROM "jsicobro" j ${where}`,
+      params
     );
 
     return {
@@ -79,7 +104,8 @@ const JSICobro = {
     limit,
     offset,
     sortBy = "JSICobroFecha",
-    sortOrder = "DESC"
+    sortOrder = "DESC",
+    filters = {}
   ) => {
     // Sanitiza los campos para evitar SQL Injection
     const allowedSortFields = [
@@ -99,7 +125,41 @@ const JSICobro = {
       ? sortOrder.toUpperCase()
       : "DESC";
 
+    // Grupo de búsqueda por texto (un mismo valor en todos los campos)
     const searchValue = `%${term}%`;
+    const params = [searchValue];
+    const searchGroup = `(
+        CAST(j."JSICobroId" AS TEXT) ILIKE $1
+        OR CAST(j."CajaId" AS TEXT) ILIKE $1
+        OR CAST(j."ClienteId" AS TEXT) ILIKE $1
+        OR CAST(j."JSICobroMonto" AS TEXT) ILIKE $1
+        OR CAST(j."JSICobroUsuarioId" AS TEXT) ILIKE $1
+        OR TO_CHAR(j."JSICobroFecha", 'DD/MM/YYYY HH24:MI:SS') ILIKE $1
+        OR cl."ClienteNombre" ILIKE $1
+        OR cl."ClienteApellido" ILIKE $1
+        OR c."CajaDescripcion" ILIKE $1
+      )`;
+
+    // Filtros adicionales (rango de fechas + categóricos)
+    const { fechaDesde, fechaHasta, cajaId, clienteId } = filters;
+    const conditions = [searchGroup];
+    if (fechaDesde) {
+      params.push(fechaDesde);
+      conditions.push(`j."JSICobroFecha"::date >= $${params.length}::date`);
+    }
+    if (fechaHasta) {
+      params.push(fechaHasta);
+      conditions.push(`j."JSICobroFecha"::date <= $${params.length}::date`);
+    }
+    if (cajaId) {
+      params.push(cajaId);
+      conditions.push(`j."CajaId" = $${params.length}`);
+    }
+    if (clienteId) {
+      params.push(clienteId);
+      conditions.push(`j."ClienteId" = $${params.length}`);
+    }
+    const where = `WHERE ${conditions.join(" AND ")}`;
 
     const searchQuery = `
       SELECT j.*,
@@ -109,59 +169,21 @@ const JSICobro = {
       FROM "jsicobro" j
       LEFT JOIN "caja" c ON j."CajaId" = c."CajaId"
       LEFT JOIN "clientes" cl ON j."ClienteId" = cl."ClienteId"
-      WHERE CAST(j."JSICobroId" AS TEXT) ILIKE $1
-        OR CAST(j."CajaId" AS TEXT) ILIKE $2
-        OR CAST(j."ClienteId" AS TEXT) ILIKE $3
-        OR CAST(j."JSICobroMonto" AS TEXT) ILIKE $4
-        OR CAST(j."JSICobroUsuarioId" AS TEXT) ILIKE $5
-        OR TO_CHAR(j."JSICobroFecha", 'DD/MM/YYYY HH24:MI:SS') ILIKE $6
-        OR cl."ClienteNombre" ILIKE $7
-        OR cl."ClienteApellido" ILIKE $8
-        OR c."CajaDescripcion" ILIKE $9
+      ${where}
       ORDER BY j."${sortField}" ${order}
-      LIMIT $10 OFFSET $11
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
 
-    const result = await db.query(searchQuery, [
-      searchValue, // JSICobroId
-      searchValue, // CajaId
-      searchValue, // ClienteId
-      searchValue, // JSICobroMonto
-      searchValue, // JSICobroUsuarioId
-      searchValue, // JSICobroFecha
-      searchValue, // ClienteNombre
-      searchValue, // ClienteApellido
-      searchValue, // CajaDescripcion
-      limit,
-      offset,
-    ]);
+    const result = await db.query(searchQuery, [...params, limit, offset]);
 
     const countQuery = `
       SELECT COUNT(*) as total FROM "jsicobro" j
       LEFT JOIN "caja" c ON j."CajaId" = c."CajaId"
       LEFT JOIN "clientes" cl ON j."ClienteId" = cl."ClienteId"
-      WHERE CAST(j."JSICobroId" AS TEXT) ILIKE $1
-        OR CAST(j."CajaId" AS TEXT) ILIKE $2
-        OR CAST(j."ClienteId" AS TEXT) ILIKE $3
-        OR CAST(j."JSICobroMonto" AS TEXT) ILIKE $4
-        OR CAST(j."JSICobroUsuarioId" AS TEXT) ILIKE $5
-        OR TO_CHAR(j."JSICobroFecha", 'DD/MM/YYYY HH24:MI:SS') ILIKE $6
-        OR cl."ClienteNombre" ILIKE $7
-        OR cl."ClienteApellido" ILIKE $8
-        OR c."CajaDescripcion" ILIKE $9
+      ${where}
     `;
 
-    const countResult = await db.query(countQuery, [
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-    ]);
+    const countResult = await db.query(countQuery, params);
 
     const total = countResult.rows[0]?.total || 0;
 

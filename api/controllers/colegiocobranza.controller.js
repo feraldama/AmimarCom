@@ -5,6 +5,14 @@ const Nomina = require("../models/nomina.model");
 const Colegio = require("../models/colegio.model");
 const db = require("../config/db");
 
+// Lee los parámetros de filtro de la query (compartidos por getAll y search)
+const parseFiltros = (query) => ({
+  fechaDesde: query.fechaDesde || undefined,
+  fechaHasta: query.fechaHasta || undefined,
+  cajaId: query.cajaId || undefined,
+  colegioId: query.colegioId || undefined,
+});
+
 // Obtener todas las cobranzas con paginación
 exports.getAll = async (req, res) => {
   const limit = parseInt(req.query.limit) || 10;
@@ -17,7 +25,8 @@ exports.getAll = async (req, res) => {
       limit,
       offset,
       sortBy,
-      sortOrder
+      sortOrder,
+      parseFiltros(req.query)
     );
     res.json(result);
   } catch (error) {
@@ -47,7 +56,8 @@ exports.search = async (req, res) => {
       limit,
       offset,
       sortBy,
-      sortOrder
+      sortOrder,
+      parseFiltros(req.query)
     );
 
     res.json(result);

@@ -47,6 +47,21 @@ export interface VentaProducto {
   VentaProductoUnitario: number;
 }
 
+export interface VentaFiltros {
+  fechaDesde?: string;
+  fechaHasta?: string;
+  ventaTipo?: string;
+}
+
+const buildFiltrosParams = (filtros?: VentaFiltros) => {
+  const params: { [key: string]: string | number } = {};
+  if (!filtros) return params;
+  if (filtros.fechaDesde) params.fechaDesde = filtros.fechaDesde;
+  if (filtros.fechaHasta) params.fechaHasta = filtros.fechaHasta;
+  if (filtros.ventaTipo) params.ventaTipo = filtros.ventaTipo;
+  return params;
+};
+
 export const getVentas = async () => {
   const response = await api.get("/venta");
   return response.data;
@@ -56,11 +71,13 @@ export const getVentasPaginated = async (
   page = 1,
   limit = 10,
   sortBy?: string,
-  sortOrder?: "asc" | "desc"
+  sortOrder?: "asc" | "desc",
+  filtros?: VentaFiltros
 ) => {
   const params: { [key: string]: string | number | undefined } = {
     page,
     limit,
+    ...buildFiltrosParams(filtros),
   };
   if (sortBy) params.sortBy = sortBy;
   if (sortOrder) params.sortOrder = sortOrder;
@@ -125,12 +142,14 @@ export const searchVentas = async (
   page = 1,
   limit = 10,
   sortBy?: string,
-  sortOrder?: "asc" | "desc"
+  sortOrder?: "asc" | "desc",
+  filtros?: VentaFiltros
 ) => {
   const params: { [key: string]: string | number | undefined } = {
     q: searchTerm,
     page,
     limit,
+    ...buildFiltrosParams(filtros),
   };
   if (sortBy) params.sortBy = sortBy;
   if (sortOrder) params.sortOrder = sortOrder;

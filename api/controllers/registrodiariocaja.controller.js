@@ -3,10 +3,16 @@ const CajaGasto = require("../models/cajagasto.model");
 const db = require("../config/db");
 
 // Obtener todos los registros con paginación
+// Lee los parámetros de filtro de la query (compartidos por getAll y search)
+const parseFiltros = (query) => ({
+  fechaDesde: query.fechaDesde || undefined,
+  fechaHasta: query.fechaHasta || undefined,
+  cajaId: query.cajaId || undefined,
+  tipoGastoId: query.tipoGastoId || undefined,
+  tipoGastoGrupoId: query.tipoGastoGrupoId || undefined,
+});
+
 exports.getAll = async (req, res) => {
-  const limit = parseInt(req.query.limit) || 10;
-  const page = parseInt(req.query.page) || 1;
-  const offset = (page - 1) * limit;
   const sortBy = req.query.sortBy || "RegistroDiarioCajaFecha";
   const sortOrder = req.query.sortOrder || "DESC";
   try {
@@ -19,6 +25,7 @@ exports.getAll = async (req, res) => {
       offset,
       sortBy,
       sortOrder,
+      parseFiltros(req.query),
     );
     res.json(result);
   } catch (error) {
@@ -49,6 +56,7 @@ exports.search = async (req, res) => {
       offset,
       sortBy,
       sortOrder,
+      parseFiltros(req.query),
     );
 
     res.json(result);

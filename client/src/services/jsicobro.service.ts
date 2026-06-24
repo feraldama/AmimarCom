@@ -14,15 +14,34 @@ export interface JSICobro {
   ClienteApellido?: string;
 }
 
+export interface JSICobroFiltros {
+  fechaDesde?: string;
+  fechaHasta?: string;
+  cajaId?: string | number;
+  clienteId?: string | number;
+}
+
+const buildFiltrosParams = (filtros?: JSICobroFiltros) => {
+  const params: { [key: string]: string | number } = {};
+  if (!filtros) return params;
+  if (filtros.fechaDesde) params.fechaDesde = filtros.fechaDesde;
+  if (filtros.fechaHasta) params.fechaHasta = filtros.fechaHasta;
+  if (filtros.cajaId) params.cajaId = filtros.cajaId;
+  if (filtros.clienteId) params.clienteId = filtros.clienteId;
+  return params;
+};
+
 export const getJSICobros = async (
   page = 1,
   limit = 10,
   sortBy?: string,
-  sortOrder?: "asc" | "desc"
+  sortOrder?: "asc" | "desc",
+  filtros?: JSICobroFiltros
 ) => {
   const params: { [key: string]: string | number | undefined } = {
     page,
     limit,
+    ...buildFiltrosParams(filtros),
   };
   if (sortBy) params.sortBy = sortBy;
   if (sortOrder) params.sortOrder = sortOrder;
@@ -103,12 +122,14 @@ export const searchJSICobros = async (
   page = 1,
   limit = 10,
   sortBy?: string,
-  sortOrder?: "asc" | "desc"
+  sortOrder?: "asc" | "desc",
+  filtros?: JSICobroFiltros
 ) => {
   const params: { [key: string]: string | number | undefined } = {
     q: searchTerm,
     page,
     limit,
+    ...buildFiltrosParams(filtros),
   };
   if (sortBy) params.sortBy = sortBy;
   if (sortOrder) params.sortOrder = sortOrder;

@@ -26,7 +26,8 @@ const DivisaMovimiento = {
     limit,
     offset,
     sortBy = "DivisaMovimientoId",
-    sortOrder = "DESC"
+    sortOrder = "DESC",
+    filters = {}
   ) => {
     const allowedSortFields = [
       "DivisaMovimientoId",
@@ -48,6 +49,33 @@ const DivisaMovimiento = {
       ? sortOrder.toUpperCase()
       : "DESC";
 
+    // Construye los filtros dinámicamente (rango de fechas + categóricos)
+    const { fechaDesde, fechaHasta, cajaId, divisaId, divisaMovimientoTipo } =
+      filters;
+    const conditions = [];
+    const params = [];
+    if (fechaDesde) {
+      params.push(fechaDesde);
+      conditions.push(`dm."DivisaMovimientoFecha"::date >= $${params.length}::date`);
+    }
+    if (fechaHasta) {
+      params.push(fechaHasta);
+      conditions.push(`dm."DivisaMovimientoFecha"::date <= $${params.length}::date`);
+    }
+    if (cajaId) {
+      params.push(cajaId);
+      conditions.push(`dm."CajaId" = $${params.length}`);
+    }
+    if (divisaId) {
+      params.push(divisaId);
+      conditions.push(`dm."DivisaId" = $${params.length}`);
+    }
+    if (divisaMovimientoTipo) {
+      params.push(divisaMovimientoTipo);
+      conditions.push(`dm."DivisaMovimientoTipo" = $${params.length}`);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
     const query = `
       SELECT dm.*,
         c."CajaDescripcion",
@@ -57,14 +85,16 @@ const DivisaMovimiento = {
       LEFT JOIN "caja" c ON dm."CajaId" = c."CajaId"
       LEFT JOIN "divisa" d ON dm."DivisaId" = d."DivisaId"
       LEFT JOIN "usuario" u ON dm."UsuarioId" = u."UsuarioId"
+      ${where}
       ORDER BY dm."${sortField}" ${order}
-      LIMIT $1 OFFSET $2
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
 
-    const result = await db.query(query, [limit, offset]);
+    const result = await db.query(query, [...params, limit, offset]);
 
     const countResult = await db.query(
-      'SELECT COUNT(*) as total FROM "divisamovimiento"'
+      `SELECT COUNT(*) as total FROM "divisamovimiento" dm ${where}`,
+      params
     );
 
     return {
@@ -83,7 +113,8 @@ const DivisaMovimiento = {
     limit,
     offset,
     sortBy = "DivisaMovimientoId",
-    sortOrder = "DESC"
+    sortOrder = "DESC",
+    filters = {}
   ) => {
     const allowedSortFields = [
       "DivisaMovimientoId",
@@ -105,7 +136,48 @@ const DivisaMovimiento = {
       ? sortOrder.toUpperCase()
       : "DESC";
 
+    // Grupo de búsqueda por texto (un mismo valor en todos los campos)
     const searchValue = `%${term}%`;
+    const params = [searchValue];
+    const searchGroup = `(
+        dm."DivisaMovimientoTipo" ILIKE $1
+        OR CAST(dm."DivisaMovimientoId" AS TEXT) ILIKE $1
+        OR CAST(dm."CajaId" AS TEXT) ILIKE $1
+        OR CAST(dm."DivisaId" AS TEXT) ILIKE $1
+        OR CAST(dm."DivisaMovimientoCambio" AS TEXT) ILIKE $1
+        OR CAST(dm."DivisaMovimientoCantidad" AS TEXT) ILIKE $1
+        OR CAST(dm."DivisaMovimientoMonto" AS TEXT) ILIKE $1
+        OR CAST(dm."UsuarioId" AS TEXT) ILIKE $1
+        OR c."CajaDescripcion" ILIKE $1
+        OR d."DivisaNombre" ILIKE $1
+        OR u."UsuarioNombre" ILIKE $1
+      )`;
+
+    // Filtros adicionales (rango de fechas + categóricos)
+    const { fechaDesde, fechaHasta, cajaId, divisaId, divisaMovimientoTipo } =
+      filters;
+    const conditions = [searchGroup];
+    if (fechaDesde) {
+      params.push(fechaDesde);
+      conditions.push(`dm."DivisaMovimientoFecha"::date >= $${params.length}::date`);
+    }
+    if (fechaHasta) {
+      params.push(fechaHasta);
+      conditions.push(`dm."DivisaMovimientoFecha"::date <= $${params.length}::date`);
+    }
+    if (cajaId) {
+      params.push(cajaId);
+      conditions.push(`dm."CajaId" = $${params.length}`);
+    }
+    if (divisaId) {
+      params.push(divisaId);
+      conditions.push(`dm."DivisaId" = $${params.length}`);
+    }
+    if (divisaMovimientoTipo) {
+      params.push(divisaMovimientoTipo);
+      conditions.push(`dm."DivisaMovimientoTipo" = $${params.length}`);
+    }
+    const where = `WHERE ${conditions.join(" AND ")}`;
 
     const searchQuery = `
       SELECT dm.*,
@@ -116,68 +188,22 @@ const DivisaMovimiento = {
       LEFT JOIN "caja" c ON dm."CajaId" = c."CajaId"
       LEFT JOIN "divisa" d ON dm."DivisaId" = d."DivisaId"
       LEFT JOIN "usuario" u ON dm."UsuarioId" = u."UsuarioId"
-      WHERE dm."DivisaMovimientoTipo" ILIKE $1
-        OR CAST(dm."DivisaMovimientoId" AS TEXT) ILIKE $2
-        OR CAST(dm."CajaId" AS TEXT) ILIKE $3
-        OR CAST(dm."DivisaId" AS TEXT) ILIKE $4
-        OR CAST(dm."DivisaMovimientoCambio" AS TEXT) ILIKE $5
-        OR CAST(dm."DivisaMovimientoCantidad" AS TEXT) ILIKE $6
-        OR CAST(dm."DivisaMovimientoMonto" AS TEXT) ILIKE $7
-        OR CAST(dm."UsuarioId" AS TEXT) ILIKE $8
-        OR c."CajaDescripcion" ILIKE $9
-        OR d."DivisaNombre" ILIKE $10
-        OR u."UsuarioNombre" ILIKE $11
+      ${where}
       ORDER BY dm."${sortField}" ${order}
-      LIMIT $12 OFFSET $13
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
 
-    const result = await db.query(searchQuery, [
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      limit,
-      offset,
-    ]);
+    const result = await db.query(searchQuery, [...params, limit, offset]);
 
     const countQuery = `
       SELECT COUNT(*) as total FROM "divisamovimiento" dm
       LEFT JOIN "caja" c ON dm."CajaId" = c."CajaId"
       LEFT JOIN "divisa" d ON dm."DivisaId" = d."DivisaId"
       LEFT JOIN "usuario" u ON dm."UsuarioId" = u."UsuarioId"
-      WHERE dm."DivisaMovimientoTipo" ILIKE $1
-        OR CAST(dm."DivisaMovimientoId" AS TEXT) ILIKE $2
-        OR CAST(dm."CajaId" AS TEXT) ILIKE $3
-        OR CAST(dm."DivisaId" AS TEXT) ILIKE $4
-        OR CAST(dm."DivisaMovimientoCambio" AS TEXT) ILIKE $5
-        OR CAST(dm."DivisaMovimientoCantidad" AS TEXT) ILIKE $6
-        OR CAST(dm."DivisaMovimientoMonto" AS TEXT) ILIKE $7
-        OR CAST(dm."UsuarioId" AS TEXT) ILIKE $8
-        OR c."CajaDescripcion" ILIKE $9
-        OR d."DivisaNombre" ILIKE $10
-        OR u."UsuarioNombre" ILIKE $11
+      ${where}
     `;
 
-    const countResult = await db.query(countQuery, [
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-    ]);
+    const countResult = await db.query(countQuery, params);
 
     const total = countResult.rows[0]?.total || 0;
 

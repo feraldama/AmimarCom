@@ -11,8 +11,35 @@ import {
 import JSICobroList from "../../components/jsicobro/JSICobroList";
 import Pagination from "../../components/common/Pagination";
 import PageHeader from "../../components/common/PageHeader";
+import FilterPanel, { FilterSelect } from "../../components/common/FilterPanel";
+import { getCajas } from "../../services/cajas.service";
+import { getClientes } from "../../services/clientes.service";
 import Swal from "sweetalert2";
 import { usePermiso } from "../../hooks/usePermiso";
+
+interface CajaOption {
+  CajaId: number;
+  CajaDescripcion: string;
+}
+interface ClienteOption {
+  ClienteId: number;
+  ClienteNombre: string;
+  ClienteApellido?: string;
+}
+
+interface Filtros {
+  fechaDesde: string;
+  fechaHasta: string;
+  cajaId: string;
+  clienteId: string;
+}
+
+const FILTROS_VACIOS: Filtros = {
+  fechaDesde: "",
+  fechaHasta: "",
+  cajaId: "",
+  clienteId: "",
+};
 
 interface Pagination {
   totalItems: number;
@@ -36,6 +63,10 @@ export default function JSICobroPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [sortKey, setSortKey] = useState<string>("JSICobroId");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const [filtros, setFiltros] = useState<Filtros>(FILTROS_VACIOS);
+  const [appliedFiltros, setAppliedFiltros] = useState<Filtros>(FILTROS_VACIOS);
+  const [cajas, setCajas] = useState<CajaOption[]>([]);
+  const [clientes, setClientes] = useState<ClienteOption[]>([]);
   const puedeCrear = usePermiso("JSICOBRO", "crear");
   const puedeEditar = usePermiso("JSICOBRO", "editar");
   const puedeEliminar = usePermiso("JSICOBRO", "eliminar");
@@ -51,14 +82,16 @@ export default function JSICobroPage() {
           currentPage,
           itemsPerPage,
           sortKey,
-          sortOrder
+          sortOrder,
+          appliedFiltros
         );
       } else {
         data = await getJSICobros(
           currentPage,
           itemsPerPage,
           sortKey,
-          sortOrder
+          sortOrder,
+          appliedFiltros
         );
       }
       setJSICobrosData({
@@ -77,11 +110,34 @@ export default function JSICobroPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, appliedSearchTerm, itemsPerPage, sortKey, sortOrder]);
+  }, [
+    currentPage,
+    appliedSearchTerm,
+    itemsPerPage,
+    sortKey,
+    sortOrder,
+    appliedFiltros,
+  ]);
 
   useEffect(() => {
     fetchJSICobros();
   }, [fetchJSICobros]);
+
+  useEffect(() => {
+    const cargarOpciones = async () => {
+      try {
+        const [cajasResp, clientesResp] = await Promise.all([
+          getCajas(1, 1000),
+          getClientes(1, 1000),
+        ]);
+        setCajas(cajasResp.data || []);
+        setClientes(clientesResp.data || []);
+      } catch {
+        // Si fallan las opciones, los filtros simplemente quedan vacíos
+      }
+    };
+    cargarOpciones();
+  }, []);
 
   useEffect(() => {
     if (error) {
@@ -103,6 +159,17 @@ export default function JSICobroPage() {
     if (e.key === "Enter") {
       applySearch();
     }
+  };
+
+  const handleApplyFilter = () => {
+    setAppliedFiltros(filtros);
+    setCurrentPage(1);
+  };
+
+  const handleClearFilter = () => {
+    setFiltros(FILTROS_VACIOS);
+    setAppliedFiltros(FILTROS_VACIOS);
+    setCurrentPage(1);
   };
 
   const handleDelete = async (jsicobro: JSICobro) => {
@@ -200,6 +267,40 @@ export default function JSICobroPage() {
           {error}
         </div>
       )}
+      <FilterPanel
+        fechaDesde={filtros.fechaDesde}
+        fechaHasta={filtros.fechaHasta}
+        onFechaDesdeChange={(v) =>
+          setFiltros((p) => ({ ...p, fechaDesde: v }))
+        }
+        onFechaHastaChange={(v) =>
+          setFiltros((p) => ({ ...p, fechaHasta: v }))
+        }
+        onApply={handleApplyFilter}
+        onClear={handleClearFilter}
+      >
+        <FilterSelect
+          label="Caja"
+          value={filtros.cajaId}
+          onChange={(v) => setFiltros((p) => ({ ...p, cajaId: v }))}
+          options={cajas
+            .slice()
+            .sort((a, b) => a.CajaDescripcion.localeCompare(b.CajaDescripcion))
+            .map((c) => ({ value: c.CajaId, label: c.CajaDescripcion }))}
+        />
+        <FilterSelect
+          label="Cliente"
+          value={filtros.clienteId}
+          onChange={(v) => setFiltros((p) => ({ ...p, clienteId: v }))}
+          options={clientes
+            .slice()
+            .map((cl) => ({
+              value: cl.ClienteId,
+              label: `${cl.ClienteNombre || ""} ${cl.ClienteApellido || ""}`.trim(),
+            }))
+            .sort((a, b) => a.label.localeCompare(b.label))}
+        />
+      </FilterPanel>
       <div className={loading ? "opacity-50 pointer-events-none" : ""}>
       <JSICobroList
         jsicobros={jsicobrosData.jsicobros}

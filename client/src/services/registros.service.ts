@@ -1,15 +1,36 @@
 import api from "./api";
 import type { AxiosError } from "axios";
 
+export interface RegistroDiarioCajaFiltros {
+  fechaDesde?: string;
+  fechaHasta?: string;
+  cajaId?: string | number;
+  tipoGastoId?: string | number;
+  tipoGastoGrupoId?: string | number;
+}
+
+const buildFiltrosParams = (filtros?: RegistroDiarioCajaFiltros) => {
+  const params: { [key: string]: string | number } = {};
+  if (!filtros) return params;
+  if (filtros.fechaDesde) params.fechaDesde = filtros.fechaDesde;
+  if (filtros.fechaHasta) params.fechaHasta = filtros.fechaHasta;
+  if (filtros.cajaId) params.cajaId = filtros.cajaId;
+  if (filtros.tipoGastoId) params.tipoGastoId = filtros.tipoGastoId;
+  if (filtros.tipoGastoGrupoId) params.tipoGastoGrupoId = filtros.tipoGastoGrupoId;
+  return params;
+};
+
 export const getRegistrosDiariosCaja = async (
   page = 1,
   limit = 10,
   sortBy?: string,
-  sortOrder?: "asc" | "desc"
+  sortOrder?: "asc" | "desc",
+  filtros?: RegistroDiarioCajaFiltros
 ) => {
   const params: { [key: string]: string | number | undefined } = {
     page,
     limit,
+    ...buildFiltrosParams(filtros),
   };
   if (sortBy) params.sortBy = sortBy;
   if (sortOrder) params.sortOrder = sortOrder;
@@ -31,12 +52,14 @@ export const searchRegistrosDiariosCaja = async (
   page = 1,
   limit = 10,
   sortBy?: string,
-  sortOrder?: "asc" | "desc"
+  sortOrder?: "asc" | "desc",
+  filtros?: RegistroDiarioCajaFiltros
 ) => {
   const params: { [key: string]: string | number | undefined } = {
     q: searchTerm,
     page,
     limit,
+    ...buildFiltrosParams(filtros),
   };
   if (sortBy) params.sortBy = sortBy;
   if (sortOrder) params.sortOrder = sortOrder;

@@ -27,7 +27,8 @@ const PagoTrans = {
     limit,
     offset,
     sortBy = "PagoTransId",
-    sortOrder = "DESC"
+    sortOrder = "DESC",
+    filters = {}
   ) => {
     // Sanitiza sortOrder y sortBy para evitar SQL Injection
     const allowedSortFields = [
@@ -58,6 +59,28 @@ const PagoTrans = {
       ? sortOrder.toUpperCase()
       : "DESC";
 
+    // Construye los filtros dinámicamente (rango de fechas + categóricos)
+    const { fechaDesde, fechaHasta, transporteId, cajaId } = filters;
+    const conditions = [];
+    const params = [];
+    if (fechaDesde) {
+      params.push(fechaDesde);
+      conditions.push(`p."PagoTransFecha"::date >= $${params.length}::date`);
+    }
+    if (fechaHasta) {
+      params.push(fechaHasta);
+      conditions.push(`p."PagoTransFecha"::date <= $${params.length}::date`);
+    }
+    if (transporteId) {
+      params.push(transporteId);
+      conditions.push(`p."TransporteId" = $${params.length}`);
+    }
+    if (cajaId) {
+      params.push(cajaId);
+      conditions.push(`p."CajaId" = $${params.length}`);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
     const query = `
       SELECT p.*,
         t."TransporteNombre",
@@ -68,14 +91,16 @@ const PagoTrans = {
       LEFT JOIN "transporte" t ON p."TransporteId" = t."TransporteId"
       LEFT JOIN "caja" c ON p."CajaId" = c."CajaId"
       LEFT JOIN "clientes" cl ON p."ClienteId" = cl."ClienteId"
+      ${where}
       ORDER BY p."${sortField}" ${order}
-      LIMIT $1 OFFSET $2
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
 
-    const result = await db.query(query, [limit, offset]);
+    const result = await db.query(query, [...params, limit, offset]);
 
     const countResult = await db.query(
-      'SELECT COUNT(*) as total FROM "pagotrans"'
+      `SELECT COUNT(*) as total FROM "pagotrans" p ${where}`,
+      params
     );
 
     return {
@@ -94,7 +119,8 @@ const PagoTrans = {
     limit,
     offset,
     sortBy = "PagoTransFecha",
-    sortOrder = "DESC"
+    sortOrder = "DESC",
+    filters = {}
   ) => {
     // Sanitiza los campos para evitar SQL Injection
     const allowedSortFields = [
@@ -126,6 +152,43 @@ const PagoTrans = {
       : "DESC";
 
     const searchValue = `%${term}%`;
+    const params = [searchValue];
+    const searchGroup = `(
+        p."PagoTransOrigen" ILIKE $1
+        OR p."PagoTransDestino" ILIKE $1
+        OR p."PagoTransNumeroBoleto" ILIKE $1
+        OR p."PagoTransNombreApellido" ILIKE $1
+        OR p."PagoTransCI" ILIKE $1
+        OR p."PagoTransTelefono" ILIKE $1
+        OR p."PagoTransClienteRUC" ILIKE $1
+        OR CAST(p."TransporteId" AS TEXT) ILIKE $1
+        OR CAST(p."CajaId" AS TEXT) ILIKE $1
+        OR CAST(p."ClienteId" AS TEXT) ILIKE $1
+        OR CAST(p."PagoTransMonto" AS TEXT) ILIKE $1
+        OR TO_CHAR(p."PagoTransFecha", 'DD/MM/YYYY HH24:MI:SS') ILIKE $1
+        OR TO_CHAR(p."PagoTransFechaEmbarque", 'DD/MM/YYYY') ILIKE $1
+      )`;
+
+    // Filtros adicionales (rango de fechas + categóricos)
+    const { fechaDesde, fechaHasta, transporteId, cajaId } = filters;
+    const conditions = [searchGroup];
+    if (fechaDesde) {
+      params.push(fechaDesde);
+      conditions.push(`p."PagoTransFecha"::date >= $${params.length}::date`);
+    }
+    if (fechaHasta) {
+      params.push(fechaHasta);
+      conditions.push(`p."PagoTransFecha"::date <= $${params.length}::date`);
+    }
+    if (transporteId) {
+      params.push(transporteId);
+      conditions.push(`p."TransporteId" = $${params.length}`);
+    }
+    if (cajaId) {
+      params.push(cajaId);
+      conditions.push(`p."CajaId" = $${params.length}`);
+    }
+    const where = `WHERE ${conditions.join(" AND ")}`;
 
     const searchQuery = `
       SELECT p.*,
@@ -137,73 +200,19 @@ const PagoTrans = {
       LEFT JOIN "transporte" t ON p."TransporteId" = t."TransporteId"
       LEFT JOIN "caja" c ON p."CajaId" = c."CajaId"
       LEFT JOIN "clientes" cl ON p."ClienteId" = cl."ClienteId"
-      WHERE p."PagoTransOrigen" ILIKE $1
-        OR p."PagoTransDestino" ILIKE $2
-        OR p."PagoTransNumeroBoleto" ILIKE $3
-        OR p."PagoTransNombreApellido" ILIKE $4
-        OR p."PagoTransCI" ILIKE $5
-        OR p."PagoTransTelefono" ILIKE $6
-        OR p."PagoTransClienteRUC" ILIKE $7
-        OR CAST(p."TransporteId" AS TEXT) ILIKE $8
-        OR CAST(p."CajaId" AS TEXT) ILIKE $9
-        OR CAST(p."ClienteId" AS TEXT) ILIKE $10
-        OR CAST(p."PagoTransMonto" AS TEXT) ILIKE $11
-        OR TO_CHAR(p."PagoTransFecha", 'DD/MM/YYYY HH24:MI:SS') ILIKE $12
-        OR TO_CHAR(p."PagoTransFechaEmbarque", 'DD/MM/YYYY') ILIKE $13
+      ${where}
       ORDER BY p."${sortField}" ${order}
-      LIMIT $14 OFFSET $15
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
 
-    const result = await db.query(searchQuery, [
-      searchValue, // Origen
-      searchValue, // Destino
-      searchValue, // NumeroBoleto
-      searchValue, // NombreApellido
-      searchValue, // CI
-      searchValue, // Telefono
-      searchValue, // ClienteRUC
-      searchValue, // TransporteId
-      searchValue, // CajaId
-      searchValue, // ClienteId
-      searchValue, // Monto
-      searchValue, // Fecha
-      searchValue, // FechaEmbarque
-      limit,
-      offset,
-    ]);
+    const result = await db.query(searchQuery, [...params, limit, offset]);
 
     const countQuery = `
-      SELECT COUNT(*) as total FROM "pagotrans"
-      WHERE "PagoTransOrigen" ILIKE $1
-        OR "PagoTransDestino" ILIKE $2
-        OR "PagoTransNumeroBoleto" ILIKE $3
-        OR "PagoTransNombreApellido" ILIKE $4
-        OR "PagoTransCI" ILIKE $5
-        OR "PagoTransTelefono" ILIKE $6
-        OR "PagoTransClienteRUC" ILIKE $7
-        OR CAST("TransporteId" AS TEXT) ILIKE $8
-        OR CAST("CajaId" AS TEXT) ILIKE $9
-        OR CAST("ClienteId" AS TEXT) ILIKE $10
-        OR CAST("PagoTransMonto" AS TEXT) ILIKE $11
-        OR TO_CHAR("PagoTransFecha", 'DD/MM/YYYY HH24:MI:SS') ILIKE $12
-        OR TO_CHAR("PagoTransFechaEmbarque", 'DD/MM/YYYY') ILIKE $13
+      SELECT COUNT(*) as total FROM "pagotrans" p
+      ${where}
     `;
 
-    const countResult = await db.query(countQuery, [
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-      searchValue,
-    ]);
+    const countResult = await db.query(countQuery, params);
 
     const total = countResult.rows[0]?.total || 0;
 

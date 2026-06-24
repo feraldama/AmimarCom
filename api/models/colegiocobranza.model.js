@@ -37,7 +37,8 @@ const ColegioCobranza = {
     limit,
     offset,
     sortBy = "ColegioCobranzaId",
-    sortOrder = "DESC"
+    sortOrder = "DESC",
+    filters = {}
   ) => {
     const allowedSortFields = [
       "ColegioCobranzaId",
@@ -60,6 +61,28 @@ const ColegioCobranza = {
       ? sortOrder.toUpperCase()
       : "DESC";
 
+    // Construye los filtros dinámicamente (rango de fechas + categóricos)
+    const { fechaDesde, fechaHasta, cajaId, colegioId } = filters;
+    const conditions = [];
+    const params = [];
+    if (fechaDesde) {
+      params.push(fechaDesde);
+      conditions.push(`cc."ColegioCobranzaFecha"::date >= $${params.length}::date`);
+    }
+    if (fechaHasta) {
+      params.push(fechaHasta);
+      conditions.push(`cc."ColegioCobranzaFecha"::date <= $${params.length}::date`);
+    }
+    if (cajaId) {
+      params.push(cajaId);
+      conditions.push(`cc."CajaId" = $${params.length}`);
+    }
+    if (colegioId) {
+      params.push(colegioId);
+      conditions.push(`n."ColegioId" = $${params.length}`);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
     const query = `
       SELECT cc.*,
         c."CajaDescripcion",
@@ -70,14 +93,19 @@ const ColegioCobranza = {
       LEFT JOIN "caja" c ON cc."CajaId" = c."CajaId"
       LEFT JOIN "nomina" n ON cc."NominaId" = n."NominaId"
       LEFT JOIN "usuario" u ON cc."UsuarioId" = u."UsuarioId"
+      ${where}
       ORDER BY cc."${sortField}" ${order}
-      LIMIT $1 OFFSET $2
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
 
-    const result = await db.query(query, [limit, offset]);
+    const result = await db.query(query, [...params, limit, offset]);
 
     const countResult = await db.query(
-      'SELECT COUNT(*) as total FROM "colegiocobranza"'
+      `SELECT COUNT(*) as total
+      FROM "colegiocobranza" cc
+      LEFT JOIN "nomina" n ON cc."NominaId" = n."NominaId"
+      ${where}`,
+      params
     );
 
     return {
@@ -96,7 +124,8 @@ const ColegioCobranza = {
     limit,
     offset,
     sortBy = "ColegioCobranzaId",
-    sortOrder = "DESC"
+    sortOrder = "DESC",
+    filters = {}
   ) => {
     const allowedSortFields = [
       "ColegioCobranzaId",
@@ -119,6 +148,47 @@ const ColegioCobranza = {
       ? sortOrder.toUpperCase()
       : "DESC";
 
+    // Grupo de búsqueda por texto (un mismo valor en todos los campos)
+    const searchValue = `%${term}%`;
+    const params = [searchValue];
+    const searchGroup = `(
+        CAST(cc."ColegioCobranzaId" AS TEXT) ILIKE $1
+        OR CAST(cc."CajaId" AS TEXT) ILIKE $1
+        OR cc."ColegioCobranzaFecha"::TEXT ILIKE $1
+        OR CAST(cc."NominaId" AS TEXT) ILIKE $1
+        OR cc."ColegioCobranzaMesPagado" ILIKE $1
+        OR cc."ColegioCobranzaMes" ILIKE $1
+        OR CAST(cc."ColegioCobranzaDiasMora" AS TEXT) ILIKE $1
+        OR cc."ColegioCobranzaExamen" ILIKE $1
+        OR CAST(cc."UsuarioId" AS TEXT) ILIKE $1
+        OR CAST(cc."ColegioCobranzaDescuento" AS TEXT) ILIKE $1
+        OR c."CajaDescripcion" ILIKE $1
+        OR n."NominaNombre" ILIKE $1
+        OR n."NominaApellido" ILIKE $1
+        OR u."UsuarioNombre" ILIKE $1
+      )`;
+
+    // Filtros adicionales (rango de fechas + categóricos)
+    const { fechaDesde, fechaHasta, cajaId, colegioId } = filters;
+    const conditions = [searchGroup];
+    if (fechaDesde) {
+      params.push(fechaDesde);
+      conditions.push(`cc."ColegioCobranzaFecha"::date >= $${params.length}::date`);
+    }
+    if (fechaHasta) {
+      params.push(fechaHasta);
+      conditions.push(`cc."ColegioCobranzaFecha"::date <= $${params.length}::date`);
+    }
+    if (cajaId) {
+      params.push(cajaId);
+      conditions.push(`cc."CajaId" = $${params.length}`);
+    }
+    if (colegioId) {
+      params.push(colegioId);
+      conditions.push(`n."ColegioId" = $${params.length}`);
+    }
+    const where = `WHERE ${conditions.join(" AND ")}`;
+
     const searchQuery = `
       SELECT cc.*,
         c."CajaDescripcion",
@@ -129,46 +199,12 @@ const ColegioCobranza = {
       LEFT JOIN "caja" c ON cc."CajaId" = c."CajaId"
       LEFT JOIN "nomina" n ON cc."NominaId" = n."NominaId"
       LEFT JOIN "usuario" u ON cc."UsuarioId" = u."UsuarioId"
-      WHERE CAST(cc."ColegioCobranzaId" AS TEXT) ILIKE $1
-        OR CAST(cc."CajaId" AS TEXT) ILIKE $2
-        OR cc."ColegioCobranzaFecha"::TEXT ILIKE $3
-        OR CAST(cc."NominaId" AS TEXT) ILIKE $4
-        OR cc."ColegioCobranzaMesPagado" ILIKE $5
-        OR cc."ColegioCobranzaMes" ILIKE $6
-        OR CAST(cc."ColegioCobranzaDiasMora" AS TEXT) ILIKE $7
-        OR cc."ColegioCobranzaExamen" ILIKE $8
-        OR CAST(cc."UsuarioId" AS TEXT) ILIKE $9
-        OR CAST(cc."ColegioCobranzaDescuento" AS TEXT) ILIKE $10
-        OR c."CajaDescripcion" ILIKE $11
-        OR n."NominaNombre" ILIKE $12
-        OR n."NominaApellido" ILIKE $13
-        OR u."UsuarioNombre" ILIKE $14
+      ${where}
       ORDER BY cc."${sortField}" ${order}
-      LIMIT $15 OFFSET $16
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
-    const searchValue = `%${term}%`;
 
-    const result = await db.query(
-      searchQuery,
-      [
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        limit,
-        offset,
-      ]
-    );
+    const result = await db.query(searchQuery, [...params, limit, offset]);
 
     const countResult = await db.query(
       `SELECT COUNT(*) as total
@@ -176,36 +212,8 @@ const ColegioCobranza = {
       LEFT JOIN "caja" c ON cc."CajaId" = c."CajaId"
       LEFT JOIN "nomina" n ON cc."NominaId" = n."NominaId"
       LEFT JOIN "usuario" u ON cc."UsuarioId" = u."UsuarioId"
-      WHERE CAST(cc."ColegioCobranzaId" AS TEXT) ILIKE $1
-        OR CAST(cc."CajaId" AS TEXT) ILIKE $2
-        OR cc."ColegioCobranzaFecha"::TEXT ILIKE $3
-        OR CAST(cc."NominaId" AS TEXT) ILIKE $4
-        OR cc."ColegioCobranzaMesPagado" ILIKE $5
-        OR cc."ColegioCobranzaMes" ILIKE $6
-        OR CAST(cc."ColegioCobranzaDiasMora" AS TEXT) ILIKE $7
-        OR cc."ColegioCobranzaExamen" ILIKE $8
-        OR CAST(cc."UsuarioId" AS TEXT) ILIKE $9
-        OR CAST(cc."ColegioCobranzaDescuento" AS TEXT) ILIKE $10
-        OR c."CajaDescripcion" ILIKE $11
-        OR n."NominaNombre" ILIKE $12
-        OR n."NominaApellido" ILIKE $13
-        OR u."UsuarioNombre" ILIKE $14`,
-      [
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-        searchValue,
-      ]
+      ${where}`,
+      params
     );
 
     return {

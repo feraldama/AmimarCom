@@ -1,6 +1,23 @@
 import api from "./api";
 import type { AxiosError } from "axios";
 
+export interface CompraFiltros {
+  fechaDesde?: string;
+  fechaHasta?: string;
+  proveedorId?: string | number;
+  compraTipo?: string;
+}
+
+const buildFiltrosParams = (filtros?: CompraFiltros) => {
+  const params: { [key: string]: string | number } = {};
+  if (!filtros) return params;
+  if (filtros.fechaDesde) params.fechaDesde = filtros.fechaDesde;
+  if (filtros.fechaHasta) params.fechaHasta = filtros.fechaHasta;
+  if (filtros.proveedorId) params.proveedorId = filtros.proveedorId;
+  if (filtros.compraTipo) params.compraTipo = filtros.compraTipo;
+  return params;
+};
+
 export interface Compra {
   CompraId: number;
   CompraFecha: string;
@@ -145,11 +162,12 @@ export const getComprasPaginated = async (
   page: number = 1,
   limit: number = 10,
   sortKey: string = "CompraId",
-  sortOrder: "asc" | "desc" = "desc"
+  sortOrder: "asc" | "desc" = "desc",
+  filtros?: CompraFiltros
 ): Promise<ComprasResponse> => {
   try {
     const response = await api.get("/compras", {
-      params: { page, limit, sortKey, sortOrder },
+      params: { page, limit, sortKey, sortOrder, ...buildFiltrosParams(filtros) },
     });
     return response.data;
   } catch (error) {
@@ -164,11 +182,19 @@ export const searchCompras = async (
   page: number = 1,
   limit: number = 10,
   sortKey: string = "CompraId",
-  sortOrder: "asc" | "desc" = "desc"
+  sortOrder: "asc" | "desc" = "desc",
+  filtros?: CompraFiltros
 ): Promise<ComprasResponse> => {
   try {
     const response = await api.get("/compras/search", {
-      params: { search: searchTerm, page, limit, sortKey, sortOrder },
+      params: {
+        search: searchTerm,
+        page,
+        limit,
+        sortKey,
+        sortOrder,
+        ...buildFiltrosParams(filtros),
+      },
     });
     return response.data;
   } catch (error) {

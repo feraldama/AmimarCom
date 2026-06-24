@@ -11,8 +11,34 @@ import {
 import PagosTransporteList from "../../components/pagotrans/PagosTransporteList";
 import Pagination from "../../components/common/Pagination";
 import PageHeader from "../../components/common/PageHeader";
+import FilterPanel, { FilterSelect } from "../../components/common/FilterPanel";
+import { getCajas } from "../../services/cajas.service";
+import { getTransportes } from "../../services/transporte.service";
 import Swal from "sweetalert2";
 import { usePermiso } from "../../hooks/usePermiso";
+
+interface CajaOption {
+  CajaId: number;
+  CajaDescripcion: string;
+}
+interface TransporteOption {
+  TransporteId: number;
+  TransporteNombre: string;
+}
+
+interface Filtros {
+  fechaDesde: string;
+  fechaHasta: string;
+  transporteId: string;
+  cajaId: string;
+}
+
+const FILTROS_VACIOS: Filtros = {
+  fechaDesde: "",
+  fechaHasta: "",
+  transporteId: "",
+  cajaId: "",
+};
 
 interface Pagination {
   totalItems: number;
@@ -38,6 +64,10 @@ export default function PagosTransportePage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [sortKey, setSortKey] = useState<string>("PagoTransId");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const [filtros, setFiltros] = useState<Filtros>(FILTROS_VACIOS);
+  const [appliedFiltros, setAppliedFiltros] = useState<Filtros>(FILTROS_VACIOS);
+  const [cajas, setCajas] = useState<CajaOption[]>([]);
+  const [transportes, setTransportes] = useState<TransporteOption[]>([]);
   const puedeCrear = usePermiso("PAGOTRANS", "crear");
   const puedeEditar = usePermiso("PAGOTRANS", "editar");
   const puedeEliminar = usePermiso("PAGOTRANS", "eliminar");
@@ -53,14 +83,16 @@ export default function PagosTransportePage() {
           currentPage,
           itemsPerPage,
           sortKey,
-          sortOrder
+          sortOrder,
+          appliedFiltros
         );
       } else {
         data = await getPagosTrans(
           currentPage,
           itemsPerPage,
           sortKey,
-          sortOrder
+          sortOrder,
+          appliedFiltros
         );
       }
       setPagosTransData({
@@ -79,11 +111,34 @@ export default function PagosTransportePage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, appliedSearchTerm, itemsPerPage, sortKey, sortOrder]);
+  }, [
+    currentPage,
+    appliedSearchTerm,
+    itemsPerPage,
+    sortKey,
+    sortOrder,
+    appliedFiltros,
+  ]);
 
   useEffect(() => {
     fetchPagosTrans();
   }, [fetchPagosTrans]);
+
+  useEffect(() => {
+    const cargarOpciones = async () => {
+      try {
+        const [cajasResp, transportesResp] = await Promise.all([
+          getCajas(1, 1000),
+          getTransportes(1, 1000),
+        ]);
+        setCajas(cajasResp.data || []);
+        setTransportes(transportesResp.data || []);
+      } catch {
+        // Si fallan las opciones, los filtros simplemente quedan vacíos
+      }
+    };
+    cargarOpciones();
+  }, []);
 
   useEffect(() => {
     if (error) {
@@ -105,6 +160,17 @@ export default function PagosTransportePage() {
     if (e.key === "Enter") {
       applySearch();
     }
+  };
+
+  const handleApplyFilter = () => {
+    setAppliedFiltros(filtros);
+    setCurrentPage(1);
+  };
+
+  const handleClearFilter = () => {
+    setFiltros(FILTROS_VACIOS);
+    setAppliedFiltros(FILTROS_VACIOS);
+    setCurrentPage(1);
   };
 
   const handleDelete = async (pagoTrans: PagoTrans) => {
@@ -202,6 +268,42 @@ export default function PagosTransportePage() {
           {error}
         </div>
       )}
+      <FilterPanel
+        fechaDesde={filtros.fechaDesde}
+        fechaHasta={filtros.fechaHasta}
+        onFechaDesdeChange={(v) =>
+          setFiltros((p) => ({ ...p, fechaDesde: v }))
+        }
+        onFechaHastaChange={(v) =>
+          setFiltros((p) => ({ ...p, fechaHasta: v }))
+        }
+        onApply={handleApplyFilter}
+        onClear={handleClearFilter}
+      >
+        <FilterSelect
+          label="Transporte"
+          value={filtros.transporteId}
+          onChange={(v) => setFiltros((p) => ({ ...p, transporteId: v }))}
+          options={transportes
+            .slice()
+            .sort((a, b) =>
+              a.TransporteNombre.localeCompare(b.TransporteNombre)
+            )
+            .map((t) => ({
+              value: t.TransporteId,
+              label: t.TransporteNombre,
+            }))}
+        />
+        <FilterSelect
+          label="Caja"
+          value={filtros.cajaId}
+          onChange={(v) => setFiltros((p) => ({ ...p, cajaId: v }))}
+          options={cajas
+            .slice()
+            .sort((a, b) => a.CajaDescripcion.localeCompare(b.CajaDescripcion))
+            .map((c) => ({ value: c.CajaId, label: c.CajaDescripcion }))}
+        />
+      </FilterPanel>
       <div className={loading ? "opacity-50 pointer-events-none" : ""}>
       <PagosTransporteList
         pagosTrans={pagosTransData.pagosTrans}

@@ -10,8 +10,34 @@ import {
 import ColegioCobranzasList from "../../components/colegiocobranzas/ColegioCobranzasList";
 import Pagination from "../../components/common/Pagination";
 import PageHeader from "../../components/common/PageHeader";
+import FilterPanel, { FilterSelect } from "../../components/common/FilterPanel";
+import { getCajas } from "../../services/cajas.service";
+import { getColegios } from "../../services/colegio.service";
 import Swal from "sweetalert2";
 import { usePermiso } from "../../hooks/usePermiso";
+
+interface CajaOption {
+  CajaId: number;
+  CajaDescripcion: string;
+}
+interface ColegioOption {
+  ColegioId: number;
+  ColegioNombre: string;
+}
+
+interface Filtros {
+  fechaDesde: string;
+  fechaHasta: string;
+  cajaId: string;
+  colegioId: string;
+}
+
+const FILTROS_VACIOS: Filtros = {
+  fechaDesde: "",
+  fechaHasta: "",
+  cajaId: "",
+  colegioId: "",
+};
 
 interface ColegioCobranza {
   id: string | number;
@@ -55,6 +81,10 @@ export default function ColegioCobranzasPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [sortKey, setSortKey] = useState<string>("ColegioCobranzaId");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const [filtros, setFiltros] = useState<Filtros>(FILTROS_VACIOS);
+  const [appliedFiltros, setAppliedFiltros] = useState<Filtros>(FILTROS_VACIOS);
+  const [cajas, setCajas] = useState<CajaOption[]>([]);
+  const [colegios, setColegios] = useState<ColegioOption[]>([]);
   const puedeCrear = usePermiso("COLEGIOCOBRANZA", "crear");
   const puedeEditar = usePermiso("COLEGIOCOBRANZA", "editar");
   const puedeEliminar = usePermiso("COLEGIOCOBRANZA", "eliminar");
@@ -70,14 +100,16 @@ export default function ColegioCobranzasPage() {
           currentPage,
           itemsPerPage,
           sortKey,
-          sortOrder
+          sortOrder,
+          appliedFiltros
         );
       } else {
         data = await getColegioCobranzas(
           currentPage,
           itemsPerPage,
           sortKey,
-          sortOrder
+          sortOrder,
+          appliedFiltros
         );
       }
       setCobranzasData({
@@ -93,11 +125,34 @@ export default function ColegioCobranzasPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, appliedSearchTerm, itemsPerPage, sortKey, sortOrder]);
+  }, [
+    currentPage,
+    appliedSearchTerm,
+    itemsPerPage,
+    sortKey,
+    sortOrder,
+    appliedFiltros,
+  ]);
 
   useEffect(() => {
     fetchCobranzas();
   }, [fetchCobranzas]);
+
+  useEffect(() => {
+    const cargarOpciones = async () => {
+      try {
+        const [cajasResp, colegiosResp] = await Promise.all([
+          getCajas(1, 1000),
+          getColegios(1, 1000),
+        ]);
+        setCajas(cajasResp.data || []);
+        setColegios(colegiosResp.data || []);
+      } catch {
+        // Si fallan las opciones, los filtros simplemente quedan vacíos
+      }
+    };
+    cargarOpciones();
+  }, []);
 
   useEffect(() => {
     if (error) {
@@ -119,6 +174,17 @@ export default function ColegioCobranzasPage() {
     if (e.key === "Enter") {
       applySearch();
     }
+  };
+
+  const handleApplyFilter = () => {
+    setAppliedFiltros(filtros);
+    setCurrentPage(1);
+  };
+
+  const handleClearFilter = () => {
+    setFiltros(FILTROS_VACIOS);
+    setAppliedFiltros(FILTROS_VACIOS);
+    setCurrentPage(1);
   };
 
   const handleDelete = async (cobranza: ColegioCobranza) => {
@@ -218,6 +284,37 @@ export default function ColegioCobranzasPage() {
           {error}
         </div>
       )}
+      <FilterPanel
+        fechaDesde={filtros.fechaDesde}
+        fechaHasta={filtros.fechaHasta}
+        onFechaDesdeChange={(v) =>
+          setFiltros((p) => ({ ...p, fechaDesde: v }))
+        }
+        onFechaHastaChange={(v) =>
+          setFiltros((p) => ({ ...p, fechaHasta: v }))
+        }
+        onApply={handleApplyFilter}
+        onClear={handleClearFilter}
+      >
+        <FilterSelect
+          label="Caja"
+          value={filtros.cajaId}
+          onChange={(v) => setFiltros((p) => ({ ...p, cajaId: v }))}
+          options={cajas
+            .slice()
+            .sort((a, b) => a.CajaDescripcion.localeCompare(b.CajaDescripcion))
+            .map((c) => ({ value: c.CajaId, label: c.CajaDescripcion }))}
+        />
+        <FilterSelect
+          label="Colegio"
+          value={filtros.colegioId}
+          onChange={(v) => setFiltros((p) => ({ ...p, colegioId: v }))}
+          options={colegios
+            .slice()
+            .sort((a, b) => a.ColegioNombre.localeCompare(b.ColegioNombre))
+            .map((c) => ({ value: c.ColegioId, label: c.ColegioNombre }))}
+        />
+      </FilterPanel>
       <div className={loading ? "opacity-50 pointer-events-none" : ""}>
       <ColegioCobranzasList
         cobranzas={cobranzasData.cobranzas.map((c) => ({

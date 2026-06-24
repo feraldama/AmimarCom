@@ -5,16 +5,22 @@ import {
   getComprasPaginated,
   searchCompras,
   type Compra,
+  type CompraFiltros,
   getProductosByCompraId,
   type CompraProducto,
   deleteCompra,
 } from "../../services/compras.service";
-import { getProveedorById } from "../../services/proveedores.service";
+import {
+  getProveedorById,
+  getAllProveedoresSinPaginacion,
+  type Proveedor,
+} from "../../services/proveedores.service";
 import { getProductoById } from "../../services/productos.service";
 import { getAlmacenById } from "../../services/almacenes.service";
 import ComprasList from "../../components/compras/ComprasList";
 import Pagination from "../../components/common/Pagination";
 import PageHeader from "../../components/common/PageHeader";
+import FilterPanel, { FilterSelect } from "../../components/common/FilterPanel";
 import { formatCurrency } from "../../utils/utils";
 import Swal from "sweetalert2";
 import axios from "axios";
@@ -26,6 +32,25 @@ interface Pagination {
   itemsPerPage?: number;
   [key: string]: unknown;
 }
+
+interface Filtros {
+  fechaDesde: string;
+  fechaHasta: string;
+  proveedorId: string;
+  compraTipo: string;
+}
+
+const FILTROS_VACIOS: Filtros = {
+  fechaDesde: "",
+  fechaHasta: "",
+  proveedorId: "",
+  compraTipo: "",
+};
+
+const TIPOS_COMPRA: { value: string; label: string }[] = [
+  { value: "CO", label: "Contado" },
+  { value: "CR", label: "Crédito" },
+];
 
 export default function ComprasPage() {
   const [comprasData, setComprasData] = useState<{
@@ -40,6 +65,9 @@ export default function ComprasPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [sortKey, setSortKey] = useState<string>("CompraId");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const [filtros, setFiltros] = useState<Filtros>(FILTROS_VACIOS);
+  const [appliedFiltros, setAppliedFiltros] = useState<Filtros>(FILTROS_VACIOS);
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
 
   const puedeCrear = usePermiso("COMPRAS", "crear");
   const puedeLeer = usePermiso("COMPRAS", "leer");
@@ -76,20 +104,23 @@ export default function ComprasPage() {
     try {
       setLoading(true);
       let data;
+      const filtrosParaServicio: CompraFiltros = appliedFiltros;
       if (appliedSearchTerm) {
         data = await searchCompras(
           appliedSearchTerm,
           currentPage,
           itemsPerPage,
           sortKey,
-          sortOrder
+          sortOrder,
+          filtrosParaServicio
         );
       } else {
         data = await getComprasPaginated(
           currentPage,
           itemsPerPage,
           sortKey,
-          sortOrder
+          sortOrder,
+          filtrosParaServicio
         );
       }
       const comprasConProveedores = await loadProveedoresData(data.data);
@@ -107,11 +138,30 @@ export default function ComprasPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, appliedSearchTerm, itemsPerPage, sortKey, sortOrder]);
+  }, [
+    currentPage,
+    appliedSearchTerm,
+    itemsPerPage,
+    sortKey,
+    sortOrder,
+    appliedFiltros,
+  ]);
 
   useEffect(() => {
     fetchCompras();
   }, [fetchCompras]);
+
+  useEffect(() => {
+    const cargarOpciones = async () => {
+      try {
+        const provResp = await getAllProveedoresSinPaginacion();
+        setProveedores(provResp.data || []);
+      } catch {
+        // Si fallan las opciones, los filtros simplemente quedan vacíos
+      }
+    };
+    cargarOpciones();
+  }, []);
 
   useEffect(() => {
     if (error) {
@@ -133,6 +183,17 @@ export default function ComprasPage() {
     if (e.key === "Enter") {
       applySearch();
     }
+  };
+
+  const handleApplyFilter = () => {
+    setAppliedFiltros(filtros);
+    setCurrentPage(1);
+  };
+
+  const handleClearFilter = () => {
+    setFiltros(FILTROS_VACIOS);
+    setAppliedFiltros(FILTROS_VACIOS);
+    setCurrentPage(1);
   };
 
   const handleViewDetails = async (compra: Compra) => {
@@ -388,6 +449,39 @@ export default function ComprasPage() {
           {error}
         </div>
       )}
+      <FilterPanel
+        fechaDesde={filtros.fechaDesde}
+        fechaHasta={filtros.fechaHasta}
+        onFechaDesdeChange={(v) =>
+          setFiltros((p) => ({ ...p, fechaDesde: v }))
+        }
+        onFechaHastaChange={(v) =>
+          setFiltros((p) => ({ ...p, fechaHasta: v }))
+        }
+        onApply={handleApplyFilter}
+        onClear={handleClearFilter}
+      >
+        <FilterSelect
+          label="Proveedor"
+          value={filtros.proveedorId}
+          onChange={(v) => setFiltros((p) => ({ ...p, proveedorId: v }))}
+          options={proveedores
+            .slice()
+            .sort((a, b) =>
+              a.ProveedorNombre.localeCompare(b.ProveedorNombre)
+            )
+            .map((p) => ({
+              value: p.ProveedorId,
+              label: p.ProveedorNombre,
+            }))}
+        />
+        <FilterSelect
+          label="Tipo de compra"
+          value={filtros.compraTipo}
+          onChange={(v) => setFiltros((p) => ({ ...p, compraTipo: v }))}
+          options={TIPOS_COMPRA}
+        />
+      </FilterPanel>
       <div className={loading ? "opacity-50 pointer-events-none" : ""}>
       <ComprasList
         compras={comprasData.compras}

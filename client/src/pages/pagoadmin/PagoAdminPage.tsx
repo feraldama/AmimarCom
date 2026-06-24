@@ -12,8 +12,29 @@ import PagoAdminList, {
 } from "../../components/pagoadmin/PagoAdminList";
 import Pagination from "../../components/common/Pagination";
 import PageHeader from "../../components/common/PageHeader";
+import FilterPanel, { FilterSelect } from "../../components/common/FilterPanel";
+import { getCajas } from "../../services/cajas.service";
 import Swal from "sweetalert2";
 import { usePermiso } from "../../hooks/usePermiso";
+
+interface CajaOption {
+  CajaId: number;
+  CajaDescripcion: string;
+}
+
+interface Filtros {
+  fechaDesde: string;
+  fechaHasta: string;
+  cajaOrigenId: string;
+  cajaId: string;
+}
+
+const FILTROS_VACIOS: Filtros = {
+  fechaDesde: "",
+  fechaHasta: "",
+  cajaOrigenId: "",
+  cajaId: "",
+};
 
 interface Pagination {
   totalItems: number;
@@ -39,6 +60,9 @@ export default function PagoAdminPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [sortKey, setSortKey] = useState<string>("PagoAdminId");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const [filtros, setFiltros] = useState<Filtros>(FILTROS_VACIOS);
+  const [appliedFiltros, setAppliedFiltros] = useState<Filtros>(FILTROS_VACIOS);
+  const [cajas, setCajas] = useState<CajaOption[]>([]);
   const puedeCrear = usePermiso("PAGOADMIN", "crear");
   const puedeEditar = usePermiso("PAGOADMIN", "editar");
   const puedeEliminar = usePermiso("PAGOADMIN", "eliminar");
@@ -54,14 +78,16 @@ export default function PagoAdminPage() {
           currentPage,
           itemsPerPage,
           sortKey,
-          sortOrder
+          sortOrder,
+          appliedFiltros
         );
       } else {
         data = await getPagosAdmin(
           currentPage,
           itemsPerPage,
           sortKey,
-          sortOrder
+          sortOrder,
+          appliedFiltros
         );
       }
       setPagosAdminData({
@@ -77,11 +103,30 @@ export default function PagoAdminPage() {
     } finally {
       setLoading(false);
     }
-  }, [currentPage, appliedSearchTerm, itemsPerPage, sortKey, sortOrder]);
+  }, [
+    currentPage,
+    appliedSearchTerm,
+    itemsPerPage,
+    sortKey,
+    sortOrder,
+    appliedFiltros,
+  ]);
 
   useEffect(() => {
     fetchPagosAdmin();
   }, [fetchPagosAdmin]);
+
+  useEffect(() => {
+    const cargarOpciones = async () => {
+      try {
+        const cajasResp = await getCajas(1, 1000);
+        setCajas(cajasResp.data || []);
+      } catch {
+        // Si fallan las opciones, los filtros simplemente quedan vacíos
+      }
+    };
+    cargarOpciones();
+  }, []);
 
   useEffect(() => {
     if (error) {
@@ -103,6 +148,17 @@ export default function PagoAdminPage() {
     if (e.key === "Enter") {
       applySearch();
     }
+  };
+
+  const handleApplyFilter = () => {
+    setAppliedFiltros(filtros);
+    setCurrentPage(1);
+  };
+
+  const handleClearFilter = () => {
+    setFiltros(FILTROS_VACIOS);
+    setAppliedFiltros(FILTROS_VACIOS);
+    setCurrentPage(1);
   };
 
   const handleDelete = async (pagoAdmin: PagoAdmin) => {
@@ -203,6 +259,37 @@ export default function PagoAdminPage() {
           {error}
         </div>
       )}
+      <FilterPanel
+        fechaDesde={filtros.fechaDesde}
+        fechaHasta={filtros.fechaHasta}
+        onFechaDesdeChange={(v) =>
+          setFiltros((p) => ({ ...p, fechaDesde: v }))
+        }
+        onFechaHastaChange={(v) =>
+          setFiltros((p) => ({ ...p, fechaHasta: v }))
+        }
+        onApply={handleApplyFilter}
+        onClear={handleClearFilter}
+      >
+        <FilterSelect
+          label="Caja Origen"
+          value={filtros.cajaOrigenId}
+          onChange={(v) => setFiltros((p) => ({ ...p, cajaOrigenId: v }))}
+          options={cajas
+            .slice()
+            .sort((a, b) => a.CajaDescripcion.localeCompare(b.CajaDescripcion))
+            .map((c) => ({ value: c.CajaId, label: c.CajaDescripcion }))}
+        />
+        <FilterSelect
+          label="Caja Destino"
+          value={filtros.cajaId}
+          onChange={(v) => setFiltros((p) => ({ ...p, cajaId: v }))}
+          options={cajas
+            .slice()
+            .sort((a, b) => a.CajaDescripcion.localeCompare(b.CajaDescripcion))
+            .map((c) => ({ value: c.CajaId, label: c.CajaDescripcion }))}
+        />
+      </FilterPanel>
       <div className={loading ? "opacity-50 pointer-events-none" : ""}>
       <PagoAdminList
         pagosAdmin={pagosAdminData.pagosAdmin}

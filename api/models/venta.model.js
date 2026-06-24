@@ -129,7 +129,13 @@ const Venta = {
     return true;
   },
 
-  getAllPaginated: async (limit, offset, sortBy = "VentaId", sortOrder = "ASC") => {
+  getAllPaginated: async (
+    limit,
+    offset,
+    sortBy = "VentaId",
+    sortOrder = "ASC",
+    filters = {}
+  ) => {
     const allowedSortFields = [
       "VentaId",
       "VentaFecha",
@@ -149,6 +155,24 @@ const Venta = {
       ? sortOrder.toUpperCase()
       : "ASC";
 
+    // Construye los filtros dinámicamente (rango de fechas + categóricos)
+    const { fechaDesde, fechaHasta, ventaTipo } = filters;
+    const conditions = [];
+    const params = [];
+    if (fechaDesde) {
+      params.push(fechaDesde);
+      conditions.push(`v."VentaFecha"::date >= $${params.length}::date`);
+    }
+    if (fechaHasta) {
+      params.push(fechaHasta);
+      conditions.push(`v."VentaFecha"::date <= $${params.length}::date`);
+    }
+    if (ventaTipo) {
+      params.push(ventaTipo);
+      conditions.push(`v."VentaTipo" = $${params.length}`);
+    }
+    const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
+
     const query = `
       SELECT v.*,
         c."ClienteNombre", c."ClienteApellido",
@@ -158,12 +182,16 @@ const Venta = {
       LEFT JOIN "clientes" c ON v."ClienteId" = c."ClienteId"
       LEFT JOIN "almacen" a ON v."AlmacenId" = a."AlmacenId"
       LEFT JOIN "usuario" u ON v."VentaUsuario" = u."UsuarioId"
+      ${where}
       ORDER BY v."${sortField}" ${order}
-      LIMIT $1 OFFSET $2`;
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
 
-    const result = await db.query(query, [limit, offset]);
+    const result = await db.query(query, [...params, limit, offset]);
 
-    const countResult = await db.query('SELECT COUNT(*) as total FROM "venta"');
+    const countResult = await db.query(
+      `SELECT COUNT(*) as total FROM "venta" v ${where}`,
+      params
+    );
 
     return {
       ventas: result.rows,
@@ -176,7 +204,8 @@ const Venta = {
     limit,
     offset,
     sortBy = "VentaId",
-    sortOrder = "ASC"
+    sortOrder = "ASC",
+    filters = {}
   ) => {
     const allowedSortFields = [
       "VentaId",
@@ -218,6 +247,63 @@ const Venta = {
         break;
     }
 
+    // Para busqueda exacta de numeros
+    const exactValue = term;
+    // Para busqueda parcial de texto
+    const likeValue = `%${term}%`;
+
+    // Grupo de búsqueda por texto (ocupa los placeholders $1..$11)
+    const params = [
+      exactValue, // VentaId
+      likeValue,  // VentaFecha
+      likeValue,  // Cliente nombre completo
+      likeValue,  // AlmacenNombre
+      tipoVentaSearch, // VentaTipo (codigo exacto)
+      likeValue,  // VentaTipo (nombre descriptivo)
+      likeValue,  // VentaPagoTipo
+      exactValue, // VentaCantidadProductos
+      likeValue,  // UsuarioNombre
+      exactValue, // Total
+      likeValue,  // VentaEntrega
+    ];
+    const searchGroup = `(
+        CAST(v."VentaId" AS TEXT) = $1
+        OR TO_CHAR(v."VentaFecha", 'YYYY-MM-DD HH24:MI:SS') ILIKE $2
+        OR LOWER(CONCAT(COALESCE(c."ClienteNombre", ''), ' ', COALESCE(c."ClienteApellido", ''))) LIKE LOWER($3)
+        OR LOWER(COALESCE(a."AlmacenNombre", '')) LIKE LOWER($4)
+        OR v."VentaTipo" = $5
+        OR LOWER(
+          CASE v."VentaTipo"
+            WHEN 'CO' THEN 'contado'
+            WHEN 'CR' THEN 'credito'
+            WHEN 'PO' THEN 'pos'
+            WHEN 'TR' THEN 'transfer'
+          END
+        ) LIKE LOWER($6)
+        OR LOWER(v."VentaPagoTipo") LIKE LOWER($7)
+        OR CAST(v."VentaCantidadProductos" AS TEXT) = $8
+        OR LOWER(COALESCE(u."UsuarioNombre", '')) LIKE LOWER($9)
+        OR CAST(v."Total" AS TEXT) = $10
+        OR LOWER(COALESCE(v."VentaEntrega"::text, '')) LIKE LOWER($11)
+      )`;
+
+    // Filtros adicionales (rango de fechas + categóricos)
+    const { fechaDesde, fechaHasta, ventaTipo } = filters;
+    const conditions = [searchGroup];
+    if (fechaDesde) {
+      params.push(fechaDesde);
+      conditions.push(`v."VentaFecha"::date >= $${params.length}::date`);
+    }
+    if (fechaHasta) {
+      params.push(fechaHasta);
+      conditions.push(`v."VentaFecha"::date <= $${params.length}::date`);
+    }
+    if (ventaTipo) {
+      params.push(ventaTipo);
+      conditions.push(`v."VentaTipo" = $${params.length}`);
+    }
+    const where = `WHERE ${conditions.join(" AND ")}`;
+
     const searchQuery = `
       SELECT v.*,
         c."ClienteNombre", c."ClienteApellido",
@@ -227,51 +313,12 @@ const Venta = {
       LEFT JOIN "clientes" c ON v."ClienteId" = c."ClienteId"
       LEFT JOIN "almacen" a ON v."AlmacenId" = a."AlmacenId"
       LEFT JOIN "usuario" u ON v."VentaUsuario" = u."UsuarioId"
-      WHERE
-        CAST(v."VentaId" AS TEXT) = $1
-        OR TO_CHAR(v."VentaFecha", 'YYYY-MM-DD HH24:MI:SS') ILIKE $2
-        OR LOWER(CONCAT(COALESCE(c."ClienteNombre", ''), ' ', COALESCE(c."ClienteApellido", ''))) LIKE LOWER($3)
-        OR LOWER(COALESCE(a."AlmacenNombre", '')) LIKE LOWER($4)
-        OR v."VentaTipo" = $5
-        OR LOWER(
-          CASE v."VentaTipo"
-            WHEN 'CO' THEN 'contado'
-            WHEN 'CR' THEN 'credito'
-            WHEN 'PO' THEN 'pos'
-            WHEN 'TR' THEN 'transfer'
-          END
-        ) LIKE LOWER($6)
-        OR LOWER(v."VentaPagoTipo") LIKE LOWER($7)
-        OR CAST(v."VentaCantidadProductos" AS TEXT) = $8
-        OR LOWER(COALESCE(u."UsuarioNombre", '')) LIKE LOWER($9)
-        OR CAST(v."Total" AS TEXT) = $10
-        OR LOWER(COALESCE(v."VentaEntrega"::text, '')) LIKE LOWER($11)
+      ${where}
       ORDER BY v."${sortField}" ${order}
-      LIMIT $12 OFFSET $13
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
 
-    // Para busqueda exacta de numeros
-    const exactValue = term;
-    // Para busqueda parcial de texto
-    const likeValue = `%${term}%`;
-
-    const values = [
-      exactValue, // VentaId
-      likeValue,  // VentaFecha
-      likeValue,  // Cliente nombre completo
-      likeValue,  // AlmacenNombre
-      tipoVentaSearch, // VentaTipo (codigo exacto)
-      likeValue,  // VentaTipo (nombre descriptivo)
-      likeValue,  // VentaPagoTipo
-      exactValue, // VentaCantidadProductos
-      likeValue,  // UsuarioNombre
-      exactValue, // Total
-      likeValue,  // VentaEntrega
-      limit,
-      offset,
-    ];
-
-    const result = await db.query(searchQuery, values);
+    const result = await db.query(searchQuery, [...params, limit, offset]);
 
     const countQuery = `
       SELECT COUNT(*) as total
@@ -279,42 +326,10 @@ const Venta = {
       LEFT JOIN "clientes" c ON v."ClienteId" = c."ClienteId"
       LEFT JOIN "almacen" a ON v."AlmacenId" = a."AlmacenId"
       LEFT JOIN "usuario" u ON v."VentaUsuario" = u."UsuarioId"
-      WHERE
-        CAST(v."VentaId" AS TEXT) = $1
-        OR TO_CHAR(v."VentaFecha", 'YYYY-MM-DD HH24:MI:SS') ILIKE $2
-        OR LOWER(CONCAT(COALESCE(c."ClienteNombre", ''), ' ', COALESCE(c."ClienteApellido", ''))) LIKE LOWER($3)
-        OR LOWER(COALESCE(a."AlmacenNombre", '')) LIKE LOWER($4)
-        OR v."VentaTipo" = $5
-        OR LOWER(
-          CASE v."VentaTipo"
-            WHEN 'CO' THEN 'contado'
-            WHEN 'CR' THEN 'credito'
-            WHEN 'PO' THEN 'pos'
-            WHEN 'TR' THEN 'transfer'
-          END
-        ) LIKE LOWER($6)
-        OR LOWER(v."VentaPagoTipo") LIKE LOWER($7)
-        OR CAST(v."VentaCantidadProductos" AS TEXT) = $8
-        OR LOWER(COALESCE(u."UsuarioNombre", '')) LIKE LOWER($9)
-        OR CAST(v."Total" AS TEXT) = $10
-        OR LOWER(COALESCE(v."VentaEntrega"::text, '')) LIKE LOWER($11)
+      ${where}
     `;
 
-    const countValues = [
-      exactValue, // VentaId
-      likeValue,  // VentaFecha
-      likeValue,  // Cliente nombre completo
-      likeValue,  // AlmacenNombre
-      tipoVentaSearch, // VentaTipo (codigo exacto)
-      likeValue,  // VentaTipo (nombre descriptivo)
-      likeValue,  // VentaPagoTipo
-      exactValue, // VentaCantidadProductos
-      likeValue,  // UsuarioNombre
-      exactValue, // Total
-      likeValue,  // VentaEntrega
-    ];
-
-    const countResult = await db.query(countQuery, countValues);
+    const countResult = await db.query(countQuery, params);
 
     return {
       ventas: result.rows,

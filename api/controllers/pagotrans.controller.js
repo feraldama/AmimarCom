@@ -4,6 +4,14 @@ const CajaGasto = require("../models/cajagasto.model");
 const db = require("../config/db");
 
 // Obtener todos los pagos con paginación
+// Lee los parámetros de filtro de la query (compartidos por getAll y search)
+const parseFiltros = (query) => ({
+  fechaDesde: query.fechaDesde || undefined,
+  fechaHasta: query.fechaHasta || undefined,
+  transporteId: query.transporteId || undefined,
+  cajaId: query.cajaId || undefined,
+});
+
 exports.getAll = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -16,7 +24,8 @@ exports.getAll = async (req, res) => {
       limit,
       offset,
       sortBy,
-      sortOrder
+      sortOrder,
+      parseFiltros(req.query)
     );
     res.json(result);
   } catch (error) {
@@ -46,7 +55,8 @@ exports.search = async (req, res) => {
       limit,
       offset,
       sortBy,
-      sortOrder
+      sortOrder,
+      parseFiltros(req.query)
     );
 
     res.json(result);

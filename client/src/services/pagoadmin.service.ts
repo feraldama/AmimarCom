@@ -1,15 +1,34 @@
 import api from "./api";
 import type { AxiosError } from "axios";
 
+export interface PagoAdminFiltros {
+  fechaDesde?: string;
+  fechaHasta?: string;
+  cajaOrigenId?: string | number;
+  cajaId?: string | number;
+}
+
+const buildFiltrosParams = (filtros?: PagoAdminFiltros) => {
+  const params: { [key: string]: string | number } = {};
+  if (!filtros) return params;
+  if (filtros.fechaDesde) params.fechaDesde = filtros.fechaDesde;
+  if (filtros.fechaHasta) params.fechaHasta = filtros.fechaHasta;
+  if (filtros.cajaOrigenId) params.cajaOrigenId = filtros.cajaOrigenId;
+  if (filtros.cajaId) params.cajaId = filtros.cajaId;
+  return params;
+};
+
 export const getPagosAdmin = async (
   page = 1,
   limit = 10,
   sortBy?: string,
-  sortOrder?: "asc" | "desc"
+  sortOrder?: "asc" | "desc",
+  filtros?: PagoAdminFiltros
 ) => {
   const params: { [key: string]: string | number | undefined } = {
     page,
     limit,
+    ...buildFiltrosParams(filtros),
   };
   if (sortBy) params.sortBy = sortBy;
   if (sortOrder) params.sortOrder = sortOrder;
@@ -31,12 +50,14 @@ export const searchPagosAdmin = async (
   page = 1,
   limit = 10,
   sortBy?: string,
-  sortOrder?: "asc" | "desc"
+  sortOrder?: "asc" | "desc",
+  filtros?: PagoAdminFiltros
 ) => {
   const params: { [key: string]: string | number | undefined } = {
     q: searchTerm,
     page,
     limit,
+    ...buildFiltrosParams(filtros),
   };
   if (sortBy) params.sortBy = sortBy;
   if (sortOrder) params.sortOrder = sortOrder;
