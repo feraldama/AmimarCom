@@ -16,7 +16,7 @@ import {
 } from "../../../services/clientes.service";
 import ClienteModal from "../../../components/common/ClienteModal";
 import Swal from "sweetalert2";
-import { formatMiles } from "../../../utils/utils";
+import { formatMiles, formatMilesSmart } from "../../../utils/utils";
 
 interface Caja {
   id: string | number;
@@ -79,6 +79,8 @@ export default function WesternPagosTab() {
   const [cargoEnvioPagos, setCargoEnvioPagos] = useState<number | "">("");
   const [montoPagos, setMontoPagos] = useState<number | "">("");
   const [valorEspecialPagos, setValorEspecialPagos] = useState<number | "">("");
+  // Texto crudo del "Monto en Dólares" para permitir escribir la coma decimal
+  const [valorEspecialPagosStr, setValorEspecialPagosStr] = useState("");
 
   // Formulario Envíos (tipogastoid = 2)
   const [cajaIdEnvios, setCajaIdEnvios] = useState<string | number>("");
@@ -93,6 +95,8 @@ export default function WesternPagosTab() {
   const [cargoEnvioEnvios, setCargoEnvioEnvios] = useState<number | "">("");
   const [montoEnvios, setMontoEnvios] = useState<number | "">("");
   const [valorEspecialEnvios, setValorEspecialEnvios] = useState<number | "">("");
+  // Texto crudo del "Monto en Dólares" para permitir escribir la coma decimal
+  const [valorEspecialEnviosStr, setValorEspecialEnviosStr] = useState("");
 
   // Estados para prevenir doble envío al hacer clic múltiples veces en CONFIRMAR
   const [isSubmittingPagos, setIsSubmittingPagos] = useState(false);
@@ -170,6 +174,7 @@ export default function WesternPagosTab() {
   // Limpiar valor especial y monto cuando cambie el grupo en pagos
   useEffect(() => {
     setValorEspecialPagos("");
+    setValorEspecialPagosStr("");
     setMontoPagos("");
     if (tipoGastoIdPagos === 1 && tipoGastoGrupoIdPagos === 8) {
       // Grupo "USD CON COTIZACION": re-aplicar la cotización de compra cargada
@@ -184,6 +189,7 @@ export default function WesternPagosTab() {
   // Limpiar valor especial y monto cuando cambie el grupo en envíos
   useEffect(() => {
     setValorEspecialEnvios("");
+    setValorEspecialEnviosStr("");
     setMontoEnvios("");
     if (tipoGastoIdEnvios === 2 && tipoGastoGrupoIdEnvios === 15) {
       // Grupo "USD CON COTIZACION": re-aplicar la cotización de venta cargada
@@ -248,6 +254,16 @@ export default function WesternPagosTab() {
         icon: "warning",
         title: "Caja no aperturada",
         text: "Debes aperturar una caja antes de realizar pagos.",
+        confirmButtonColor: "#0d9488",
+      });
+      return;
+    }
+
+    if (!clienteSeleccionadoPagos) {
+      Swal.fire({
+        icon: "warning",
+        title: "Cliente requerido",
+        text: "Debes seleccionar un cliente antes de registrar el pago.",
         confirmButtonColor: "#0d9488",
       });
       return;
@@ -392,6 +408,7 @@ export default function WesternPagosTab() {
       setCargoEnvioPagos("");
       setMontoPagos("");
       setValorEspecialPagos("");
+      setValorEspecialPagosStr("");
       setClienteSeleccionadoPagos(null);
       setClienteRUCPagos("");
       setTelefonoPagos("");
@@ -421,6 +438,16 @@ export default function WesternPagosTab() {
         icon: "warning",
         title: "Caja no aperturada",
         text: "Debes aperturar una caja antes de realizar envíos.",
+        confirmButtonColor: "#0d9488",
+      });
+      return;
+    }
+
+    if (!clienteSeleccionadoEnvios) {
+      Swal.fire({
+        icon: "warning",
+        title: "Cliente requerido",
+        text: "Debes seleccionar un cliente antes de registrar el envío.",
         confirmButtonColor: "#0d9488",
       });
       return;
@@ -565,6 +592,7 @@ export default function WesternPagosTab() {
       setCargoEnvioEnvios("");
       setMontoEnvios("");
       setValorEspecialEnvios("");
+      setValorEspecialEnviosStr("");
       setClienteSeleccionadoEnvios(null);
       setClienteRUCEnvios("");
       setTelefonoEnvios("");
@@ -594,6 +622,7 @@ export default function WesternPagosTab() {
     setCargoEnvioPagos("");
     setMontoPagos("");
     setValorEspecialPagos("");
+    setValorEspecialPagosStr("");
     setClienteSeleccionadoPagos(null);
     setClienteRUCPagos("");
     setTelefonoPagos("");
@@ -614,6 +643,7 @@ export default function WesternPagosTab() {
     setCargoEnvioEnvios("");
     setMontoEnvios("");
     setValorEspecialEnvios("");
+    setValorEspecialEnviosStr("");
     setClienteSeleccionadoEnvios(null);
     setClienteRUCEnvios("");
     setTelefonoEnvios("");
@@ -660,7 +690,9 @@ export default function WesternPagosTab() {
     valorEspecial: number | "" = "",
     setValorEspecial: (value: number | "") => void = () => {},
     autoFocusGrupo: boolean = false,
-    isSubmitting: boolean = false
+    isSubmitting: boolean = false,
+    valorEspecialStr: string = "",
+    setValorEspecialStr: (value: string) => void = () => {}
   ) => {
     // Determinar si debe mostrar el input especial (Monto en Dólares)
     // PAGOS  (TipoGastoId=1) -> grupo 8  ("USD CON COTIZACION")
@@ -803,17 +835,25 @@ export default function WesternPagosTab() {
               </label>
               <input
                 type="text"
-                value={valorEspecial !== "" ? formatMiles(valorEspecial) : ""}
+                value={valorEspecialStr}
                 onChange={(e) => {
-                  const raw = e.target.value
-                    .replace(/\./g, "")
-                    .replace(/,/g, ".");
+                  // Permitir solo dígitos, puntos (miles) y una única coma decimal
+                  const input = e.target.value.replace(/[^\d.,]/g, "");
+                  setValorEspecialStr(input);
+                  // Normalizar a número: quitar puntos de miles y coma -> punto decimal
+                  const raw = input.replace(/\./g, "").replace(/,/g, ".");
                   const num = Number(raw);
-                  setValorEspecial(isNaN(num) ? "" : num);
+                  setValorEspecial(input === "" || isNaN(num) ? "" : num);
+                }}
+                onBlur={() => {
+                  // Al salir, reformatear con separador de miles y hasta 2 decimales
+                  if (valorEspecial !== "") {
+                    setValorEspecialStr(formatMilesSmart(valorEspecial));
+                  }
                 }}
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                inputMode="numeric"
+                inputMode="decimal"
               />
               <p className="mt-1 text-xs text-gray-500">
                 Monto = Dólares × Cambio Dolar
@@ -848,7 +888,7 @@ export default function WesternPagosTab() {
           {/* Cliente */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Cliente
+              Cliente <span className="text-red-500">*</span>
             </label>
             <button
               type="button"
@@ -1020,7 +1060,9 @@ export default function WesternPagosTab() {
             valorEspecialPagos,
             setValorEspecialPagos,
             true, // autoFocus en Grupo al montar el tab
-            isSubmittingPagos
+            isSubmittingPagos,
+            valorEspecialPagosStr,
+            setValorEspecialPagosStr
           )}
         </div>
 
@@ -1060,7 +1102,9 @@ export default function WesternPagosTab() {
             valorEspecialEnvios,
             setValorEspecialEnvios,
             false, // autoFocus
-            isSubmittingEnvios
+            isSubmittingEnvios,
+            valorEspecialEnviosStr,
+            setValorEspecialEnviosStr
           )}
         </div>
       </div>
