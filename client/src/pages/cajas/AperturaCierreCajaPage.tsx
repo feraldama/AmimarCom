@@ -113,8 +113,9 @@ export default function AperturaCierreCajaPage() {
   const montoTotal = useMemo(() => {
     const sb = subtotalesBilletes.reduce((s, x) => s + x.subtotal, 0);
     const sm = subtotalesMonedas.reduce((s, x) => s + x.subtotal, 0);
-    return sb + sm;
-  }, [subtotalesBilletes, subtotalesMonedas]);
+    const sp = pendientes.reduce((s, p) => s + (Number(p.monto) || 0), 0);
+    return sb + sm + sp;
+  }, [subtotalesBilletes, subtotalesMonedas, pendientes]);
 
   useEffect(() => {
     const fetchCajas = async () => {
@@ -308,6 +309,13 @@ export default function AperturaCierreCajaPage() {
     );
     const apertura = Number(aperturaReg.RegistroDiarioCajaMonto);
     const cierre = Number(cierreReg.RegistroDiarioCajaMonto);
+    // Los pendientes (vales/deudas) van incluidos en el monto del cierre, pero
+    // NO son efectivo real, así que no deben contar como sobrante/faltante.
+    const totalPendientesCierre = (datosCierre?.pendientes ?? []).reduce(
+      (s, p) => s + (Number(p.monto) || 0),
+      0,
+    );
+    const cierreEfectivo = cierre - totalPendientesCierre;
     let egresos = 0;
     let ingresos = 0;
     for (const reg of registrosFiltrados) {
@@ -316,7 +324,7 @@ export default function AperturaCierreCajaPage() {
         ingresos += monto;
       if (reg.TipoGastoId === 1 && reg.TipoGastoGrupoId !== 2) egresos += monto;
     }
-    const sobranteFaltante = ingresos + apertura - (cierre + egresos);
+    const sobranteFaltante = ingresos + apertura - (cierreEfectivo + egresos);
     let txtSobranteFaltante = "";
     if (sobranteFaltante > 0) {
       txtSobranteFaltante = `Faltante de: ${formatMiles(sobranteFaltante)}`;
