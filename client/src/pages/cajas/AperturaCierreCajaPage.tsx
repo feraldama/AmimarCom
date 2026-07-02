@@ -202,9 +202,11 @@ export default function AperturaCierreCajaPage() {
   const fetchRegistrosCaja = async () => {
     try {
       const data = await getRegistrosDiariosCaja(1, 1000, undefined, "desc");
+      // Traemos TODOS los registros de la caja (sin filtrar por usuario) para
+      // que los movimientos de PASE hechos por el operador de otra caja
+      // (que quedan a nombre de ese usuario) también entren en el cierre.
       const registrosFiltrados = data.data.filter(
-        (r: RegistroDiarioCaja) =>
-          r.CajaId == cajaId && r.UsuarioId === user?.id,
+        (r: RegistroDiarioCaja) => r.CajaId == cajaId,
       );
       setRegistrosCaja(registrosFiltrados);
     } catch {
@@ -228,8 +230,7 @@ export default function AperturaCierreCajaPage() {
       try {
         const data = await getRegistrosDiariosCaja(1, 1000, undefined, "desc");
         const registrosFiltrados = data.data.filter(
-          (r: RegistroDiarioCaja) =>
-            r.CajaId == cajaId && r.UsuarioId === user?.id,
+          (r: RegistroDiarioCaja) => r.CajaId == cajaId,
         );
         registrosParaUsar = registrosFiltrados;
 
@@ -297,9 +298,11 @@ export default function AperturaCierreCajaPage() {
       return;
     }
 
+    // Los movimientos del cierre se toman por CajaId dentro de la ventana
+    // apertura -> cierre (sin filtrar por usuario): así se incluyen los PASE
+    // recibidos desde otras cajas, que quedan a nombre del usuario de origen.
     const registrosFiltrados = registrosParaUsar.filter(
       (reg) =>
-        reg.UsuarioId == user.id &&
         reg.RegistroDiarioCajaId >= aperturaReg.RegistroDiarioCajaId &&
         reg.RegistroDiarioCajaId <= cierreReg.RegistroDiarioCajaId,
     );
