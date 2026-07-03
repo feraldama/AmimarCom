@@ -333,9 +333,9 @@ export default function AperturaCierreCajaPage() {
     } else {
       txtSobranteFaltante = "Sobrante/Faltante: 0";
     }
-    // Totales del encabezado: ingresos incluye la apertura y los pendientes,
-    // egresos no incluye el cierre, y la diferencia es el saldo teórico.
-    const totalIngresos = ingresos + apertura + totalPendientesCierre;
+    // Totales del encabezado: ingresos incluye la apertura, egresos no incluye
+    // el cierre, y la diferencia es el saldo teórico (apertura + ingresos - egresos).
+    const totalIngresos = ingresos + apertura;
     const diferencia = totalIngresos - egresos;
 
     // Desglose de egresos e ingresos por concepto (grupo de gasto), sumando los
