@@ -333,9 +333,9 @@ export default function AperturaCierreCajaPage() {
     } else {
       txtSobranteFaltante = "Sobrante/Faltante: 0";
     }
-    // Totales del encabezado: ingresos incluye la apertura, egresos no incluye
-    // el cierre, y la diferencia es el saldo teórico (apertura + ingresos - egresos).
-    const totalIngresos = ingresos + apertura;
+    // Totales del encabezado: ingresos incluye la apertura y los pendientes,
+    // egresos no incluye el cierre, y la diferencia es el saldo teórico.
+    const totalIngresos = ingresos + apertura + totalPendientesCierre;
     const diferencia = totalIngresos - egresos;
 
     // Desglose de egresos e ingresos por concepto (grupo de gasto), sumando los
@@ -494,7 +494,7 @@ export default function AperturaCierreCajaPage() {
     doc.line(margin, y, pageW - margin, y);
     y += 5;
 
-    doc.text(`Total: ${formatMiles(totalEfectivo)}`, margin, y);
+    doc.text(`Total: ${formatMiles(totalEfectivo + totalPendientes)}`, margin, y);
     y += 6;
     doc.setLineWidth(0.3);
     doc.line(margin, y, pageW - margin, y);
