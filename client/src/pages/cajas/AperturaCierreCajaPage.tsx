@@ -374,7 +374,9 @@ export default function AperturaCierreCajaPage() {
     const ingresosAgrupados = agruparMovimientos(
       (reg) => reg.TipoGastoId === 2 && reg.TipoGastoGrupoId !== 2,
     );
-    const totalEgresosSeccion = cierre + egresos;
+    // El cierre de caja no se cuenta como egreso en el ticket; el total de
+    // egresos sólo suma los movimientos de egreso reales.
+    const totalEgresosSeccion = egresos;
     const totalIngresosSeccion = apertura + ingresos;
 
     const billetesTicket =
@@ -530,8 +532,6 @@ export default function AperturaCierreCajaPage() {
     doc.text("EGRESOS", pageW / 2, y, { align: "center" });
     y += 5;
     doc.line(margin, y, pageW - margin, y);
-    y += 5;
-    doc.text(`CIERRE CAJA: ${formatMiles(cierre)}`, margin, y);
     y += 5;
     egresosAgrupados.forEach((g) => {
       const sufijoUsd =

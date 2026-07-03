@@ -1,5 +1,12 @@
 # Reglas del proyecto AmimarCom
 
+## Git
+
+- **NUNCA hacer `git commit` ni `git push`.** Dejar siempre los cambios en el
+  working tree para que el usuario los revise y commitee/pushee él mismo. No
+  crear commits (incluidos reverts) ni subir nada al remoto, aunque el cambio
+  parezca terminado.
+
 ## Componentes
 
 - **Campos de fecha:** usar SIEMPRE el componente `CampoFecha`
