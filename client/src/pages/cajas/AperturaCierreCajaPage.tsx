@@ -309,13 +309,6 @@ export default function AperturaCierreCajaPage() {
     );
     const apertura = Number(aperturaReg.RegistroDiarioCajaMonto);
     const cierre = Number(cierreReg.RegistroDiarioCajaMonto);
-    // Los pendientes (vales/deudas) van incluidos en el monto del cierre, pero
-    // NO son efectivo real, así que no deben contar como sobrante/faltante.
-    const totalPendientesCierre = (datosCierre?.pendientes ?? []).reduce(
-      (s, p) => s + (Number(p.monto) || 0),
-      0,
-    );
-    const cierreEfectivo = cierre - totalPendientesCierre;
     let egresos = 0;
     let ingresos = 0;
     for (const reg of registrosFiltrados) {
@@ -324,7 +317,12 @@ export default function AperturaCierreCajaPage() {
         ingresos += monto;
       if (reg.TipoGastoId === 1 && reg.TipoGastoGrupoId !== 2) egresos += monto;
     }
-    const sobranteFaltante = ingresos + apertura - (cierreEfectivo + egresos);
+    // El monto de cierre ya incluye los pendientes (efectivo + pendientes).
+    // Los pendientes son plata que salió/se debe, así que forman parte de lo que
+    // la caja debe rendir y se comparan contra el teórico igual que el efectivo.
+    // Por eso NO se descuentan acá: un pendiente correctamente cargado NO genera
+    // faltante ni sobrante.
+    const sobranteFaltante = ingresos + apertura - (cierre + egresos);
     let txtSobranteFaltante = "";
     if (sobranteFaltante > 0) {
       txtSobranteFaltante = `Faltante de: ${formatMiles(sobranteFaltante)}`;
