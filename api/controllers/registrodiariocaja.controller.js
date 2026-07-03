@@ -499,11 +499,8 @@ exports.aperturaCierreCaja = async (req, res) => {
         message: "Apertura realizada correctamente",
       });
     } else {
-      // CIERRE: crear registro de cierre (con pendientes 1-4)
-      const pendiente1 = Number(RegistroDiarioCajaPendiente1) || 0;
-      const pendiente2 = Number(RegistroDiarioCajaPendiente2) || 0;
-      const pendiente3 = Number(RegistroDiarioCajaPendiente3) || 0;
-      const pendiente4 = Number(RegistroDiarioCajaPendiente4) || 0;
+      // CIERRE: CajaMonto en la tabla Caja no se modifica (queda fijo)
+      // Crear registro de cierre (con pendientes 1-4)
       await RegistroDiarioCaja.create({
         CajaId,
         RegistroDiarioCajaFecha: new Date(),
@@ -512,23 +509,11 @@ exports.aperturaCierreCaja = async (req, res) => {
         RegistroDiarioCajaDetalle: "CIERRE " + CajaDescripcion,
         RegistroDiarioCajaMonto: Monto,
         UsuarioId,
-        RegistroDiarioCajaPendiente1: pendiente1,
-        RegistroDiarioCajaPendiente2: pendiente2,
-        RegistroDiarioCajaPendiente3: pendiente3,
-        RegistroDiarioCajaPendiente4: pendiente4,
+        RegistroDiarioCajaPendiente1: Number(RegistroDiarioCajaPendiente1) || 0,
+        RegistroDiarioCajaPendiente2: Number(RegistroDiarioCajaPendiente2) || 0,
+        RegistroDiarioCajaPendiente3: Number(RegistroDiarioCajaPendiente3) || 0,
+        RegistroDiarioCajaPendiente4: Number(RegistroDiarioCajaPendiente4) || 0,
       });
-      // Los pendientes (vales/deudas) se cargan solo en el cierre y nunca se
-      // registraron como egreso durante el día, por lo que siguen sumando al
-      // CajaMonto corriente. Los descontamos para que NO queden como saldo en
-      // la reapertura del día siguiente (el saldo debe reflejar el efectivo).
-      const totalPendientes = pendiente1 + pendiente2 + pendiente3 + pendiente4;
-      if (totalPendientes > 0) {
-        const cajaMontoActual = Number(caja?.CajaMonto) || 0;
-        await db.query(
-          'UPDATE "caja" SET "CajaMonto" = $1 WHERE "CajaId" = $2',
-          [cajaMontoActual - totalPendientes, CajaId]
-        );
-      }
       return res.json({
         success: true,
         message: "Cierre realizado correctamente",
