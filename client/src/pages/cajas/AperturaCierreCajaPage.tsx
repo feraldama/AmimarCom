@@ -494,7 +494,7 @@ export default function AperturaCierreCajaPage() {
     doc.line(margin, y, pageW - margin, y);
     y += 5;
 
-    doc.text(`Total: ${formatMiles(totalEfectivo + totalPendientes)}`, margin, y);
+    doc.text(`Total: ${formatMiles(totalEfectivo)}`, margin, y);
     y += 6;
     doc.setLineWidth(0.3);
     doc.line(margin, y, pageW - margin, y);
