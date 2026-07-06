@@ -13,7 +13,11 @@ import { createRegistroDiarioCaja } from "../../../services/registros.service";
 import { getDivisaGastosByDivisaId } from "../../../services/divisagasto.service";
 import { getCajaGastosByTipoGastoAndGrupo } from "../../../services/cajagasto.service";
 import Swal from "sweetalert2";
-import { formatMiles } from "../../../utils/utils";
+import {
+  formatMilesSmart,
+  formatMontoInput,
+  parseMonto,
+} from "../../../utils/utils";
 
 interface Caja {
   id: string | number;
@@ -41,6 +45,7 @@ export default function DivisasTab() {
   const [divisaIdCompra, setDivisaIdCompra] = useState<number | "">("");
   const [cambioCompra, setCambioCompra] = useState<number | "">("");
   const [cantidadCompra, setCantidadCompra] = useState<number | "">("");
+  const [cantidadCompraInput, setCantidadCompraInput] = useState("");
   const [montoCompra, setMontoCompra] = useState<number>(0);
 
   // Formulario Venta
@@ -48,6 +53,7 @@ export default function DivisasTab() {
   const [divisaIdVenta, setDivisaIdVenta] = useState<number | "">("");
   const [cambioVenta, setCambioVenta] = useState<number | "">("");
   const [cantidadVenta, setCantidadVenta] = useState<number | "">("");
+  const [cantidadVentaInput, setCantidadVentaInput] = useState("");
   const [montoVenta, setMontoVenta] = useState<number>(0);
 
   const [isSubmittingCompra, setIsSubmittingCompra] = useState(false);
@@ -273,6 +279,7 @@ export default function DivisasTab() {
       setDivisaIdCompra("");
       setCambioCompra("");
       setCantidadCompra("");
+      setCantidadCompraInput("");
       setMontoCompra(0);
 
       // Resetear fecha a actual
@@ -435,6 +442,7 @@ export default function DivisasTab() {
       setDivisaIdVenta("");
       setCambioVenta("");
       setCantidadVenta("");
+      setCantidadVentaInput("");
       setMontoVenta(0);
 
       // Resetear fecha a actual
@@ -454,10 +462,21 @@ export default function DivisasTab() {
     }
   };
 
+  const handleCantidadChange = (
+    raw: string,
+    setStr: (v: string) => void,
+    setNum: (v: number | "") => void
+  ) => {
+    const formatted = formatMontoInput(raw);
+    setStr(formatted);
+    setNum(formatted === "" ? "" : parseMonto(formatted));
+  };
+
   const handleCancelCompra = () => {
     setDivisaIdCompra("");
     setCambioCompra("");
     setCantidadCompra("");
+    setCantidadCompraInput("");
     setMontoCompra(0);
     const hoy = new Date();
     const yyyy = hoy.getFullYear();
@@ -472,6 +491,7 @@ export default function DivisasTab() {
     setDivisaIdVenta("");
     setCambioVenta("");
     setCantidadVenta("");
+    setCantidadVentaInput("");
     setMontoVenta(0);
     const hoy = new Date();
     const yyyy = hoy.getFullYear();
@@ -490,8 +510,8 @@ export default function DivisasTab() {
     setDivisaId: (value: number | "") => void,
     cambio: number | "",
     _setCambio: (value: number | "") => void,
-    cantidad: number | "",
-    setCantidad: (value: number | "") => void,
+    cantidadStr: string,
+    onCantidadChange: (raw: string) => void,
     monto: number,
     onSubmit: (e: React.FormEvent) => void,
     onCancel: () => void,
@@ -563,12 +583,12 @@ export default function DivisasTab() {
             </label>
             <input
               type="text"
-              value={cambio !== "" ? formatMiles(cambio) : ""}
+              value={cambio !== "" ? formatMilesSmart(cambio) : ""}
               readOnly
               tabIndex={-1}
               required
               className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-100 text-gray-700 cursor-not-allowed"
-              inputMode="numeric"
+              inputMode="decimal"
             />
             <p className="mt-1 text-xs text-gray-500">
               Cotización tomada de Divisas (compra/venta).
@@ -582,17 +602,11 @@ export default function DivisasTab() {
             </label>
             <input
               type="text"
-              value={cantidad !== "" ? formatMiles(cantidad) : ""}
-              onChange={(e) => {
-                const raw = e.target.value
-                  .replace(/\./g, "")
-                  .replace(/,/g, ".");
-                const num = Number(raw);
-                setCantidad(isNaN(num) ? "" : num);
-              }}
+              value={cantidadStr}
+              onChange={(e) => onCantidadChange(e.target.value)}
               required
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-              inputMode="numeric"
+              inputMode="decimal"
             />
           </div>
 
@@ -603,7 +617,7 @@ export default function DivisasTab() {
             </label>
             <input
               type="text"
-              value={formatMiles(monto)}
+              value={formatMilesSmart(monto)}
               readOnly
               disabled
               className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-600"
@@ -660,8 +674,13 @@ export default function DivisasTab() {
             setDivisaIdCompra,
             cambioCompra,
             setCambioCompra,
-            cantidadCompra,
-            setCantidadCompra,
+            cantidadCompraInput,
+            (raw) =>
+              handleCantidadChange(
+                raw,
+                setCantidadCompraInput,
+                setCantidadCompra
+              ),
             montoCompra,
             handleSubmitCompra,
             handleCancelCompra,
@@ -680,8 +699,13 @@ export default function DivisasTab() {
             setDivisaIdVenta,
             cambioVenta,
             setCambioVenta,
-            cantidadVenta,
-            setCantidadVenta,
+            cantidadVentaInput,
+            (raw) =>
+              handleCantidadChange(
+                raw,
+                setCantidadVentaInput,
+                setCantidadVenta
+              ),
             montoVenta,
             handleSubmitVenta,
             handleCancelVenta,
@@ -723,10 +747,10 @@ export default function DivisasTab() {
                       {divisa.DivisaNombre}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 text-right border-b border-gray-100">
-                      {formatMiles(divisa.DivisaCompraMonto)}
+                      {formatMilesSmart(divisa.DivisaCompraMonto)}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 text-right border-b border-gray-100">
-                      {formatMiles(divisa.DivisaVentaMonto)}
+                      {formatMilesSmart(divisa.DivisaVentaMonto)}
                     </td>
                   </tr>
                 ))}

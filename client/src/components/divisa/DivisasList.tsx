@@ -4,7 +4,12 @@ import SearchButton from "../common/Input/SearchButton";
 import ActionButton from "../common/Button/ActionButton";
 import DataTable from "../common/Table/DataTable";
 import Modal from "../common/Modal";
-import { formatMiles } from "../../utils/utils";
+import {
+  formatMilesSmart,
+  formatMontoInput,
+  parseMonto,
+  montoToInput,
+} from "../../utils/utils";
 import { getTiposGasto } from "../../services/tipogasto.service";
 import { getTiposGastoGrupo } from "../../services/tipogastogrupo.service";
 import {
@@ -87,6 +92,8 @@ export default function DivisasList({
     DivisaCompraMonto: 0,
     DivisaVentaMonto: 0,
   });
+  const [compraInput, setCompraInput] = useState("");
+  const [ventaInput, setVentaInput] = useState("");
 
   const [tiposGasto, setTiposGasto] = useState<TipoGasto[]>([]);
   const [tiposGastoGrupo, setTiposGastoGrupo] = useState<TipoGastoGrupo[]>([]);
@@ -124,6 +131,8 @@ export default function DivisasList({
         DivisaCompraMonto: Number(currentDivisa.DivisaCompraMonto) || 0,
         DivisaVentaMonto: Number(currentDivisa.DivisaVentaMonto) || 0,
       });
+      setCompraInput(montoToInput(Number(currentDivisa.DivisaCompraMonto) || 0));
+      setVentaInput(montoToInput(Number(currentDivisa.DivisaVentaMonto) || 0));
       // Cargar gastos de la divisa
       loadDivisaGastos(currentDivisa.DivisaId);
     } else {
@@ -134,6 +143,8 @@ export default function DivisasList({
         DivisaCompraMonto: 0,
         DivisaVentaMonto: 0,
       });
+      setCompraInput("");
+      setVentaInput("");
       setDivisaGastos([]);
     }
     setGastoFormData({ TipoGastoId: "", TipoGastoGrupoId: "" });
@@ -311,8 +322,8 @@ export default function DivisasList({
     e.preventDefault();
     onSubmit({
       ...formData,
-      DivisaCompraMonto: Number(formData.DivisaCompraMonto),
-      DivisaVentaMonto: Number(formData.DivisaVentaMonto),
+      DivisaCompraMonto: parseMonto(compraInput),
+      DivisaVentaMonto: parseMonto(ventaInput),
     });
   };
 
@@ -325,13 +336,13 @@ export default function DivisasList({
       key: "DivisaCompraMonto",
       label: "Monto Compra",
       render: (divisa: Divisa) =>
-        `Gs. ${formatMiles(Number(divisa.DivisaCompraMonto))}`,
+        `Gs. ${formatMilesSmart(Number(divisa.DivisaCompraMonto))}`,
     },
     {
       key: "DivisaVentaMonto",
       label: "Monto Venta",
       render: (divisa: Divisa) =>
-        `Gs. ${formatMiles(Number(divisa.DivisaVentaMonto))}`,
+        `Gs. ${formatMilesSmart(Number(divisa.DivisaVentaMonto))}`,
     },
   ];
 
@@ -429,25 +440,12 @@ export default function DivisasList({
                       type="text"
                       name="DivisaCompraMonto"
                       id="DivisaCompraMonto"
-                      value={
-                        formData.DivisaCompraMonto
-                          ? formatMiles(formData.DivisaCompraMonto)
-                          : ""
+                      value={compraInput}
+                      onChange={(e) =>
+                        setCompraInput(formatMontoInput(e.target.value))
                       }
-                      onChange={(e) => {
-                        const raw = e.target.value
-                          .replace(/\./g, "")
-                          .replace(/,/g, ".");
-                        const num = Number(raw);
-                        if (!isNaN(num)) {
-                          setFormData((prev) => ({
-                            ...prev,
-                            DivisaCompraMonto: num,
-                          }));
-                        }
-                      }}
                       className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
-                      inputMode="numeric"
+                      inputMode="decimal"
                       required
                     />
                   </div>
@@ -462,25 +460,12 @@ export default function DivisasList({
                       type="text"
                       name="DivisaVentaMonto"
                       id="DivisaVentaMonto"
-                      value={
-                        formData.DivisaVentaMonto
-                          ? formatMiles(formData.DivisaVentaMonto)
-                          : ""
+                      value={ventaInput}
+                      onChange={(e) =>
+                        setVentaInput(formatMontoInput(e.target.value))
                       }
-                      onChange={(e) => {
-                        const raw = e.target.value
-                          .replace(/\./g, "")
-                          .replace(/,/g, ".");
-                        const num = Number(raw);
-                        if (!isNaN(num)) {
-                          setFormData((prev) => ({
-                            ...prev,
-                            DivisaVentaMonto: num,
-                          }));
-                        }
-                      }}
                       className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
-                      inputMode="numeric"
+                      inputMode="decimal"
                       required
                     />
                   </div>

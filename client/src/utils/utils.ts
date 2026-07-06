@@ -64,6 +64,36 @@ export const formatMilesWithDecimals = (value: number | string): string => {
   }).format(commission);
 };
 
+// Formatea lo que el usuario tipea permitiendo hasta 2 decimales.
+// La coma es el separador decimal; los puntos se tratan como separadores de
+// miles. Preserva la coma/decimales mientras se está escribiendo.
+export const formatMontoInput = (raw: string): string => {
+  const cleaned = raw.replace(/[^\d,]/g, "");
+  const firstComma = cleaned.indexOf(",");
+  if (firstComma === -1) {
+    return cleaned ? Number(cleaned).toLocaleString("es-ES") : "";
+  }
+  const intDigits = cleaned.slice(0, firstComma);
+  const decDigits = cleaned
+    .slice(firstComma + 1)
+    .replace(/,/g, "")
+    .slice(0, 2);
+  const intFormatted = intDigits
+    ? Number(intDigits).toLocaleString("es-ES")
+    : "0";
+  return `${intFormatted},${decDigits}`;
+};
+
+// Convierte el texto del input (formato es-ES) a número.
+export const parseMonto = (raw: string): number => {
+  const n = Number(String(raw).replace(/\./g, "").replace(",", "."));
+  return isNaN(n) ? 0 : n;
+};
+
+// Convierte un número a texto para el input, mostrando decimales si los tiene.
+export const montoToInput = (n: number): string =>
+  n ? n.toLocaleString("es-ES", { maximumFractionDigits: 2 }) : "";
+
 export const formatCurrency = (value: number) => {
   return new Intl.NumberFormat("es-PY", {
     style: "currency",
