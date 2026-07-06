@@ -583,7 +583,7 @@ export default function DivisasTab() {
             </label>
             <input
               type="text"
-              value={cambio !== "" ? formatMilesSmart(cambio) : ""}
+              value={cambio !== "" ? formatMilesSmart(Number(cambio)) : ""}
               readOnly
               tabIndex={-1}
               required
@@ -747,10 +747,10 @@ export default function DivisasTab() {
                       {divisa.DivisaNombre}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 text-right border-b border-gray-100">
-                      {formatMilesSmart(divisa.DivisaCompraMonto)}
+                      {formatMilesSmart(Number(divisa.DivisaCompraMonto))}
                     </td>
                     <td className="px-4 py-3 text-sm text-gray-900 text-right border-b border-gray-100">
-                      {formatMilesSmart(divisa.DivisaVentaMonto)}
+                      {formatMilesSmart(Number(divisa.DivisaVentaMonto))}
                     </td>
                   </tr>
                 ))}

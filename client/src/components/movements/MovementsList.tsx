@@ -72,16 +72,17 @@ export default function MovementsList({
     });
   };
 
-  // Formatear monto
+  // Formatear monto. Muestra hasta 2 decimales solo si el valor los tiene
+  // (los montos en guaraníes se ven enteros; las divisas conservan decimales).
   const formatAmount = (amount: number) => {
     return new Intl.NumberFormat("es-PY", {
       style: "currency",
       currency: "PYG",
       minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      maximumFractionDigits: 2,
       currencyDisplay: "code", // Muestra "PYG"
     })
-      .format(amount)
+      .format(Number(amount))
       .replace("PYG", "Gs."); // Reemplaza "PYG" con "Gs."
   };
 

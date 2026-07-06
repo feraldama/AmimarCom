@@ -776,7 +776,7 @@ export default function WesternPagosTab() {
               </label>
               <input
                 type="text"
-                value={cambioDolar !== "" ? formatMiles(cambioDolar) : ""}
+                value={cambioDolar !== "" ? formatMilesSmart(Number(cambioDolar)) : ""}
                 readOnly
                 tabIndex={-1}
                 className="w-full px-3 py-2 border border-gray-200 rounded-lg bg-gray-100 text-gray-700 cursor-not-allowed"

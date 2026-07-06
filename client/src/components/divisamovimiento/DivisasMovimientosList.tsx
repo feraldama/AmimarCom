@@ -5,7 +5,12 @@ import SearchButton from "../common/Input/SearchButton";
 import ActionButton from "../common/Button/ActionButton";
 import DataTable from "../common/Table/DataTable";
 import Modal from "../common/Modal";
-import { formatMiles } from "../../utils/utils";
+import {
+  formatMilesSmart,
+  formatMontoInput,
+  parseMonto,
+  montoToInput,
+} from "../../utils/utils";
 import { getCajas } from "../../services/cajas.service";
 import { getUsuarios } from "../../services/usuarios.service";
 import { getDivisas } from "../../services/divisa.service";
@@ -95,6 +100,9 @@ export default function DivisasMovimientosList({
     UsuarioId: "",
   });
 
+  const [cambioInput, setCambioInput] = useState("");
+  const [cantidadInput, setCantidadInput] = useState("");
+
   const [cajas, setCajas] = useState<Caja[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
   const [divisas, setDivisas] = useState<Divisa[]>([]);
@@ -147,6 +155,12 @@ export default function DivisasMovimientosList({
           ? String(currentMovimiento.UsuarioId)
           : "",
       });
+      setCambioInput(
+        montoToInput(Number(currentMovimiento.DivisaMovimientoCambio) || 0)
+      );
+      setCantidadInput(
+        montoToInput(Number(currentMovimiento.DivisaMovimientoCantidad) || 0)
+      );
     } else {
       const today = new Date().toISOString().split("T")[0];
       setFormData({
@@ -161,6 +175,8 @@ export default function DivisasMovimientosList({
         DivisaMovimientoMonto: 0,
         UsuarioId: user?.id ? String(user.id) : "",
       });
+      setCambioInput("");
+      setCantidadInput("");
     }
   }, [currentMovimiento, user]);
 
@@ -185,12 +201,13 @@ export default function DivisasMovimientosList({
       if (divisa) {
         const cambio =
           formData.DivisaMovimientoTipo === "C"
-            ? divisa.DivisaCompraMonto
-            : divisa.DivisaVentaMonto;
+            ? Number(divisa.DivisaCompraMonto)
+            : Number(divisa.DivisaVentaMonto);
         setFormData((prev) => ({
           ...prev,
           DivisaMovimientoCambio: cambio,
         }));
+        setCambioInput(montoToInput(cambio));
       }
     }
   }, [formData.DivisaId, formData.DivisaMovimientoTipo, divisas]);
@@ -268,19 +285,19 @@ export default function DivisasMovimientosList({
       key: "DivisaMovimientoCantidad",
       label: "Cantidad",
       render: (movimiento: DivisaMovimiento) =>
-        formatMiles(Number(movimiento.DivisaMovimientoCantidad)),
+        formatMilesSmart(Number(movimiento.DivisaMovimientoCantidad)),
     },
     {
       key: "DivisaMovimientoCambio",
       label: "Cambio",
       render: (movimiento: DivisaMovimiento) =>
-        `Gs. ${formatMiles(Number(movimiento.DivisaMovimientoCambio))}`,
+        `Gs. ${formatMilesSmart(Number(movimiento.DivisaMovimientoCambio))}`,
     },
     {
       key: "DivisaMovimientoMonto",
       label: "Monto",
       render: (movimiento: DivisaMovimiento) =>
-        `Gs. ${formatMiles(Number(movimiento.DivisaMovimientoMonto))}`,
+        `Gs. ${formatMilesSmart(Number(movimiento.DivisaMovimientoMonto))}`,
     },
     {
       key: "UsuarioId",
@@ -440,25 +457,17 @@ export default function DivisasMovimientosList({
                       type="text"
                       name="DivisaMovimientoCambio"
                       id="DivisaMovimientoCambio"
-                      value={
-                        formData.DivisaMovimientoCambio
-                          ? formatMiles(formData.DivisaMovimientoCambio)
-                          : ""
-                      }
+                      value={cambioInput}
                       onChange={(e) => {
-                        const raw = e.target.value
-                          .replace(/\./g, "")
-                          .replace(/,/g, ".");
-                        const num = Number(raw);
-                        if (!isNaN(num)) {
-                          setFormData((prev) => ({
-                            ...prev,
-                            DivisaMovimientoCambio: num,
-                          }));
-                        }
+                        const formatted = formatMontoInput(e.target.value);
+                        setCambioInput(formatted);
+                        setFormData((prev) => ({
+                          ...prev,
+                          DivisaMovimientoCambio: parseMonto(formatted),
+                        }));
                       }}
                       className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
-                      inputMode="numeric"
+                      inputMode="decimal"
                       required
                     />
                   </div>
@@ -473,25 +482,17 @@ export default function DivisasMovimientosList({
                       type="text"
                       name="DivisaMovimientoCantidad"
                       id="DivisaMovimientoCantidad"
-                      value={
-                        formData.DivisaMovimientoCantidad
-                          ? formatMiles(formData.DivisaMovimientoCantidad)
-                          : ""
-                      }
+                      value={cantidadInput}
                       onChange={(e) => {
-                        const raw = e.target.value
-                          .replace(/\./g, "")
-                          .replace(/,/g, ".");
-                        const num = Number(raw);
-                        if (!isNaN(num)) {
-                          setFormData((prev) => ({
-                            ...prev,
-                            DivisaMovimientoCantidad: num,
-                          }));
-                        }
+                        const formatted = formatMontoInput(e.target.value);
+                        setCantidadInput(formatted);
+                        setFormData((prev) => ({
+                          ...prev,
+                          DivisaMovimientoCantidad: parseMonto(formatted),
+                        }));
                       }}
                       className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
-                      inputMode="numeric"
+                      inputMode="decimal"
                       required
                     />
                   </div>
@@ -508,7 +509,7 @@ export default function DivisasMovimientosList({
                       id="DivisaMovimientoMonto"
                       value={
                         formData.DivisaMovimientoMonto
-                          ? formatMiles(formData.DivisaMovimientoMonto)
+                          ? formatMilesSmart(formData.DivisaMovimientoMonto)
                           : ""
                       }
                       readOnly

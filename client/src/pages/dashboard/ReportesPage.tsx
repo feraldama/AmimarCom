@@ -3,7 +3,7 @@ import React, { useState } from "react";
 import { usePermiso } from "../../hooks/usePermiso";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
-import { formatMiles } from "../../utils/utils";
+import { formatMiles, formatMilesSmart } from "../../utils/utils";
 import {
   getReportePaseCajas,
   getReporteMovimientosCajas,
@@ -330,8 +330,8 @@ const ReportesPage: React.FC = () => {
       autoTable(doc, {
         head: [["Divisa", "Compras (Cant.)", "Compras (Gs.)", "Ventas (Cant.)", "Ventas (Gs.)", "Operaciones"]],
         body: resumen.map((r: { DivisaNombre: string; CantCompra: number; MontoCompra: number; CantVenta: number; MontoVenta: number; CantOperaciones: number }) => [
-          (r.DivisaNombre || "").trim(), formatMiles(Number(r.CantCompra)), formatMiles(Number(r.MontoCompra)),
-          formatMiles(Number(r.CantVenta)), formatMiles(Number(r.MontoVenta)), r.CantOperaciones,
+          (r.DivisaNombre || "").trim(), formatMilesSmart(Number(r.CantCompra)), formatMilesSmart(Number(r.MontoCompra)),
+          formatMilesSmart(Number(r.CantVenta)), formatMilesSmart(Number(r.MontoVenta)), r.CantOperaciones,
         ]),
         startY: 38, theme: "striped", headStyles: { fillColor: [13, 148, 136] }, styles: { fontSize: 9 },
       });
@@ -346,8 +346,8 @@ const ReportesPage: React.FC = () => {
       body: data.map((r: { DivisaMovimientoId: number; DivisaMovimientoFecha: string; DivisaNombre: string; DivisaMovimientoTipo: string; DivisaMovimientoCambio: number; DivisaMovimientoCantidad: number; DivisaMovimientoMonto: number; UsuarioNombre: string; CajaDescripcion: string }) => [
         r.DivisaMovimientoId, new Date(r.DivisaMovimientoFecha).toLocaleDateString("es-PY"),
         (r.DivisaNombre || "").trim(), r.DivisaMovimientoTipo === "C" ? "Compra" : "Venta",
-        formatMiles(Number(r.DivisaMovimientoCambio)), formatMiles(Number(r.DivisaMovimientoCantidad)),
-        formatMiles(Number(r.DivisaMovimientoMonto)), (r.UsuarioNombre || "").trim(), (r.CajaDescripcion || "").trim(),
+        formatMilesSmart(Number(r.DivisaMovimientoCambio)), formatMilesSmart(Number(r.DivisaMovimientoCantidad)),
+        formatMilesSmart(Number(r.DivisaMovimientoMonto)), (r.UsuarioNombre || "").trim(), (r.CajaDescripcion || "").trim(),
       ]),
       startY: detY + 4, theme: "striped", styles: { fontSize: 8 },
     });
