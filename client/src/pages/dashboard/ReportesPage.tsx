@@ -9,7 +9,10 @@ import {
   getReporteMovimientosCajas,
   getReporteCierreDiario,
   getReporteDivisas,
+  getReporteIngresosEgresos,
+  getReporteWestern,
 } from "../../services/registros.service";
+import { PDF_COLORS, pdfHeader, pdfFooter, abrirPdf, fmtFechaHora } from "../../utils/pdfReport";
 import PageHeader from "../../components/common/PageHeader";
 import { Button } from "@/components/ui/button";
 import CampoFecha from "@/components/common/CampoFecha";
@@ -25,19 +28,48 @@ interface RegistroCaja {
   TipoGastoId: number;
   TipoGastoGrupoId: number;
   UsuarioId: string;
+  UsuarioNombre?: string;
   CajaDescripcion: string;
   TipoGastoDescripcion: string;
   TipoGastoGrupoDescripcion: string;
 }
 
-interface ReporteCaja {
+interface GrupoResumen {
+  TipoGastoId: number;
+  TipoGastoGrupoId: number;
+  GrupoDescripcion: string;
+  Total: number;
+  CantMovimientos: number;
+}
+
+interface WesternMovimiento {
+  RegistroDiarioCajaId: number;
+  GrupoDescripcion: string;
+  Detalle: string;
+  Fecha: string;
+  Monto: number;
+  Cambio: number;
+  MTCN: number;
+  CajaDescripcion: string;
+  UsuarioId: string;
+  UsuarioNombre: string;
+}
+
+interface PaseMovimiento {
+  RegistroDiarioCajaId: number;
+  Tipo: "INGRESO" | "EGRESO";
+  GrupoDescripcion: string;
+  Fecha: string;
+  Monto: number;
+  UsuarioId: string;
+  UsuarioNombre: string;
+  Detalle: string;
+}
+
+interface ReportePaseCaja {
   CajaId: number;
   CajaDescripcion: string;
-  ingresos: RegistroCaja[];
-  egresos: RegistroCaja[];
-  totalIngresos: number;
-  totalEgresos: number;
-  saldo: number;
+  pases: PaseMovimiento[];
 }
 
 // ── Componente ReportCard ──
@@ -123,6 +155,10 @@ const ReportesPage: React.FC = () => {
     mov: [today, today],
     cierre: [today, today],
     divisas: [today, today],
+    resumen: [today, today],
+    registro: [today, today],
+    westerngs: [today, today],
+    westernusd: [today, today],
   });
 
   const updateF = (key: keyof typeof f, idx: 0 | 1, val: string) => {
@@ -157,68 +193,371 @@ const ReportesPage: React.FC = () => {
     }
   };
 
-  // 1. Pase de Cajas
-  const handlePaseCajas = () => runReport("pase", async () => {
-    const response = await getReportePaseCajas(f.pase[0], f.pase[1]);
-    const data = (response.data || []) as ReporteCaja[];
-    if (!data.length) { setError("No hay datos para el periodo seleccionado"); return; }
+  // 0. Ingresos/Egresos Resumen
+  const handleIngresosEgresos = () => runReport("resumen", async () => {
+    const r = await getReporteIngresosEgresos(f.resumen[0], f.resumen[1]);
+    const egresos = (r.egresos || []) as GrupoResumen[];
+    const ingresos = (r.ingresos || []) as GrupoResumen[];
+    if (!egresos.length && !ingresos.length) { setError("No hay datos para el periodo seleccionado"); return; }
 
     const doc = new jsPDF();
-    doc.setFontSize(16);
-    doc.text("Reporte de Pase de Cajas", 14, 18);
-    doc.setFontSize(10);
-    doc.text(`Periodo: ${fmt(f.pase[0])} al ${fmt(f.pase[1])}`, 14, 25);
-    let y = 32;
+    let y = pdfHeader(doc, "Ingresos / Egresos - Resumen", f.resumen[0], f.resumen[1]);
 
-    data.forEach((caja, i) => {
+    const seccion = (titulo: string, rows: GrupoResumen[], total: number, color: [number, number, number]) => {
       if (y > 250) { doc.addPage(); y = 20; }
       doc.setFontSize(12);
       doc.setFont("helvetica", "bold");
-      doc.text(`${caja.CajaDescripcion}`, 14, y);
+      doc.text(titulo, 14, y);
       doc.setFont("helvetica", "normal");
-      y += 6;
+      autoTable(doc, {
+        head: [["Concepto", "Movimientos", "Total Gs."]],
+        body: rows.map((g) => [g.GrupoDescripcion, g.CantMovimientos, formatMiles(Number(g.Total))]),
+        foot: [[
+          `TOTAL ${titulo}`,
+          rows.reduce((s, g) => s + Number(g.CantMovimientos), 0),
+          formatMiles(total),
+        ]],
+        startY: y + 3,
+        theme: "striped",
+        headStyles: { fillColor: color },
+        footStyles: { fillColor: PDF_COLORS.totalFill, textColor: PDF_COLORS.textDark, fontStyle: "bold" },
+        styles: { fontSize: 9 },
+        columnStyles: { 1: { halign: "center" }, 2: { halign: "right" } },
+        margin: { left: 14, right: 14 },
+      });
+      y = getLastY(doc) + 12;
+    };
 
-      // Ingresos
-      if (caja.ingresos.length > 0) {
-        autoTable(doc, {
-          head: [["ID", "Fecha", "Usuario", "Detalle", "Monto"]],
-          body: caja.ingresos.map((r) => [
-            r.RegistroDiarioCajaId, new Date(r.RegistroDiarioCajaFecha).toLocaleDateString("es-PY"),
-            r.UsuarioId || "", r.RegistroDiarioCajaDetalle || "", formatMiles(r.RegistroDiarioCajaMonto),
-          ]),
-          startY: y, theme: "striped", headStyles: { fillColor: [16, 185, 129] },
-          styles: { fontSize: 8 }, margin: { left: 14, right: 14 },
-        });
-        y = getLastY(doc) + 4;
-      }
-      doc.setFontSize(9);
-      doc.text(`Ingresos: Gs. ${formatMiles(caja.totalIngresos)}`, 14, y);
-      y += 4;
+    seccion("EGRESOS", egresos, Number(r.totalEgresos), PDF_COLORS.egreso);
+    seccion("INGRESOS", ingresos, Number(r.totalIngresos), PDF_COLORS.ingreso);
 
-      // Egresos
-      if (caja.egresos.length > 0) {
-        autoTable(doc, {
-          head: [["ID", "Fecha", "Usuario", "Detalle", "Monto"]],
-          body: caja.egresos.map((r) => [
-            r.RegistroDiarioCajaId, new Date(r.RegistroDiarioCajaFecha).toLocaleDateString("es-PY"),
-            r.UsuarioId || "", r.RegistroDiarioCajaDetalle || "", formatMiles(r.RegistroDiarioCajaMonto),
-          ]),
-          startY: y, theme: "striped", headStyles: { fillColor: [220, 38, 38] },
-          styles: { fontSize: 8 }, margin: { left: 14, right: 14 },
-        });
-        y = getLastY(doc) + 4;
-      }
-      doc.setFontSize(9);
-      doc.text(`Egresos: Gs. ${formatMiles(caja.totalEgresos)}`, 14, y);
-      y += 5;
-      doc.setFont("helvetica", "bold");
-      doc.text(`Saldo: Gs. ${formatMiles(caja.saldo)}`, 14, y);
-      doc.setFont("helvetica", "normal");
-      y += 10;
-      if (i < data.length - 1) { doc.line(14, y - 4, 196, y - 4); }
+    if (y > 270) { doc.addPage(); y = 20; }
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.text(`SALDO: Gs. ${formatMiles(Number(r.saldo))}`, 14, y);
+    doc.setFont("helvetica", "normal");
+
+    pdfFooter(doc);
+    abrirPdf(doc);
+  });
+
+  // 0b. Registro Diario (apertura/cierre por caja con todos los movimientos)
+  const handleRegistroDiario = () => runReport("registro", async () => {
+    const response = await getReporteMovimientosCajas(f.registro[0], f.registro[1]);
+    const movimientos = (response.data || []) as RegistroCaja[];
+    if (!movimientos.length) { setError("No hay datos para el periodo seleccionado"); return; }
+
+    // Agrupar por caja preservando el orden cronológico (vienen por Id ASC)
+    const porCaja = new Map<number, { desc: string; regs: RegistroCaja[] }>();
+    movimientos.forEach((m) => {
+      if (!porCaja.has(m.CajaId)) porCaja.set(m.CajaId, { desc: (m.CajaDescripcion || `Caja ${m.CajaId}`).trim(), regs: [] });
+      porCaja.get(m.CajaId)!.regs.push(m);
     });
 
-    window.open(doc.output("bloburl") as unknown as string, "_blank");
+    const doc = new jsPDF("landscape");
+    let y = pdfHeader(doc, "Registro Diario - Apertura/Cierre", f.registro[0], f.registro[1]);
+
+    porCaja.forEach(({ desc, regs }) => {
+      if (y > 175) { doc.addPage(); y = 20; }
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text(desc, 14, y);
+      doc.setFont("helvetica", "normal");
+
+      autoTable(doc, {
+        head: [["Registro", "Tipo", "Grupo", "Detalle", "Fecha", "Monto Gs.", "Usuario"]],
+        body: regs.map((r) => [
+          r.RegistroDiarioCajaId,
+          r.TipoGastoId === 2 ? "INGRESO" : "EGRESO",
+          (r.TipoGastoGrupoDescripcion || "").trim(),
+          r.RegistroDiarioCajaDetalle || "",
+          fmtFechaHora(r.RegistroDiarioCajaFecha),
+          formatMiles(Number(r.RegistroDiarioCajaMonto)),
+          (r.UsuarioNombre || r.UsuarioId || "").trim(),
+        ]),
+        startY: y + 3,
+        theme: "striped",
+        headStyles: { fillColor: PDF_COLORS.primary },
+        styles: { fontSize: 8 },
+        columnStyles: { 5: { halign: "right" } },
+        margin: { left: 14, right: 14 },
+        didParseCell: (d) => {
+          if (d.section === "body" && d.column.index === 1) {
+            d.cell.styles.textColor =
+              d.cell.raw === "INGRESO" ? PDF_COLORS.ingreso : PDF_COLORS.egreso;
+            d.cell.styles.fontStyle = "bold";
+          }
+        },
+      });
+      y = getLastY(doc) + 6;
+
+      // Control apertura/cierre: misma fórmula que el ticket de cierre de caja.
+      // Apertura = TipoGasto 2 / Grupo 2, Cierre = TipoGasto 1 / Grupo 2.
+      let apertura = 0, cierre = 0, ingresos = 0, egresos = 0;
+      regs.forEach((r) => {
+        const monto = Number(r.RegistroDiarioCajaMonto) || 0;
+        if (r.TipoGastoId === 2) {
+          if (r.TipoGastoGrupoId === 2) apertura += monto; else ingresos += monto;
+        } else if (r.TipoGastoId === 1) {
+          if (r.TipoGastoGrupoId === 2) cierre += monto; else egresos += monto;
+        }
+      });
+      const sf = ingresos + apertura - (cierre + egresos);
+      const txtSf = sf > 0
+        ? `Faltante de: Gs. ${formatMiles(sf)}`
+        : sf < 0
+          ? `Sobrante de: Gs. ${formatMiles(Math.abs(sf))}`
+          : "Sobrante/Faltante: 0";
+
+      if (y > 185) { doc.addPage(); y = 20; }
+      doc.setFontSize(9);
+      doc.setTextColor(...PDF_COLORS.textMuted);
+      doc.text(
+        `Apertura: Gs. ${formatMiles(apertura)}    Ingresos: Gs. ${formatMiles(ingresos)}    Egresos: Gs. ${formatMiles(egresos)}    Cierre: Gs. ${formatMiles(cierre)}`,
+        14, y
+      );
+      y += 6;
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(...(sf === 0 ? PDF_COLORS.ingreso : PDF_COLORS.egreso));
+      doc.text(txtSf, 14, y);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(...PDF_COLORS.textDark);
+      y += 12;
+    });
+
+    pdfFooter(doc);
+    abrirPdf(doc);
+  });
+
+  // 0c. Western Ingresos/Egresos (Gs.)
+  const handleWesternGs = () => runReport("westerngs", async () => {
+    const r = await getReporteWestern(f.westerngs[0], f.westerngs[1], "gs");
+    const egresos = (r.egresos || []) as WesternMovimiento[];
+    const ingresos = (r.ingresos || []) as WesternMovimiento[];
+    if (!egresos.length && !ingresos.length) { setError("No hay datos para el periodo seleccionado"); return; }
+
+    const doc = new jsPDF();
+    let y = pdfHeader(doc, "Western - Ingresos/Egresos (Gs.)", f.westerngs[0], f.westerngs[1]);
+
+    const seccion = (titulo: string, rows: WesternMovimiento[], total: number, color: [number, number, number]) => {
+      if (y > 250) { doc.addPage(); y = 20; }
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text(titulo, 14, y);
+      doc.setFont("helvetica", "normal");
+      if (rows.length) {
+        autoTable(doc, {
+          head: [["Registro", "Detalle", "Concepto", "Caja", "Usuario", "Monto Gs."]],
+          body: rows.map((m) => [
+            m.RegistroDiarioCajaId,
+            m.Detalle,
+            m.GrupoDescripcion,
+            m.CajaDescripcion,
+            m.UsuarioNombre || m.UsuarioId || "",
+            formatMiles(Number(m.Monto)),
+          ]),
+          foot: [[`TOTAL ${titulo}`, "", "", "", "", formatMiles(total)]],
+          startY: y + 3,
+          theme: "striped",
+          headStyles: { fillColor: color },
+          footStyles: { fillColor: PDF_COLORS.totalFill, textColor: PDF_COLORS.textDark, fontStyle: "bold" },
+          styles: { fontSize: 8 },
+          columnStyles: { 5: { halign: "right" } },
+          margin: { left: 14, right: 14 },
+        });
+        y = getLastY(doc) + 12;
+      } else {
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "italic");
+        doc.setTextColor(...PDF_COLORS.textMuted);
+        doc.text("Sin movimientos en el período", 14, y + 5);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(...PDF_COLORS.textDark);
+        y += 16;
+      }
+    };
+
+    seccion("EGRESOS", egresos, Number(r.totalEgresos), PDF_COLORS.egreso);
+    seccion("INGRESOS", ingresos, Number(r.totalIngresos), PDF_COLORS.ingreso);
+
+    // Cuadro final de control
+    if (y > 240) { doc.addPage(); y = 20; }
+    autoTable(doc, {
+      body: [
+        ["EGRESOS", formatMiles(Number(r.totalEgresos))],
+        ["INGRESOS", formatMiles(Number(r.totalIngresos))],
+        ["DIFERENCIA", formatMiles(Number(r.diferencia))],
+      ],
+      startY: y + 2,
+      theme: "grid",
+      styles: { fontSize: 10, fontStyle: "bold" },
+      columnStyles: { 1: { halign: "right" } },
+      margin: { left: 110, right: 14 },
+    });
+
+    pdfFooter(doc);
+    abrirPdf(doc);
+  });
+
+  // 0d. Western USD (grupos "2 WESTERN ..."; monto USD = Gs. / cotización)
+  const handleWesternUsd = () => runReport("westernusd", async () => {
+    const r = await getReporteWestern(f.westernusd[0], f.westernusd[1], "usd");
+    const egresos = (r.egresos || []) as WesternMovimiento[];
+    const ingresos = (r.ingresos || []) as WesternMovimiento[];
+    if (!egresos.length && !ingresos.length) { setError("No hay datos para el periodo seleccionado"); return; }
+
+    const usd = (m: WesternMovimiento) =>
+      Number(m.Cambio) > 0 ? Number(m.Monto) / Number(m.Cambio) : 0;
+    const totalUsd = (rows: WesternMovimiento[]) =>
+      rows.reduce((s, m) => s + usd(m), 0);
+
+    const doc = new jsPDF("landscape");
+    let y = pdfHeader(doc, "Western USD - Ingresos/Egresos", f.westernusd[0], f.westernusd[1]);
+
+    const seccion = (titulo: string, rows: WesternMovimiento[], color: [number, number, number]) => {
+      if (y > 175) { doc.addPage(); y = 20; }
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text(titulo, 14, y);
+      doc.setFont("helvetica", "normal");
+      if (rows.length) {
+        autoTable(doc, {
+          head: [["Registro", "Detalle", "Concepto", "Caja", "Usuario", "Cotización", "Monto Gs.", "Monto U$D"]],
+          body: rows.map((m) => [
+            m.RegistroDiarioCajaId,
+            m.Detalle,
+            m.GrupoDescripcion,
+            m.CajaDescripcion,
+            m.UsuarioNombre || m.UsuarioId || "",
+            formatMilesSmart(Number(m.Cambio)),
+            formatMiles(Number(m.Monto)),
+            formatMilesSmart(usd(m)),
+          ]),
+          foot: [[`TOTAL ${titulo}`, "", "", "", "", "",
+            formatMiles(rows.reduce((s, m) => s + Number(m.Monto), 0)),
+            formatMilesSmart(totalUsd(rows)),
+          ]],
+          startY: y + 3,
+          theme: "striped",
+          headStyles: { fillColor: color },
+          footStyles: { fillColor: PDF_COLORS.totalFill, textColor: PDF_COLORS.textDark, fontStyle: "bold" },
+          styles: { fontSize: 8 },
+          columnStyles: { 5: { halign: "right" }, 6: { halign: "right" }, 7: { halign: "right" } },
+          margin: { left: 14, right: 14 },
+        });
+        y = getLastY(doc) + 12;
+      } else {
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "italic");
+        doc.setTextColor(...PDF_COLORS.textMuted);
+        doc.text("Sin movimientos en el período", 14, y + 5);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(...PDF_COLORS.textDark);
+        y += 16;
+      }
+    };
+
+    seccion("EGRESOS", egresos, PDF_COLORS.egreso);
+    seccion("INGRESOS", ingresos, PDF_COLORS.ingreso);
+
+    // Cuadro final de control, en dólares
+    if (y > 165) { doc.addPage(); y = 20; }
+    const totEgrUsd = totalUsd(egresos);
+    const totIngUsd = totalUsd(ingresos);
+    autoTable(doc, {
+      body: [
+        ["EGRESOS U$D", formatMilesSmart(totEgrUsd)],
+        ["INGRESOS U$D", formatMilesSmart(totIngUsd)],
+        ["DIFERENCIA U$D", formatMilesSmart(totEgrUsd - totIngUsd)],
+      ],
+      startY: y + 2,
+      theme: "grid",
+      styles: { fontSize: 10, fontStyle: "bold" },
+      columnStyles: { 1: { halign: "right" } },
+      margin: { left: 180, right: 14 },
+    });
+
+    pdfFooter(doc);
+    abrirPdf(doc);
+  });
+
+  // 1. Pase de Cajas
+  const handlePaseCajas = () => runReport("pase", async () => {
+    const response = await getReportePaseCajas(f.pase[0], f.pase[1]);
+    const data = (response.data || []) as ReportePaseCaja[];
+    if (!data.length) { setError("No hay datos para el periodo seleccionado"); return; }
+
+    const doc = new jsPDF();
+    let y = pdfHeader(doc, "Pase de Cajas", f.pase[0], f.pase[1]);
+
+    data.forEach((caja) => {
+      if (y > 260) { doc.addPage(); y = 20; }
+      doc.setFontSize(12);
+      doc.setFont("helvetica", "bold");
+      doc.text(caja.CajaDescripcion, 14, y);
+      doc.setFont("helvetica", "normal");
+
+      if (caja.pases.length > 0) {
+        autoTable(doc, {
+          head: [["Tipo", "Concepto", "Fecha", "Usuario", "Monto Gs."]],
+          body: caja.pases.map((p) => [
+            p.Tipo,
+            p.GrupoDescripcion,
+            new Date(p.Fecha).toLocaleDateString("es-PY"),
+            p.UsuarioNombre || p.UsuarioId || "",
+            formatMiles(Number(p.Monto)),
+          ]),
+          startY: y + 3,
+          theme: "striped",
+          headStyles: { fillColor: PDF_COLORS.primary },
+          styles: { fontSize: 9 },
+          columnStyles: { 4: { halign: "right" } },
+          margin: { left: 14, right: 14 },
+          didParseCell: (d) => {
+            if (d.section === "body" && d.column.index === 0) {
+              d.cell.styles.textColor =
+                d.cell.raw === "INGRESO" ? PDF_COLORS.ingreso : PDF_COLORS.egreso;
+              d.cell.styles.fontStyle = "bold";
+            }
+          },
+        });
+        y = getLastY(doc) + 10;
+      } else {
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "italic");
+        doc.setTextColor(...PDF_COLORS.textMuted);
+        doc.text("Sin pases en el período", 14, y + 5);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(...PDF_COLORS.textDark);
+        y += 14;
+      }
+    });
+
+    // Cuadro de control: los pases deben quedar balanceados (diferencia 0)
+    if (y > 240) { doc.addPage(); y = 20; }
+    const diferencia = Number(response.diferencia) || 0;
+    autoTable(doc, {
+      body: [
+        ["EGRESOS", formatMiles(Number(response.totalEgresos))],
+        ["INGRESOS", formatMiles(Number(response.totalIngresos))],
+        ["DIFERENCIA", formatMiles(diferencia)],
+      ],
+      startY: y + 2,
+      theme: "grid",
+      styles: { fontSize: 10, fontStyle: "bold" },
+      columnStyles: { 1: { halign: "right" } },
+      margin: { left: 110, right: 14 },
+      didParseCell: (d) => {
+        if (d.row.index === 2) {
+          d.cell.styles.textColor =
+            diferencia === 0 ? PDF_COLORS.ingreso : PDF_COLORS.egreso;
+        }
+      },
+    });
+
+    pdfFooter(doc);
+    abrirPdf(doc);
   });
 
   // 2. Movimientos de Cajas
@@ -368,6 +707,58 @@ const ReportesPage: React.FC = () => {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        {/* 0. Ingresos/Egresos Resumen */}
+        <ReportCard
+          title="Ingresos/Egresos Resumen"
+          description="Totales por concepto, agrupados en ingresos y egresos"
+          icon={<BarChart3 className="size-5 text-primary" />}
+        >
+          <DateRange fechaInicio={f.resumen[0]} fechaFin={f.resumen[1]}
+            onChangeFechaInicio={(v) => updateF("resumen", 0, v)} onChangeFechaFin={(v) => updateF("resumen", 1, v)} />
+          <Button onClick={handleIngresosEgresos} disabled={loading === "resumen"} className="w-full">
+            {loading === "resumen" ? "Generando..." : "Generar PDF"}
+          </Button>
+        </ReportCard>
+
+        {/* 0b. Registro Diario */}
+        <ReportCard
+          title="Registro Diario"
+          description="Apertura/cierre por caja con todos los movimientos y control de sobrante/faltante"
+          icon={<FileText className="size-5 text-primary" />}
+        >
+          <DateRange fechaInicio={f.registro[0]} fechaFin={f.registro[1]}
+            onChangeFechaInicio={(v) => updateF("registro", 0, v)} onChangeFechaFin={(v) => updateF("registro", 1, v)} />
+          <Button onClick={handleRegistroDiario} disabled={loading === "registro"} className="w-full">
+            {loading === "registro" ? "Generando..." : "Generar PDF"}
+          </Button>
+        </ReportCard>
+
+        {/* 0c. Western Ingresos/Egresos */}
+        <ReportCard
+          title="Western (Ingresos/Egresos)"
+          description="Pagos y envíos Western en guaraníes, con totales y diferencia"
+          icon={<ArrowLeftRight className="size-5 text-primary" />}
+        >
+          <DateRange fechaInicio={f.westerngs[0]} fechaFin={f.westerngs[1]}
+            onChangeFechaInicio={(v) => updateF("westerngs", 0, v)} onChangeFechaFin={(v) => updateF("westerngs", 1, v)} />
+          <Button onClick={handleWesternGs} disabled={loading === "westerngs"} className="w-full">
+            {loading === "westerngs" ? "Generando..." : "Generar PDF"}
+          </Button>
+        </ReportCard>
+
+        {/* 0d. Western USD */}
+        <ReportCard
+          title="Western USD"
+          description="Pagos y envíos Western en dólares con cotización"
+          icon={<ArrowLeftRight className="size-5 text-primary" />}
+        >
+          <DateRange fechaInicio={f.westernusd[0]} fechaFin={f.westernusd[1]}
+            onChangeFechaInicio={(v) => updateF("westernusd", 0, v)} onChangeFechaFin={(v) => updateF("westernusd", 1, v)} />
+          <Button onClick={handleWesternUsd} disabled={loading === "westernusd"} className="w-full">
+            {loading === "westernusd" ? "Generando..." : "Generar PDF"}
+          </Button>
+        </ReportCard>
+
         {/* 1. Cierre Diario */}
         <ReportCard
           title="Cierre Diario de Caja"
@@ -397,7 +788,7 @@ const ReportesPage: React.FC = () => {
         {/* 6. Pase de Cajas */}
         <ReportCard
           title="Pase de Cajas"
-          description="Detalle de ingresos y egresos por caja"
+          description="Pases entre cajas, con control de egresos/ingresos y diferencia"
           icon={<FileText className="size-5 text-primary" />}
         >
           <DateRange fechaInicio={f.pase[0]} fechaFin={f.pase[1]}

@@ -555,55 +555,51 @@ exports.reportePaseCajas = async (req, res) => {
       });
     }
 
-    const registros = await RegistroDiarioCaja.getReportePaseCajas(
+    const { cajas, movimientos } = await RegistroDiarioCaja.getReportePaseCajas(
       fechaInicio,
       fechaFin,
     );
 
-    // Agrupar por caja y separar ingresos y egresos
-    const reportePorCaja = {};
+    // Todas las cajas tipo 1 se listan, tengan o no pases en el período
+    const data = cajas.map((caja) => ({
+      CajaId: caja.CajaId,
+      CajaDescripcion: (caja.CajaDescripcion || "").trim(),
+      pases: [],
+    }));
+    const porCajaId = Object.fromEntries(data.map((c) => [c.CajaId, c]));
 
-    registros.forEach((registro) => {
-      const cajaId = registro.CajaId;
-      const cajaKey = `caja_${cajaId}`;
+    let totalEgresos = 0;
+    let totalIngresos = 0;
 
-      if (!reportePorCaja[cajaKey]) {
-        reportePorCaja[cajaKey] = {
-          CajaId: cajaId,
-          CajaDescripcion: registro.CajaDescripcion || "",
-          ingresos: [],
-          egresos: [],
-          totalIngresos: 0,
-          totalEgresos: 0,
-          saldo: 0,
-        };
-      }
+    movimientos.forEach((m) => {
+      const caja = porCajaId[m.CajaId];
+      if (!caja) return; // pase registrado en una caja que no es tipo 1
 
-      const monto = Number(registro.RegistroDiarioCajaMonto) || 0;
-
+      const monto = Number(m.RegistroDiarioCajaMonto) || 0;
       // TipoGastoId === 2 es ingreso, TipoGastoId === 1 es egreso
-      if (registro.TipoGastoId === 2) {
-        reportePorCaja[cajaKey].ingresos.push(registro);
-        reportePorCaja[cajaKey].totalIngresos += monto;
-      } else if (registro.TipoGastoId === 1) {
-        reportePorCaja[cajaKey].egresos.push(registro);
-        reportePorCaja[cajaKey].totalEgresos += monto;
-      }
-    });
+      const esIngreso = m.TipoGastoId === 2;
+      if (esIngreso) totalIngresos += monto;
+      else totalEgresos += monto;
 
-    // Calcular saldo para cada caja
-    Object.keys(reportePorCaja).forEach((key) => {
-      reportePorCaja[key].saldo =
-        reportePorCaja[key].totalIngresos - reportePorCaja[key].totalEgresos;
+      caja.pases.push({
+        RegistroDiarioCajaId: m.RegistroDiarioCajaId,
+        Tipo: esIngreso ? "INGRESO" : "EGRESO",
+        GrupoDescripcion: (m.TipoGastoGrupoDescripcion || "").trim(),
+        Fecha: m.RegistroDiarioCajaFecha,
+        Monto: monto,
+        UsuarioId: m.UsuarioId,
+        UsuarioNombre: (m.UsuarioNombre || "").trim(),
+        Detalle: m.RegistroDiarioCajaDetalle || "",
+      });
     });
-
-    // Convertir a array
-    const reporte = Object.values(reportePorCaja);
 
     res.json({
       fechaInicio,
       fechaFin,
-      data: reporte,
+      data,
+      totalEgresos,
+      totalIngresos,
+      diferencia: totalIngresos - totalEgresos,
     });
   } catch (error) {
     console.error("Error al generar reporte de pase de cajas:", error);
@@ -649,6 +645,91 @@ exports.reporteCierreDiario = async (req, res) => {
     res.json({ fechaInicio, fechaFin, data });
   } catch (error) {
     console.error("Error al generar reporte cierre diario:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Reporte: Ingresos/Egresos Resumen (totales por grupo de tipo de gasto)
+exports.reporteIngresosEgresos = async (req, res) => {
+  try {
+    const { fechaInicio, fechaFin } = req.query;
+    if (!fechaInicio || !fechaFin) {
+      return res.status(400).json({ message: "Faltan los parámetros fechaInicio y fechaFin" });
+    }
+
+    const grupos = await RegistroDiarioCaja.getReporteIngresosEgresos(
+      fechaInicio,
+      fechaFin,
+    );
+
+    // TipoGastoId === 2 es ingreso, TipoGastoId === 1 es egreso
+    const egresos = grupos.filter((g) => g.TipoGastoId === 1);
+    const ingresos = grupos.filter((g) => g.TipoGastoId === 2);
+    const totalEgresos = egresos.reduce((s, g) => s + Number(g.Total), 0);
+    const totalIngresos = ingresos.reduce((s, g) => s + Number(g.Total), 0);
+
+    res.json({
+      fechaInicio,
+      fechaFin,
+      egresos,
+      ingresos,
+      totalEgresos,
+      totalIngresos,
+      saldo: totalIngresos - totalEgresos,
+    });
+  } catch (error) {
+    console.error("Error al generar reporte ingresos/egresos:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Reporte: Western Ingresos/Egresos. moneda=gs (grupos "1 WESTERN ...")
+// o moneda=usd (grupos "2 WESTERN ...").
+exports.reporteWestern = async (req, res) => {
+  try {
+    const { fechaInicio, fechaFin, moneda } = req.query;
+    if (!fechaInicio || !fechaFin) {
+      return res.status(400).json({ message: "Faltan los parámetros fechaInicio y fechaFin" });
+    }
+
+    const prefijo = moneda === "usd" ? "2 WESTERN" : "1 WESTERN";
+    const registros = await RegistroDiarioCaja.getReporteWestern(
+      fechaInicio,
+      fechaFin,
+      prefijo,
+    );
+
+    const mapear = (m) => ({
+      RegistroDiarioCajaId: m.RegistroDiarioCajaId,
+      GrupoDescripcion: (m.TipoGastoGrupoDescripcion || "").trim(),
+      Detalle: m.RegistroDiarioCajaDetalle || "",
+      Fecha: m.RegistroDiarioCajaFecha,
+      Monto: Number(m.RegistroDiarioCajaMonto) || 0,
+      Cambio: Number(m.RegistroDiarioCajaCambio) || 0,
+      MTCN: m.RegistroDiarioCajaMTCN,
+      CajaDescripcion: (m.CajaDescripcion || "").trim(),
+      UsuarioId: m.UsuarioId,
+      UsuarioNombre: (m.UsuarioNombre || "").trim(),
+    });
+
+    // TipoGastoId === 2 es ingreso, TipoGastoId === 1 es egreso
+    const egresos = registros.filter((m) => m.TipoGastoId === 1).map(mapear);
+    const ingresos = registros.filter((m) => m.TipoGastoId === 2).map(mapear);
+    const totalEgresos = egresos.reduce((s, m) => s + m.Monto, 0);
+    const totalIngresos = ingresos.reduce((s, m) => s + m.Monto, 0);
+
+    res.json({
+      fechaInicio,
+      fechaFin,
+      moneda: moneda === "usd" ? "usd" : "gs",
+      egresos,
+      ingresos,
+      totalEgresos,
+      totalIngresos,
+      diferencia: totalEgresos - totalIngresos,
+    });
+  } catch (error) {
+    console.error("Error al generar reporte western:", error);
     res.status(500).json({ message: error.message });
   }
 };

@@ -223,6 +223,46 @@ export const getReporteCierreDiario = async (
   }
 };
 
+export const getReporteIngresosEgresos = async (
+  fechaInicio: string,
+  fechaFin: string
+) => {
+  try {
+    const response = await api.get(
+      "/registrodiariocaja/reporte-ingresos-egresos",
+      { params: { fechaInicio, fechaFin } }
+    );
+    return response.data;
+  } catch (error) {
+    const axiosError = error as AxiosError<{ message?: string }>;
+    throw (
+      axiosError.response?.data || {
+        message: "Error al obtener el reporte de ingresos/egresos",
+      }
+    );
+  }
+};
+
+export const getReporteWestern = async (
+  fechaInicio: string,
+  fechaFin: string,
+  moneda: "gs" | "usd" = "gs"
+) => {
+  try {
+    const response = await api.get("/registrodiariocaja/reporte-western", {
+      params: { fechaInicio, fechaFin, moneda },
+    });
+    return response.data;
+  } catch (error) {
+    const axiosError = error as AxiosError<{ message?: string }>;
+    throw (
+      axiosError.response?.data || {
+        message: "Error al obtener el reporte de western",
+      }
+    );
+  }
+};
+
 export const getReporteVentasPorTipoPago = async (
   fechaInicio: string,
   fechaFin: string

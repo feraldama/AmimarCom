@@ -412,22 +412,29 @@ const RegistroDiarioCaja = {
   },
   // ── REPORTES ──
 
+  // Pases entre cajas: registros cuyo grupo sigue la convención "PASE <caja>"
+  // (incluye overrides como "PASE JEFE"). Devuelve también todas las cajas
+  // tipo 1 para que el reporte las liste aunque no tengan pases.
   getReportePaseCajas: async (fechaDesde, fechaHasta) => {
-    const result = await db.query(
+    const cajasResult = await db.query(
+      `SELECT "CajaId", "CajaDescripcion" FROM "caja" WHERE "CajaTipoId" = 1 ORDER BY "CajaId"`
+    );
+    const movsResult = await db.query(
       `SELECT r.*,
         c."CajaDescripcion",
-        t."TipoGastoDescripcion",
-        tg."TipoGastoGrupoDescripcion"
+        tg."TipoGastoGrupoDescripcion",
+        u."UsuarioNombre"
       FROM "registrodiariocaja" r
+      JOIN "tipogastogrupo" tg ON r."TipoGastoId" = tg."TipoGastoId" AND r."TipoGastoGrupoId" = tg."TipoGastoGrupoId"
       LEFT JOIN "caja" c ON r."CajaId" = c."CajaId"
-      LEFT JOIN "tipogasto" t ON r."TipoGastoId" = t."TipoGastoId"
-      LEFT JOIN "tipogastogrupo" tg ON r."TipoGastoId" = tg."TipoGastoId" AND r."TipoGastoGrupoId" = tg."TipoGastoGrupoId"
-      WHERE r."RegistroDiarioCajaFecha"::date >= $1::date
+      LEFT JOIN "usuario" u ON r."UsuarioId" = u."UsuarioId"
+      WHERE TRIM(tg."TipoGastoGrupoDescripcion") ILIKE 'PASE %'
+        AND r."RegistroDiarioCajaFecha"::date >= $1::date
         AND r."RegistroDiarioCajaFecha"::date <= $2::date
       ORDER BY r."CajaId", r."RegistroDiarioCajaId" ASC`,
       [fechaDesde, fechaHasta]
     );
-    return result.rows;
+    return { cajas: cajasResult.rows, movimientos: movsResult.rows };
   },
 
   getReporteMovimientosCajas: async (fechaDesde, fechaHasta) => {
@@ -469,6 +476,46 @@ const RegistroDiarioCaja = {
       GROUP BY c."CajaId", c."CajaDescripcion"
       ORDER BY c."CajaDescripcion"`,
       [fechaDesde, fechaHasta]
+    );
+    return result.rows;
+  },
+
+  getReporteIngresosEgresos: async (fechaDesde, fechaHasta) => {
+    const result = await db.query(
+      `SELECT
+        r."TipoGastoId",
+        r."TipoGastoGrupoId",
+        COALESCE(TRIM(tg."TipoGastoGrupoDescripcion"), 'SIN GRUPO') AS "GrupoDescripcion",
+        SUM(r."RegistroDiarioCajaMonto") AS "Total",
+        COUNT(*) AS "CantMovimientos"
+      FROM "registrodiariocaja" r
+      LEFT JOIN "tipogastogrupo" tg ON r."TipoGastoId" = tg."TipoGastoId" AND r."TipoGastoGrupoId" = tg."TipoGastoGrupoId"
+      WHERE r."RegistroDiarioCajaFecha"::date >= $1::date
+        AND r."RegistroDiarioCajaFecha"::date <= $2::date
+      GROUP BY r."TipoGastoId", r."TipoGastoGrupoId", tg."TipoGastoGrupoDescripcion"
+      ORDER BY r."TipoGastoId", r."TipoGastoGrupoId"`,
+      [fechaDesde, fechaHasta]
+    );
+    return result.rows;
+  },
+
+  // Movimientos Western: los grupos siguen la convención "1 WESTERN ..." (Gs.)
+  // y "2 WESTERN ..." (USD con cotización); prefijo selecciona la moneda.
+  getReporteWestern: async (fechaDesde, fechaHasta, prefijo) => {
+    const result = await db.query(
+      `SELECT r.*,
+        c."CajaDescripcion",
+        tg."TipoGastoGrupoDescripcion",
+        u."UsuarioNombre"
+      FROM "registrodiariocaja" r
+      JOIN "tipogastogrupo" tg ON r."TipoGastoId" = tg."TipoGastoId" AND r."TipoGastoGrupoId" = tg."TipoGastoGrupoId"
+      LEFT JOIN "caja" c ON r."CajaId" = c."CajaId"
+      LEFT JOIN "usuario" u ON r."UsuarioId" = u."UsuarioId"
+      WHERE TRIM(tg."TipoGastoGrupoDescripcion") ILIKE $3
+        AND r."RegistroDiarioCajaFecha"::date >= $1::date
+        AND r."RegistroDiarioCajaFecha"::date <= $2::date
+      ORDER BY r."TipoGastoId", r."RegistroDiarioCajaId" ASC`,
+      [fechaDesde, fechaHasta, `${prefijo}%`]
     );
     return result.rows;
   },

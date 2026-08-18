@@ -28,6 +28,16 @@ router.get(
   authMiddleware,
   registroDiarioCajaController.reporteCierreDiario
 );
+router.get(
+  "/reporte-ingresos-egresos",
+  authMiddleware,
+  registroDiarioCajaController.reporteIngresosEgresos
+);
+router.get(
+  "/reporte-western",
+  authMiddleware,
+  registroDiarioCajaController.reporteWestern
+);
 router.get("/:id", authMiddleware, registroDiarioCajaController.getById);
 router.post("/", authMiddleware, registroDiarioCajaController.create);
 router.post(
