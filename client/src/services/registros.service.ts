@@ -183,14 +183,15 @@ export const getReportePaseCajas = async (
 
 export const getReporteMovimientosCajas = async (
   fechaInicio: string,
-  fechaFin: string
+  fechaFin: string,
+  cajaId?: string | number
 ) => {
   try {
+    const params: { [key: string]: string | number } = { fechaInicio, fechaFin };
+    if (cajaId) params.cajaId = cajaId;
     const response = await api.get(
       "/registrodiariocaja/reporte-movimientos-cajas",
-      {
-        params: { fechaInicio, fechaFin },
-      }
+      { params }
     );
     return response.data;
   } catch (error) {
@@ -258,6 +259,26 @@ export const getReporteWestern = async (
     throw (
       axiosError.response?.data || {
         message: "Error al obtener el reporte de western",
+      }
+    );
+  }
+};
+
+export const getReporteAnticipos = async (
+  fechaInicio: string,
+  fechaFin: string,
+  grupo: string
+) => {
+  try {
+    const response = await api.get("/registrodiariocaja/reporte-anticipos", {
+      params: { fechaInicio, fechaFin, grupo },
+    });
+    return response.data;
+  } catch (error) {
+    const axiosError = error as AxiosError<{ message?: string }>;
+    throw (
+      axiosError.response?.data || {
+        message: "Error al obtener el reporte de anticipos",
       }
     );
   }

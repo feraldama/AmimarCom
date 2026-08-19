@@ -145,3 +145,22 @@ export const searchJSICobros = async (
     );
   }
 };
+
+export const getReporteJSICobros = async (
+  fechaInicio: string,
+  fechaFin: string
+) => {
+  try {
+    const response = await api.get("/jsicobro/reporte", {
+      params: { fechaInicio, fechaFin },
+    });
+    return response.data;
+  } catch (error) {
+    const axiosError = error as AxiosError<{ message?: string }>;
+    throw (
+      axiosError.response?.data || {
+        message: "Error al obtener el reporte de cobros JSI",
+      }
+    );
+  }
+};

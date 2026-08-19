@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Plus, FileSpreadsheet } from "lucide-react";
 import { useState, useEffect } from "react";
 import CampoFecha from "@/components/common/CampoFecha";
 import SearchButton from "../common/Input/SearchButton";
@@ -49,6 +49,8 @@ interface PagoAdminListProps {
   sortOrder?: "asc" | "desc";
   onSort?: (key: string, order: "asc" | "desc") => void;
   disableEdit?: boolean;
+  onExport?: () => void;
+  exporting?: boolean;
 }
 
 export default function PagoAdminList({
@@ -68,6 +70,8 @@ export default function PagoAdminList({
   currentPagoAdmin,
   onSubmit,
   disableEdit,
+  onExport,
+  exporting,
 }: PagoAdminListProps) {
   const [formData, setFormData] = useState<PagoAdmin>({
     PagoAdminId: "",
@@ -277,7 +281,16 @@ export default function PagoAdminList({
             placeholder="Buscar pagos admin..."
           />
         </div>
-        <div className="py-4">
+        <div className="py-4 flex gap-2">
+          {onExport && (
+            <ActionButton
+              label={exporting ? "Exportando..." : "Exportar Excel"}
+              onClick={onExport}
+              icon={FileSpreadsheet}
+              variant="secondary"
+              disabled={exporting}
+            />
+          )}
           {onCreate && (
             <ActionButton
               label="Nuevo Pago Admin"

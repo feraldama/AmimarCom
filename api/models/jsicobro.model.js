@@ -275,6 +275,25 @@ const JSICobro = {
     );
     return result.rowCount > 0;
   },
+
+  // Cobros JSI de un rango de fechas con el cliente, para el reporte de
+  // rendición a la Junta de Saneamiento.
+  getReporteCobros: async (fechaDesde, fechaHasta) => {
+    const result = await db.query(
+      `SELECT j.*,
+        cl."ClienteNombre",
+        cl."ClienteApellido",
+        u."UsuarioNombre"
+      FROM "jsicobro" j
+      LEFT JOIN "clientes" cl ON j."ClienteId" = cl."ClienteId"
+      LEFT JOIN "usuario" u ON j."JSICobroUsuarioId" = u."UsuarioId"
+      WHERE j."JSICobroFecha"::date >= $1::date
+        AND j."JSICobroFecha"::date <= $2::date
+      ORDER BY j."JSICobroFecha" ASC, j."JSICobroId" ASC`,
+      [fechaDesde, fechaHasta]
+    );
+    return result.rows;
+  },
 };
 
 module.exports = JSICobro;

@@ -9,6 +9,11 @@ router.use(authMiddleware);
 // Rutas para cobranzas
 router.get("/", authMiddleware, colegiocobranzaController.getAll);
 router.get("/search", authMiddleware, colegiocobranzaController.search);
+router.get(
+  "/reporte",
+  authMiddleware,
+  colegiocobranzaController.reporteCobranzas
+);
 router.get("/:id", authMiddleware, colegiocobranzaController.getById);
 router.post("/", authMiddleware, colegiocobranzaController.create);
 router.put("/:id", authMiddleware, colegiocobranzaController.update);

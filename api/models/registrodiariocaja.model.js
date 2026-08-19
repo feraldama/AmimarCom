@@ -437,7 +437,13 @@ const RegistroDiarioCaja = {
     return { cajas: cajasResult.rows, movimientos: movsResult.rows };
   },
 
-  getReporteMovimientosCajas: async (fechaDesde, fechaHasta) => {
+  getReporteMovimientosCajas: async (fechaDesde, fechaHasta, cajaId) => {
+    const params = [fechaDesde, fechaHasta];
+    let filtroCaja = "";
+    if (cajaId) {
+      params.push(cajaId);
+      filtroCaja = `AND r."CajaId" = $${params.length}`;
+    }
     const result = await db.query(
       `SELECT r.*,
         c."CajaDescripcion",
@@ -453,8 +459,9 @@ const RegistroDiarioCaja = {
       WHERE c."CajaTipoId" = 1
         AND r."RegistroDiarioCajaFecha"::date >= $1::date
         AND r."RegistroDiarioCajaFecha"::date <= $2::date
+        ${filtroCaja}
       ORDER BY r."RegistroDiarioCajaId" ASC`,
-      [fechaDesde, fechaHasta]
+      params
     );
     return result.rows;
   },
@@ -516,6 +523,27 @@ const RegistroDiarioCaja = {
         AND r."RegistroDiarioCajaFecha"::date <= $2::date
       ORDER BY r."TipoGastoId", r."RegistroDiarioCajaId" ASC`,
       [fechaDesde, fechaHasta, `${prefijo}%`]
+    );
+    return result.rows;
+  },
+
+  // Movimientos de un grupo de gasto (por descripción, en ambos tipos:
+  // egresos e ingresos). Usado por el reporte de Anticipos.
+  getReporteGrupo: async (fechaDesde, fechaHasta, grupoDescripcion) => {
+    const result = await db.query(
+      `SELECT r.*,
+        c."CajaDescripcion",
+        tg."TipoGastoGrupoDescripcion",
+        u."UsuarioNombre"
+      FROM "registrodiariocaja" r
+      JOIN "tipogastogrupo" tg ON r."TipoGastoId" = tg."TipoGastoId" AND r."TipoGastoGrupoId" = tg."TipoGastoGrupoId"
+      LEFT JOIN "caja" c ON r."CajaId" = c."CajaId"
+      LEFT JOIN "usuario" u ON r."UsuarioId" = u."UsuarioId"
+      WHERE UPPER(TRIM(tg."TipoGastoGrupoDescripcion")) = UPPER(TRIM($3))
+        AND r."RegistroDiarioCajaFecha"::date >= $1::date
+        AND r."RegistroDiarioCajaFecha"::date <= $2::date
+      ORDER BY r."RegistroDiarioCajaId" ASC`,
+      [fechaDesde, fechaHasta, grupoDescripcion]
     );
     return result.rows;
   },

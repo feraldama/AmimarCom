@@ -610,7 +610,7 @@ exports.reportePaseCajas = async (req, res) => {
 // Reporte de movimientos de todas las cajas (CajaTipoId=1)
 exports.reporteMovimientosCajas = async (req, res) => {
   try {
-    const { fechaInicio, fechaFin } = req.query;
+    const { fechaInicio, fechaFin, cajaId } = req.query;
 
     if (!fechaInicio || !fechaFin) {
       return res.status(400).json({
@@ -621,6 +621,7 @@ exports.reporteMovimientosCajas = async (req, res) => {
     const registros = await RegistroDiarioCaja.getReporteMovimientosCajas(
       fechaInicio,
       fechaFin,
+      cajaId,
     );
 
     res.json({
@@ -730,6 +731,80 @@ exports.reporteWestern = async (req, res) => {
     });
   } catch (error) {
     console.error("Error al generar reporte western:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Reporte: Anticipos (movimientos de un grupo de gasto por descripción,
+// con egresos/ingresos, cotización y equivalente USD)
+exports.reporteAnticipos = async (req, res) => {
+  try {
+    const { fechaInicio, fechaFin, grupo } = req.query;
+    if (!fechaInicio || !fechaFin || !grupo) {
+      return res.status(400).json({
+        message: "Faltan los parámetros fechaInicio, fechaFin y grupo",
+      });
+    }
+
+    const registros = await RegistroDiarioCaja.getReporteGrupo(
+      fechaInicio,
+      fechaFin,
+      grupo,
+    );
+
+    let totalEgresos = 0;
+    let totalIngresos = 0;
+    let totalEgresosUsd = 0;
+    let totalIngresosUsd = 0;
+    let sumaCotizacion = 0;
+    let cantConCotizacion = 0;
+
+    const movimientos = registros.map((m) => {
+      const monto = Number(m.RegistroDiarioCajaMonto) || 0;
+      const cambio = Number(m.RegistroDiarioCajaCambio) || 0;
+      const montoUsd = cambio > 0 ? monto / cambio : 0;
+      // TipoGastoId === 2 es ingreso, TipoGastoId === 1 es egreso
+      const esIngreso = m.TipoGastoId === 2;
+      if (esIngreso) {
+        totalIngresos += monto;
+        totalIngresosUsd += montoUsd;
+      } else {
+        totalEgresos += monto;
+        totalEgresosUsd += montoUsd;
+      }
+      if (cambio > 0) {
+        sumaCotizacion += cambio;
+        cantConCotizacion += 1;
+      }
+      return {
+        RegistroDiarioCajaId: m.RegistroDiarioCajaId,
+        Tipo: esIngreso ? "INGRESO" : "EGRESO",
+        GrupoDescripcion: (m.TipoGastoGrupoDescripcion || "").trim(),
+        Detalle: m.RegistroDiarioCajaDetalle || "",
+        Fecha: m.RegistroDiarioCajaFecha,
+        Monto: monto,
+        Cambio: cambio,
+        MontoUsd: montoUsd,
+        CajaDescripcion: (m.CajaDescripcion || "").trim(),
+        UsuarioId: m.UsuarioId,
+        UsuarioNombre: (m.UsuarioNombre || "").trim(),
+      };
+    });
+
+    res.json({
+      fechaInicio,
+      fechaFin,
+      grupo,
+      movimientos,
+      totalEgresos,
+      totalIngresos,
+      totalEgresosUsd,
+      totalIngresosUsd,
+      promedioCotizacion:
+        cantConCotizacion > 0 ? sumaCotizacion / cantConCotizacion : 0,
+    });
+  } catch (error) {
+    console.error("Error al generar reporte de anticipos:", error);
     res.status(500).json({ message: error.message });
   }
 };

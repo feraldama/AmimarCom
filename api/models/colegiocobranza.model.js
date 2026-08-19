@@ -334,6 +334,34 @@ const ColegioCobranza = {
     );
     return result.rowCount > 0;
   },
+
+  // Cobranzas de un colegio en un rango de fechas, con alumno, curso e
+  // importe de la cuota. Ordenado por curso y alumno para el reporte.
+  getReporteCobranzas: async (fechaDesde, fechaHasta, colegioId) => {
+    const result = await db.query(
+      `SELECT cc.*,
+        n."NominaNombre",
+        n."NominaApellido",
+        n."ColegioId",
+        n."ColegioCursoId",
+        col."ColegioNombre",
+        col."ColegioComision",
+        cur."ColegioCursoNombre",
+        cur."ColegioCursoImporte",
+        u."UsuarioNombre"
+      FROM "colegiocobranza" cc
+      JOIN "nomina" n ON cc."NominaId" = n."NominaId"
+      LEFT JOIN "colegio" col ON n."ColegioId" = col."ColegioId"
+      LEFT JOIN "colegiocurso" cur ON n."ColegioId" = cur."ColegioId" AND n."ColegioCursoId" = cur."ColegioCursoId"
+      LEFT JOIN "usuario" u ON cc."UsuarioId" = u."UsuarioId"
+      WHERE n."ColegioId" = $3
+        AND cc."ColegioCobranzaFecha"::date >= $1::date
+        AND cc."ColegioCobranzaFecha"::date <= $2::date
+      ORDER BY cur."ColegioCursoNombre", n."NominaApellido", n."NominaNombre", cc."ColegioCobranzaFecha"`,
+      [fechaDesde, fechaHasta, colegioId]
+    );
+    return result.rows;
+  },
 };
 
 module.exports = ColegioCobranza;

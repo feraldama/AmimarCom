@@ -16,6 +16,7 @@ import FilterPanel, { FilterSelect } from "../../components/common/FilterPanel";
 import { getCajas } from "../../services/cajas.service";
 import Swal from "sweetalert2";
 import { usePermiso } from "../../hooks/usePermiso";
+import { exportarExcel } from "../../utils/excelExport";
 
 interface CajaOption {
   CajaId: number;
@@ -62,6 +63,7 @@ export default function PagoAdminPage() {
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [filtros, setFiltros] = useState<Filtros>(FILTROS_VACIOS);
   const [appliedFiltros, setAppliedFiltros] = useState<Filtros>(FILTROS_VACIOS);
+  const [exporting, setExporting] = useState(false);
   const [cajas, setCajas] = useState<CajaOption[]>([]);
   const puedeCrear = usePermiso("PAGOADMIN", "crear");
   const puedeEditar = usePermiso("PAGOADMIN", "editar");
@@ -235,6 +237,113 @@ export default function PagoAdminPage() {
     }
   };
 
+  // Exporta a Excel todos los registros que coinciden con la búsqueda y los
+  // filtros aplicados (no solo la página visible).
+  const handleExportExcel = async () => {
+    try {
+      setExporting(true);
+      // Traer todo en una sola página, respetando búsqueda/filtros/orden actuales
+      const limit = Math.max(pagosAdminData.pagination.totalItems || 0, 100000);
+      let data;
+      if (appliedSearchTerm) {
+        data = await searchPagosAdmin(
+          appliedSearchTerm,
+          1,
+          limit,
+          sortKey,
+          sortOrder,
+          appliedFiltros
+        );
+      } else {
+        data = await getPagosAdmin(1, limit, sortKey, sortOrder, appliedFiltros);
+      }
+
+      const registros: PagoAdmin[] = data.data || [];
+      if (registros.length === 0) {
+        Swal.fire({
+          icon: "info",
+          title: "Sin datos",
+          text: "No hay registros para exportar con los filtros actuales.",
+        });
+        return;
+      }
+
+      const fechaArchivo = new Date().toISOString().slice(0, 10);
+      await exportarExcel<PagoAdmin>({
+        nombreArchivo: `PagosAdmin_${fechaArchivo}.xlsx`,
+        nombreHoja: "Pagos Admin",
+        filas: registros,
+        columnas: [
+          { header: "ID", value: (p) => Number(p.PagoAdminId), ancho: 8 },
+          {
+            header: "Caja Origen",
+            value: (p) => p.CajaOrigenDescripcion || "",
+            ancho: 25,
+          },
+          {
+            header: "Monto Caja Origen",
+            value: (p) =>
+              p.MontoCajaOrigen !== null && p.MontoCajaOrigen !== undefined
+                ? Number(p.MontoCajaOrigen)
+                : null,
+            ancho: 18,
+            formato: "#,##0",
+          },
+          {
+            header: "Caja Destino",
+            value: (p) => p.CajaDescripcion || "",
+            ancho: 25,
+          },
+          {
+            header: "Monto Caja Destino",
+            value: (p) =>
+              p.MontoCajaDestino !== null && p.MontoCajaDestino !== undefined
+                ? Number(p.MontoCajaDestino)
+                : null,
+            ancho: 18,
+            formato: "#,##0",
+          },
+          {
+            header: "Fecha",
+            value: (p) =>
+              p.PagoAdminFecha
+                ? new Date(p.PagoAdminFecha).toLocaleDateString("es-ES", {
+                    year: "numeric",
+                    month: "2-digit",
+                    day: "2-digit",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : "",
+            ancho: 18,
+          },
+          {
+            header: "Detalle",
+            value: (p) => p.PagoAdminDetalle || "",
+            ancho: 50,
+          },
+          {
+            header: "Monto",
+            value: (p) => Number(p.PagoAdminMonto) || 0,
+            ancho: 15,
+            formato: "#,##0",
+            totalizar: true,
+          },
+          { header: "Usuario", value: (p) => Number(p.UsuarioId), ancho: 10 },
+        ],
+      });
+    } catch (err) {
+      const e = err as { message?: string };
+      Swal.fire({
+        icon: "error",
+        title: "Error al exportar",
+        text: e?.message || "No se pudo generar el archivo Excel.",
+      });
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
   };
@@ -312,6 +421,8 @@ export default function PagoAdminPage() {
           setCurrentPage(1);
         }}
         disableEdit={false}
+        onExport={handleExportExcel}
+        exporting={exporting}
       />
       <Pagination
         currentPage={currentPage}

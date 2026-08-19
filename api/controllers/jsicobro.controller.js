@@ -249,3 +249,59 @@ exports.delete = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Reporte: cobros JSI del período, para la rendición a la Junta de Saneamiento
+exports.reporteCobros = async (req, res) => {
+  try {
+    const { fechaInicio, fechaFin } = req.query;
+    if (!fechaInicio || !fechaFin) {
+      return res.status(400).json({
+        message: "Faltan los parámetros fechaInicio y fechaFin",
+      });
+    }
+
+    const registros = await JSICobro.getReporteCobros(fechaInicio, fechaFin);
+
+    const data = registros.map((r) => ({
+      JSICobroId: r.JSICobroId,
+      Fecha: r.JSICobroFecha,
+      ClienteId: r.ClienteId,
+      ClienteNombre: `${(r.ClienteNombre || "").trim()} ${(r.ClienteApellido || "").trim()}`.trim(),
+      Monto: Number(r.JSICobroMonto) || 0,
+      UsuarioId: r.JSICobroUsuarioId,
+      UsuarioNombre: (r.UsuarioNombre || "").trim(),
+    }));
+
+    // Resumen por día para la rendición: comisión JSI fija del 2,7% sobre
+    // lo cobrado cada día. Si algún día cambia el porcentaje, considerar
+    // moverlo a una tabla de configuración.
+    const COMISION_JSI_PCT = 2.7;
+    const porDia = new Map();
+    data.forEach((r) => {
+      // Día en hora local (toISOString convertiría a UTC y correría de día
+      // los cobros nocturnos)
+      const f = new Date(r.Fecha);
+      const dia = `${f.getFullYear()}-${String(f.getMonth() + 1).padStart(2, "0")}-${String(f.getDate()).padStart(2, "0")}`;
+      porDia.set(dia, (porDia.get(dia) || 0) + r.Monto);
+    });
+    const resumen = Array.from(porDia.entries())
+      .sort(([a], [b]) => (a < b ? -1 : 1))
+      .map(([dia, monto]) => ({
+        Fecha: dia,
+        Monto: monto,
+        Comision: (monto * COMISION_JSI_PCT) / 100,
+      }));
+
+    res.json({
+      fechaInicio,
+      fechaFin,
+      data,
+      total: data.reduce((s, r) => s + r.Monto, 0),
+      resumen,
+      comisionPct: COMISION_JSI_PCT,
+    });
+  } catch (error) {
+    console.error("Error al generar reporte de cobros JSI:", error);
+    res.status(500).json({ message: error.message });
+  }
+};

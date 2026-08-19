@@ -19,6 +19,7 @@ const Colegio = {
       "ColegioId",
       "ColegioNombre",
       "ColegioCantCurso",
+      "ColegioComision",
       "TipoGastoId",
       "TipoGastoGrupoId",
     ];
@@ -70,6 +71,7 @@ const Colegio = {
       "ColegioId",
       "ColegioNombre",
       "ColegioCantCurso",
+      "ColegioComision",
       "TipoGastoId",
       "TipoGastoGrupoId",
     ];
@@ -145,8 +147,9 @@ const Colegio = {
         "ColegioNombre",
         "ColegioCantCurso",
         "TipoGastoId",
-        "TipoGastoGrupoId"
-      ) VALUES ($1, $2, $3, $4) RETURNING "ColegioId"
+        "TipoGastoGrupoId",
+        "ColegioComision"
+      ) VALUES ($1, $2, $3, $4, $5) RETURNING "ColegioId"
     `;
 
     const values = [
@@ -154,6 +157,7 @@ const Colegio = {
       colegioData.ColegioCantCurso || 0,
       colegioData.TipoGastoId,
       colegioData.TipoGastoGrupoId,
+      Number(colegioData.ColegioComision) || 0,
     ];
 
     const result = await db.query(query, values);
@@ -173,6 +177,7 @@ const Colegio = {
       "ColegioNombre",
       "TipoGastoId",
       "TipoGastoGrupoId",
+      "ColegioComision",
     ];
 
     camposActualizables.forEach((campo) => {
@@ -183,8 +188,12 @@ const Colegio = {
       ) {
         updateFields.push(`"${campo}" = $${paramIndex}`);
         paramIndex++;
-        // Convertir a número si es TipoGastoId o TipoGastoGrupoId
-        if (campo === "TipoGastoId" || campo === "TipoGastoGrupoId") {
+        // Convertir a número si es TipoGastoId, TipoGastoGrupoId o ColegioComision
+        if (
+          campo === "TipoGastoId" ||
+          campo === "TipoGastoGrupoId" ||
+          campo === "ColegioComision"
+        ) {
           values.push(Number(colegioData[campo]));
         } else {
           values.push(colegioData[campo]);

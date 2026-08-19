@@ -274,3 +274,86 @@ exports.delete = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Reporte: cobranzas de un colegio agrupables por curso, con los importes
+// derivados igual que en la pantalla de cobranza:
+//   Subtotal = Importe del curso x cantidad de meses
+//   Multa    = días de mora x 1.000 Gs.
+//   Total    = Subtotal + Multa + Examen - Descuento
+exports.reporteCobranzas = async (req, res) => {
+  try {
+    const { fechaInicio, fechaFin, colegioId } = req.query;
+    if (!fechaInicio || !fechaFin || !colegioId) {
+      return res.status(400).json({
+        message: "Faltan los parámetros fechaInicio, fechaFin y colegioId",
+      });
+    }
+
+    const registros = await ColegioCobranza.getReporteCobranzas(
+      fechaInicio,
+      fechaFin,
+      colegioId,
+    );
+
+    const MULTA_POR_DIA = 1000;
+    const comisionPct = registros.length
+      ? Number(registros[0].ColegioComision) || 0
+      : 0;
+    const data = registros.map((r) => {
+      const importe = Number(r.ColegioCursoImporte) || 0;
+      const meses = Number(r.ColegioCobranzaMes) || 1;
+      const subtotal = importe * meses;
+      const dias = Number(r.ColegioCobranzaDiasMora) || 0;
+      const multa = dias * MULTA_POR_DIA;
+      const examen = Number(r.ColegioCobranzaExamen) || 0;
+      const descuento = Number(r.ColegioCobranzaDescuento) || 0;
+      // Comisión: % del colegio sobre (importe de la cuota - descuento)
+      const comision = ((importe - descuento) * comisionPct) / 100;
+      return {
+        ColegioCobranzaId: r.ColegioCobranzaId,
+        CursoNombre: (r.ColegioCursoNombre || "Sin curso").trim(),
+        Apellido: (r.NominaApellido || "").trim(),
+        Nombre: (r.NominaNombre || "").trim(),
+        Fecha: r.ColegioCobranzaFecha,
+        MesPagado: (r.ColegioCobranzaMesPagado || "").trim(),
+        Importe: importe,
+        Meses: meses,
+        Subtotal: subtotal,
+        DiasMora: dias,
+        Multa: multa,
+        Examen: examen,
+        Descuento: descuento,
+        Total: subtotal + multa + examen - descuento,
+        Comision: comision,
+        UsuarioNombre: (r.UsuarioNombre || "").trim(),
+      };
+    });
+
+    const totales = data.reduce(
+      (t, r) => ({
+        Subtotal: t.Subtotal + r.Subtotal,
+        Multa: t.Multa + r.Multa,
+        Examen: t.Examen + r.Examen,
+        Descuento: t.Descuento + r.Descuento,
+        Total: t.Total + r.Total,
+        Comision: t.Comision + r.Comision,
+      }),
+      { Subtotal: 0, Multa: 0, Examen: 0, Descuento: 0, Total: 0, Comision: 0 },
+    );
+
+    res.json({
+      fechaInicio,
+      fechaFin,
+      colegioId,
+      colegioNombre: registros.length
+        ? (registros[0].ColegioNombre || "").trim()
+        : "",
+      comisionPct,
+      data,
+      totales,
+    });
+  } catch (error) {
+    console.error("Error al generar reporte de cobranza de colegio:", error);
+    res.status(500).json({ message: error.message });
+  }
+};

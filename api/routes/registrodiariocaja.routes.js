@@ -38,6 +38,11 @@ router.get(
   authMiddleware,
   registroDiarioCajaController.reporteWestern
 );
+router.get(
+  "/reporte-anticipos",
+  authMiddleware,
+  registroDiarioCajaController.reporteAnticipos
+);
 router.get("/:id", authMiddleware, registroDiarioCajaController.getById);
 router.post("/", authMiddleware, registroDiarioCajaController.create);
 router.post(

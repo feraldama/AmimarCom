@@ -134,3 +134,23 @@ export const deleteColegioCobranza = async (id: string | number) => {
     );
   }
 };
+
+export const getReporteCobranzaColegio = async (
+  fechaInicio: string,
+  fechaFin: string,
+  colegioId: string | number
+) => {
+  try {
+    const response = await api.get("/colegiocobranza/reporte", {
+      params: { fechaInicio, fechaFin, colegioId },
+    });
+    return response.data;
+  } catch (error) {
+    const axiosError = error as AxiosError<{ message?: string }>;
+    throw (
+      axiosError.response?.data || {
+        message: "Error al obtener el reporte de cobranza del colegio",
+      }
+    );
+  }
+};

@@ -21,6 +21,7 @@ interface Colegio {
   ColegioId: string | number;
   ColegioNombre: string;
   ColegioCantCurso: number;
+  ColegioComision?: string | number;
   TipoGastoId: string | number;
   TipoGastoGrupoId: string | number;
   TipoGastoDescripcion?: string;
@@ -89,6 +90,7 @@ export default function ColegiosList({
     ColegioId: "",
     ColegioNombre: "",
     ColegioCantCurso: 0,
+    ColegioComision: "",
     TipoGastoId: "",
     TipoGastoGrupoId: "",
   });
@@ -126,6 +128,11 @@ export default function ColegiosList({
         ColegioId: String(currentColegio.ColegioId),
         ColegioNombre: currentColegio.ColegioNombre || "",
         ColegioCantCurso: currentColegio.ColegioCantCurso || 0,
+        ColegioComision:
+          currentColegio.ColegioComision !== undefined &&
+          currentColegio.ColegioComision !== null
+            ? String(currentColegio.ColegioComision)
+            : "",
         TipoGastoId: currentColegio.TipoGastoId
           ? String(currentColegio.TipoGastoId)
           : "",
@@ -139,6 +146,7 @@ export default function ColegiosList({
         ColegioId: "",
         ColegioNombre: "",
         ColegioCantCurso: 0,
+        ColegioComision: "",
         TipoGastoId: "",
         TipoGastoGrupoId: "",
       });
@@ -187,6 +195,7 @@ export default function ColegiosList({
       id: formData.id,
       ColegioId: formData.ColegioId,
       ColegioNombre: formData.ColegioNombre,
+      ColegioComision: formData.ColegioComision === "" ? 0 : Number(formData.ColegioComision),
       TipoGastoId: formData.TipoGastoId,
       TipoGastoGrupoId: formData.TipoGastoGrupoId,
     };
@@ -199,6 +208,12 @@ export default function ColegiosList({
     { key: "ColegioId", label: "ID" },
     { key: "ColegioNombre", label: "Nombre" },
     { key: "ColegioCantCurso", label: "Cant. Cursos" },
+    {
+      key: "ColegioComision",
+      label: "Comisión %",
+      render: (colegio: Colegio) =>
+        `${Number(colegio.ColegioComision) || 0}%`,
+    },
     {
       key: "TipoGastoDescripcion",
       label: "Tipo Gasto",
@@ -313,6 +328,27 @@ export default function ColegiosList({
                       disabled
                       readOnly
                       title="Este campo se actualiza automáticamente al agregar o eliminar cursos"
+                    />
+                  </div>
+                  <div className="col-span-6 sm:col-span-3">
+                    <label
+                      htmlFor="ColegioComision"
+                      className="block mb-2 text-sm font-medium text-gray-900"
+                    >
+                      Comisión (%)
+                    </label>
+                    <input
+                      type="number"
+                      name="ColegioComision"
+                      id="ColegioComision"
+                      value={formData.ColegioComision}
+                      onChange={handleInputChange}
+                      min={0}
+                      max={100}
+                      step={0.01}
+                      placeholder="Ej: 1,50"
+                      title="Porcentaje que se cobra sobre (cuota - descuento) de cada cobranza"
+                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
                     />
                   </div>
                   <div className="col-span-6 sm:col-span-3">

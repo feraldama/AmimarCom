@@ -9,6 +9,7 @@ router.use(authMiddleware);
 // Rutas para cobros de JSI
 router.get("/", authMiddleware, jsicobroController.getAll);
 router.get("/search", authMiddleware, jsicobroController.search);
+router.get("/reporte", authMiddleware, jsicobroController.reporteCobros);
 router.get("/:id", authMiddleware, jsicobroController.getById);
 router.post("/", authMiddleware, jsicobroController.create);
 router.put("/:id", authMiddleware, jsicobroController.update);
