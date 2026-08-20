@@ -75,7 +75,11 @@ export async function generarJSI(desde: string, hasta: string) {
       formatMiles(c.Monto),
       c.UsuarioNombre || c.UsuarioId || "",
     ]),
-    foot: [`TOTALES (${data.length} cobros)`, "", "", "", formatMiles(Number(r.total) || 0), ""],
+    foot: [
+      { content: `TOTALES (${data.length} cobros)`, colSpan: 4, styles: { halign: "right" } },
+      formatMiles(Number(r.total) || 0),
+      "",
+    ],
     fontSize: 9,
     columnStyles: { 0: { halign: "center" }, 4: { halign: "right" } },
   });
@@ -114,7 +118,7 @@ export async function generarJSI(desde: string, hasta: string) {
       ]),
       foot: [
         formatMiles(resumen.reduce((s, d) => s + d.Monto, 0)),
-        `TOTAL (${resumen.length} días)`,
+        `TOTAL (${resumen.length} ${resumen.length === 1 ? "día" : "días"})`,
         "",
         formatMiles(resumen.reduce((s, d) => s + d.Monto, 0)),
         formatMilesSmart(resumen.reduce((s, d) => s + d.Comision, 0)),

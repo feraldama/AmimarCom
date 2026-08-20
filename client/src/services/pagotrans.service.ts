@@ -157,3 +157,23 @@ export const searchPagosTrans = async (
     );
   }
 };
+
+export const getReporteEmpresaTransporte = async (
+  fechaInicio: string,
+  fechaFin: string,
+  transporteId: string | number
+) => {
+  try {
+    const response = await api.get("/pagotrans/reporte", {
+      params: { fechaInicio, fechaFin, transporteId },
+    });
+    return response.data;
+  } catch (error) {
+    const axiosError = error as AxiosError<{ message?: string }>;
+    throw (
+      axiosError.response?.data || {
+        message: "Error al obtener el reporte de empresa de transporte",
+      }
+    );
+  }
+};

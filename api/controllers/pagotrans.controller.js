@@ -260,3 +260,62 @@ exports.delete = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Reporte: ventas de pasajes de una empresa de transporte, con la
+// liquidación a la empresa (monto menos la comisión del transporte).
+exports.reportePagos = async (req, res) => {
+  try {
+    const { fechaInicio, fechaFin, transporteId } = req.query;
+    if (!fechaInicio || !fechaFin || !transporteId) {
+      return res.status(400).json({
+        message: "Faltan los parámetros fechaInicio, fechaFin y transporteId",
+      });
+    }
+
+    const registros = await PagoTrans.getReportePagos(
+      fechaInicio,
+      fechaFin,
+      transporteId,
+    );
+
+    const comisionPct = registros.length
+      ? Number(registros[0].TransporteComision) || 0
+      : 0;
+
+    const data = registros.map((r) => {
+      const monto = Number(r.PagoTransMonto) || 0;
+      return {
+        PagoTransId: r.PagoTransId,
+        NumeroBoleto: (r.PagoTransNumeroBoleto || "").trim(),
+        Fecha: r.PagoTransFecha,
+        Pasajero: (r.PagoTransNombreApellido || "").trim(),
+        Origen: (r.PagoTransOrigen || "").trim(),
+        Destino: (r.PagoTransDestino || "").trim(),
+        Monto: monto,
+        Liquidacion: monto * (1 - comisionPct / 100),
+        UsuarioId: r.PagoTransUsuarioId,
+        UsuarioNombre: (r.UsuarioNombre || "").trim(),
+      };
+    });
+
+    const totalMonto = data.reduce((s, r) => s + r.Monto, 0);
+    const totalLiquidacion = data.reduce((s, r) => s + r.Liquidacion, 0);
+
+    res.json({
+      fechaInicio,
+      fechaFin,
+      transporteId,
+      transporteNombre: registros.length
+        ? (registros[0].TransporteNombre || "").trim()
+        : "",
+      comisionPct,
+      data,
+      totalMonto,
+      totalLiquidacion,
+      totalComision: totalMonto - totalLiquidacion,
+    });
+  } catch (error) {
+    console.error("Error al generar reporte de empresa de transporte:", error);
+    res.status(500).json({ message: error.message });
+  }
+};

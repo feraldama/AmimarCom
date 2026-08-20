@@ -284,6 +284,26 @@ export const getReporteAnticipos = async (
   }
 };
 
+export const getReporteElComercio = async (
+  fechaInicio: string,
+  fechaFin: string
+) => {
+  try {
+    const response = await api.get(
+      "/registrodiariocaja/reporte-el-comercio",
+      { params: { fechaInicio, fechaFin } }
+    );
+    return response.data;
+  } catch (error) {
+    const axiosError = error as AxiosError<{ message?: string }>;
+    throw (
+      axiosError.response?.data || {
+        message: "Error al obtener el reporte El Comercio",
+      }
+    );
+  }
+};
+
 export const getReporteVentasPorTipoPago = async (
   fechaInicio: string,
   fechaFin: string

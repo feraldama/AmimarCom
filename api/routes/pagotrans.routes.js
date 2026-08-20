@@ -9,6 +9,7 @@ router.use(authMiddleware);
 // Rutas para pagos de transporte
 router.get("/", authMiddleware, pagoTransController.getAll);
 router.get("/search", authMiddleware, pagoTransController.search);
+router.get("/reporte", authMiddleware, pagoTransController.reportePagos);
 router.get("/:id", authMiddleware, pagoTransController.getById);
 router.post("/", authMiddleware, pagoTransController.create);
 router.put("/:id", authMiddleware, pagoTransController.update);

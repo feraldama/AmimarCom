@@ -50,7 +50,10 @@ export async function generarWesternGs(desde: string, hasta: string) {
         m.UsuarioNombre || m.UsuarioId || "",
         formatMiles(Number(m.Monto)),
       ]),
-      foot: [`TOTAL ${titulo}`, "", "", "", "", formatMiles(total)],
+      foot: [
+        { content: `TOTAL ${titulo}`, colSpan: 5, styles: { halign: "right" } },
+        formatMiles(total),
+      ],
       headColor: color,
       columnStyles: { 5: { halign: "right" } },
     });
@@ -98,7 +101,8 @@ export async function generarWesternUsd(desde: string, hasta: string) {
         formatMiles(Number(m.Monto)),
         Number(m.Cambio) > 0 ? formatMilesSmart(usd(m)) : "—",
       ]),
-      foot: [`TOTAL ${titulo}`, "", "", "", "", "",
+      foot: [
+        { content: `TOTAL ${titulo}`, colSpan: 6, styles: { halign: "right" } },
         formatMiles(rows.reduce((s, m) => s + Number(m.Monto), 0)),
         formatMilesSmart(totalUsd(rows)),
       ],

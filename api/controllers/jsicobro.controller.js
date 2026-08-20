@@ -272,10 +272,10 @@ exports.reporteCobros = async (req, res) => {
       UsuarioNombre: (r.UsuarioNombre || "").trim(),
     }));
 
-    // Resumen por día para la rendición: comisión JSI fija del 2,7% sobre
+    // Resumen por día para la rendición: comisión JSI fija del 1,78% sobre
     // lo cobrado cada día. Si algún día cambia el porcentaje, considerar
     // moverlo a una tabla de configuración.
-    const COMISION_JSI_PCT = 2.7;
+    const COMISION_JSI_PCT = 1.78;
     const porDia = new Map();
     data.forEach((r) => {
       // Día en hora local (toISOString convertiría a UTC y correría de día

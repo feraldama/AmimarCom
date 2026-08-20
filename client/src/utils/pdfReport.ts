@@ -1,5 +1,5 @@
 import { jsPDF } from "jspdf";
-import autoTable, { type UserOptions, type CellHookData } from "jspdf-autotable";
+import autoTable, { type UserOptions, type CellHookData, type RowInput } from "jspdf-autotable";
 
 /**
  * Helpers compartidos para los reportes PDF (encabezado, pie de página,
@@ -35,18 +35,21 @@ export const fmtFecha = (fecha: string) => {
   return `${d}/${m}/${y}`;
 };
 
-/** Fecha y hora cortas (dd/mm/aa hh:mm) para las filas de detalle. */
+/** Fecha y hora cortas (dd/mm/aa hh:mm, formato 24hs) para las filas de detalle. */
 export const fmtFechaHora = (fecha: string) => {
   if (!fecha) return "";
   const d = new Date(fecha);
   if (isNaN(d.getTime())) return "";
-  return d.toLocaleString("es-PY", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
+  return d
+    .toLocaleString("es-PY", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    })
+    .replace(",", "");
 };
 
 export const getLastY = (doc: jsPDF) =>
@@ -128,12 +131,10 @@ export const pdfFooter = (doc: jsPDF) => {
   doc.setTextColor(...PDF_COLORS.textDark);
 };
 
-type Celda = string | number;
-
 export interface SeccionTabla {
-  head: Celda[];
-  body: Celda[][];
-  foot?: Celda[];
+  head: RowInput;
+  body: RowInput[];
+  foot?: RowInput;
   headColor?: RGB;
   columnStyles?: UserOptions["columnStyles"];
   fontSize?: number;
@@ -177,6 +178,9 @@ export const pdfSeccion = (
     head: [tabla.head],
     body: tabla.body,
     foot: tabla.foot ? [tabla.foot] : undefined,
+    // El pie es la fila de totales del período: solo en la última página,
+    // para que no parezca un subtotal por página.
+    showFoot: "lastPage",
     startY,
     theme: "striped",
     headStyles: { fillColor: tabla.headColor ?? PDF_COLORS.primary },

@@ -337,6 +337,26 @@ const PagoTrans = {
     );
     return result.rowCount > 0;
   },
+
+  // Ventas de pasajes de una empresa de transporte en un rango de fechas,
+  // con la comisión de la empresa para calcular la liquidación.
+  getReportePagos: async (fechaDesde, fechaHasta, transporteId) => {
+    const result = await db.query(
+      `SELECT p.*,
+        t."TransporteNombre",
+        t."TransporteComision",
+        u."UsuarioNombre"
+      FROM "pagotrans" p
+      LEFT JOIN "transporte" t ON p."TransporteId" = t."TransporteId"
+      LEFT JOIN "usuario" u ON p."PagoTransUsuarioId" = u."UsuarioId"
+      WHERE p."TransporteId" = $3
+        AND p."PagoTransFecha"::date >= $1::date
+        AND p."PagoTransFecha"::date <= $2::date
+      ORDER BY p."PagoTransFecha" ASC, p."PagoTransId" ASC`,
+      [fechaDesde, fechaHasta, transporteId]
+    );
+    return result.rows;
+  },
 };
 
 module.exports = PagoTrans;

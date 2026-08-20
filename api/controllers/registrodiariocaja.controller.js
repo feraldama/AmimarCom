@@ -808,3 +808,37 @@ exports.reporteAnticipos = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Reporte: El Comercio (resumen de los grupos asociados a WEPA / WEPA USD)
+exports.reporteElComercio = async (req, res) => {
+  try {
+    const { fechaInicio, fechaFin } = req.query;
+    if (!fechaInicio || !fechaFin) {
+      return res.status(400).json({ message: "Faltan los parámetros fechaInicio y fechaFin" });
+    }
+
+    const grupos = await RegistroDiarioCaja.getReporteElComercio(
+      fechaInicio,
+      fechaFin,
+    );
+
+    // TipoGastoId === 2 es ingreso, TipoGastoId === 1 es egreso
+    const egresos = grupos.filter((g) => g.TipoGastoId === 1);
+    const ingresos = grupos.filter((g) => g.TipoGastoId === 2);
+    const sumar = (rows, campo) => rows.reduce((s, g) => s + Number(g[campo]), 0);
+
+    res.json({
+      fechaInicio,
+      fechaFin,
+      egresos,
+      ingresos,
+      totalEgresos: sumar(egresos, "Total"),
+      totalIngresos: sumar(ingresos, "Total"),
+      totalEgresosUsd: sumar(egresos, "TotalUsd"),
+      totalIngresosUsd: sumar(ingresos, "TotalUsd"),
+    });
+  } catch (error) {
+    console.error("Error al generar reporte El Comercio:", error);
+    res.status(500).json({ message: error.message });
+  }
+};

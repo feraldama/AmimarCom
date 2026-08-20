@@ -50,7 +50,8 @@ export async function generarAnticipos(desde: string, hasta: string, grupo: stri
       Number(m.Cambio) > 0 ? formatMilesSmart(Number(m.MontoUsd)) : "",
       m.UsuarioNombre || m.UsuarioId || "",
     ]),
-    foot: ["TOTAL", "", "", "",
+    foot: [
+      { content: "TOTAL", colSpan: 4, styles: { halign: "right" } },
       formatMiles(Number(r.totalEgresos)),
       formatMiles(Number(r.totalIngresos)),
       "",

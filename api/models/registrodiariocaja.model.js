@@ -527,6 +527,38 @@ const RegistroDiarioCaja = {
     return result.rows;
   },
 
+  // Resumen "El Comercio": totales por grupo de gasto, limitado a los grupos
+  // asociados (vía cajagasto) a las cajas WEPA y WEPA USD, que son las
+  // operaciones que pasan por la financiera El Comercio. Incluye el
+  // equivalente USD de los movimientos con cotización.
+  getReporteElComercio: async (fechaDesde, fechaHasta) => {
+    const result = await db.query(
+      `SELECT
+        r."TipoGastoId",
+        r."TipoGastoGrupoId",
+        COALESCE(TRIM(tg."TipoGastoGrupoDescripcion"), 'SIN GRUPO') AS "GrupoDescripcion",
+        SUM(r."RegistroDiarioCajaMonto") AS "Total",
+        SUM(CASE WHEN r."RegistroDiarioCajaCambio" > 0
+              THEN r."RegistroDiarioCajaMonto" / r."RegistroDiarioCajaCambio"
+              ELSE 0 END) AS "TotalUsd",
+        COUNT(*) AS "CantMovimientos"
+      FROM "registrodiariocaja" r
+      JOIN "tipogastogrupo" tg ON r."TipoGastoId" = tg."TipoGastoId" AND r."TipoGastoGrupoId" = tg."TipoGastoGrupoId"
+      WHERE (r."TipoGastoId", r."TipoGastoGrupoId") IN (
+          SELECT cg."TipoGastoId", cg."TipoGastoGrupoId"
+          FROM "cajagasto" cg
+          JOIN "caja" c ON cg."CajaId" = c."CajaId"
+          WHERE TRIM(c."CajaDescripcion") IN ('WEPA', 'WEPA USD')
+        )
+        AND r."RegistroDiarioCajaFecha"::date >= $1::date
+        AND r."RegistroDiarioCajaFecha"::date <= $2::date
+      GROUP BY r."TipoGastoId", r."TipoGastoGrupoId", tg."TipoGastoGrupoDescripcion"
+      ORDER BY r."TipoGastoId", r."TipoGastoGrupoId"`,
+      [fechaDesde, fechaHasta]
+    );
+    return result.rows;
+  },
+
   // Movimientos de un grupo de gasto (por descripción, en ambos tipos:
   // egresos e ingresos). Usado por el reporte de Anticipos.
   getReporteGrupo: async (fechaDesde, fechaHasta, grupoDescripcion) => {

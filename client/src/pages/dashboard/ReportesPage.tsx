@@ -5,6 +5,7 @@ import { usePermiso } from "../../hooks/usePermiso";
 import { getTiposGastoGrupo, type TipoGastoGrupo } from "../../services/tipogastogrupo.service";
 import { getCajas } from "../../services/cajas.service";
 import { getColegios } from "../../services/colegio.service";
+import { getTransportes } from "../../services/transporte.service";
 import { SinDatosError } from "../../utils/pdfReport";
 import { generarIngresosEgresosResumen } from "../../reports/ingresosEgresosResumen";
 import { generarRegistroDiario, generarIngresoEgresoPorCaja } from "../../reports/registroDiario";
@@ -16,6 +17,8 @@ import { generarCierreDiario } from "../../reports/cierreDiario";
 import { generarDivisas } from "../../reports/divisas";
 import { generarCobranzaColegios } from "../../reports/cobranzaColegios";
 import { generarJSI } from "../../reports/jsi";
+import { generarElComercio } from "../../reports/elComercio";
+import { generarEmpresaTransporte } from "../../reports/empresaTransporte";
 import PageHeader from "../../components/common/PageHeader";
 import { Button } from "@/components/ui/button";
 import CampoFecha from "@/components/common/CampoFecha";
@@ -95,6 +98,8 @@ const ReportesPage: React.FC = () => {
     porcaja: [today, today],
     colegios: [today, today],
     jsi: [today, today],
+    comercio: [today, today],
+    transporte: [today, today],
     westerngs: [today, today],
     westernusd: [today, today],
     anticipos: [today, today],
@@ -115,6 +120,10 @@ const ReportesPage: React.FC = () => {
   // Colegios para el selector de Cobranza Colegios
   const [colegios, setColegios] = useState<{ id: number; desc: string }[]>([]);
   const [colegioReporte, setColegioReporte] = useState("");
+
+  // Empresas de transporte para el selector de Empresa de Transporte
+  const [transportes, setTransportes] = useState<{ id: number; desc: string }[]>([]);
+  const [transporteReporte, setTransporteReporte] = useState("");
 
   useEffect(() => {
     getTiposGastoGrupo()
@@ -149,6 +158,17 @@ const ReportesPage: React.FC = () => {
         );
       })
       .catch((err) => console.error("Error al cargar colegios:", err));
+
+    getTransportes(1, 1000, "TransporteNombre", "asc")
+      .then((data: { data: { TransporteId: number; TransporteNombre: string }[] }) => {
+        setTransportes(
+          (data.data || []).map((t) => ({
+            id: t.TransporteId,
+            desc: (t.TransporteNombre || `Transporte ${t.TransporteId}`).trim(),
+          }))
+        );
+      })
+      .catch((err) => console.error("Error al cargar transportes:", err));
   }, []);
 
   const updateF = (key: keyof typeof f, idx: 0 | 1, val: string) => {
@@ -275,6 +295,42 @@ const ReportesPage: React.FC = () => {
       description: "Rendición de cobros a la Junta de Saneamiento de Itauguá",
       icon: <FileText className="size-5 text-primary" />,
       run: generarJSI,
+    },
+    {
+      key: "comercio",
+      title: "El Comercio",
+      description: "Resumen de operaciones de la financiera (grupos WEPA / WEPA USD)",
+      icon: <BarChart3 className="size-5 text-primary" />,
+      run: generarElComercio,
+    },
+    {
+      key: "transporte",
+      title: "Empresa de Transporte",
+      description: "Ventas de pasajes con liquidación y comisión de la empresa",
+      icon: <FileText className="size-5 text-primary" />,
+      run: (desde, hasta) =>
+        generarEmpresaTransporte(
+          desde,
+          hasta,
+          transporteReporte,
+          transportes.find((t) => String(t.id) === transporteReporte)?.desc || ""
+        ),
+      disabled: !transporteReporte,
+      extra: (
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-muted-foreground mb-1">Transporte</label>
+          <select
+            value={transporteReporte}
+            onChange={(e) => setTransporteReporte(e.target.value)}
+            className={inputClassName}
+          >
+            <option value="">Seleccioná una empresa...</option>
+            {transportes.map((t) => (
+              <option key={t.id} value={t.id}>{t.desc}</option>
+            ))}
+          </select>
+        </div>
+      ),
     },
     {
       key: "westerngs",

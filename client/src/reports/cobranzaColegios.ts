@@ -76,7 +76,7 @@ export async function generarCobranzaColegios(
         c.Comision ? formatMilesSmart(c.Comision) : "",
       ]),
       foot: [
-        `TOTAL (${rows.length} cobranzas)`, "", "", "", "", "",
+        { content: `TOTAL (${rows.length} cobranzas)`, colSpan: 6, styles: { halign: "right" } },
         formatMiles(sum((c) => c.Subtotal)),
         "",
         formatMiles(sum((c) => c.Multa)),

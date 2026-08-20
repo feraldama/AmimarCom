@@ -43,6 +43,11 @@ router.get(
   authMiddleware,
   registroDiarioCajaController.reporteAnticipos
 );
+router.get(
+  "/reporte-el-comercio",
+  authMiddleware,
+  registroDiarioCajaController.reporteElComercio
+);
 router.get("/:id", authMiddleware, registroDiarioCajaController.getById);
 router.post("/", authMiddleware, registroDiarioCajaController.create);
 router.post(
