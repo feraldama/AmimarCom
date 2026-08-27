@@ -1,8 +1,8 @@
 {
-  "postman.settings.dotenv-detection-notification-visibility": false,
-  "github.copilot.chat.commitMessageGeneration.instructions": [
-    {
-      "text": "Genera siempre el mensaje de commit en español, sin importar el idioma del código o de los cambios."
-    }
-  ]
+  "postman.settings.dotenv-detection-notification-visibility": false
+  // 27/08/2026: se quitó "github.copilot.chat.commitMessageGeneration.instructions"
+  // (pedía el commit en español). Igual que en la config de usuario, esa instrucción
+  // hace que el Responsible AI Service de GitHub filtre el prompt (promptFiltered) y
+  // la chispa de Source Control no genere nada. El idioma ya lo maneja
+  // "github.copilot.chat.localeOverride": "es" en la config de usuario.
 }
