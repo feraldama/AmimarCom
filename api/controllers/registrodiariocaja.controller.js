@@ -462,6 +462,18 @@ exports.aperturaCierreCaja = async (req, res) => {
         Sigue = "N";
         error = "CAJA ABIERTA - DEBE REALIZAR EL CIERRE";
       }
+      // El usuario no puede aperturar si ya tiene OTRA caja abierta
+      if (Sigue === "S") {
+        const estadoUsuario =
+          await RegistroDiarioCaja.getEstadoAperturaPorUsuario(UsuarioId);
+        if (
+          estadoUsuario.cajaId &&
+          estadoUsuario.aperturaId > estadoUsuario.cierreId
+        ) {
+          Sigue = "N";
+          error = `USTED YA TIENE ABIERTA LA CAJA ${estadoUsuario.cajaId} - DEBE REALIZAR EL CIERRE`;
+        }
+      }
     } else {
       if (RegistroDiarioCajaIdCierre < RegistroDiarioCajaIdApertura) {
         Sigue = "S";

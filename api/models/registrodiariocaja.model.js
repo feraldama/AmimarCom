@@ -387,27 +387,58 @@ const RegistroDiarioCaja = {
   },
 
   getEstadoAperturaPorUsuario: async (usuarioId) => {
-    // Buscar la ultima apertura del usuario
-    const aperturasResult = await db.query(
-      `SELECT "RegistroDiarioCajaId", "CajaId" FROM "registrodiariocaja" WHERE "UsuarioId" = $1 AND "TipoGastoId" = 2 AND "TipoGastoGrupoId" = 2 ORDER BY "RegistroDiarioCajaId" DESC LIMIT 1`,
+    // Busca, por caja, la ultima apertura del usuario que NO tenga un cierre
+    // posterior sobre esa misma caja. Se evalua por caja (y no solo la
+    // ultima apertura vs. el ultimo cierre del usuario) para que una caja
+    // que quedo abierta no se "tape" con la apertura/cierre de otra caja.
+    const abiertaResult = await db.query(
+      `SELECT a."RegistroDiarioCajaId", a."CajaId"
+       FROM "registrodiariocaja" a
+       WHERE a."UsuarioId" = $1
+         AND a."TipoGastoId" = 2
+         AND a."TipoGastoGrupoId" = 2
+         AND NOT EXISTS (
+           SELECT 1 FROM "registrodiariocaja" c
+           WHERE c."CajaId" = a."CajaId"
+             AND c."TipoGastoId" = 1
+             AND c."TipoGastoGrupoId" = 2
+             AND c."RegistroDiarioCajaId" > a."RegistroDiarioCajaId"
+         )
+       ORDER BY a."RegistroDiarioCajaId" ASC
+       LIMIT 1`,
       [usuarioId]
     );
-    const apertura = aperturasResult.rows[0] || {
-      RegistroDiarioCajaId: 0,
-      CajaId: null,
-    };
+    const abierta = abiertaResult.rows[0];
 
-    // Buscar el ultimo cierre del usuario
+    if (abierta) {
+      // Ultimo cierre de esa caja (siempre menor a la apertura, por definicion)
+      const cierreResult = await db.query(
+        `SELECT "RegistroDiarioCajaId" FROM "registrodiariocaja" WHERE "CajaId" = $1 AND "TipoGastoId" = 1 AND "TipoGastoGrupoId" = 2 AND "RegistroDiarioCajaId" < $2 ORDER BY "RegistroDiarioCajaId" DESC LIMIT 1`,
+        [abierta.CajaId, abierta.RegistroDiarioCajaId]
+      );
+      return {
+        aperturaId: abierta.RegistroDiarioCajaId,
+        cierreId: cierreResult.rows[0]?.RegistroDiarioCajaId || 0,
+        cajaId: abierta.CajaId,
+      };
+    }
+
+    // Sin caja abierta: devolver la ultima apertura/cierre del usuario
+    // (cierreId >= aperturaId) para mantener el contrato del endpoint.
+    const aperturasResult = await db.query(
+      `SELECT "RegistroDiarioCajaId" FROM "registrodiariocaja" WHERE "UsuarioId" = $1 AND "TipoGastoId" = 2 AND "TipoGastoGrupoId" = 2 ORDER BY "RegistroDiarioCajaId" DESC LIMIT 1`,
+      [usuarioId]
+    );
     const cierresResult = await db.query(
       `SELECT "RegistroDiarioCajaId" FROM "registrodiariocaja" WHERE "UsuarioId" = $1 AND "TipoGastoId" = 1 AND "TipoGastoGrupoId" = 2 ORDER BY "RegistroDiarioCajaId" DESC LIMIT 1`,
       [usuarioId]
     );
-    const cierre = cierresResult.rows[0] || { RegistroDiarioCajaId: 0 };
-
+    const aperturaId = aperturasResult.rows[0]?.RegistroDiarioCajaId || 0;
+    const cierreId = cierresResult.rows[0]?.RegistroDiarioCajaId || 0;
     return {
-      aperturaId: apertura.RegistroDiarioCajaId || 0,
-      cierreId: cierre.RegistroDiarioCajaId || 0,
-      cajaId: apertura.CajaId || null,
+      aperturaId,
+      cierreId: Math.max(cierreId, aperturaId),
+      cajaId: null,
     };
   },
   // ── REPORTES ──
