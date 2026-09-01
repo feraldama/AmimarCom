@@ -22,7 +22,11 @@ async function generar(
   cajaId?: string | number
 ) {
   validarRango(desde, hasta);
-  const response = await getReporteMovimientosCajas(desde, hasta, cajaId);
+  const response = await getReporteMovimientosCajas(
+    desde,
+    hasta,
+    cajaId ? [cajaId] : []
+  );
   const movimientos = (response.data || []) as RegistroCaja[];
   if (!movimientos.length) {
     throw new SinDatosError("No hay datos para el periodo seleccionado");

@@ -25,6 +25,8 @@ interface WesternMovimiento {
   CajaDescripcion: string;
   UsuarioId: string;
   UsuarioNombre: string;
+  // Grupos "3 WESTERN ...": el monto ya está en USD (no hay monto en Gs.)
+  EsUsdPuro?: boolean;
 }
 
 export async function generarWesternGs(desde: string, hasta: string) {
@@ -80,10 +82,20 @@ export async function generarWesternUsd(desde: string, hasta: string) {
     throw new SinDatosError("No hay datos para el periodo seleccionado");
   }
 
+  // Monto en U$D: los grupos "3 WESTERN ..." ya están en dólares; el resto
+  // se convierte con la cotización (si la tiene).
   const usd = (m: WesternMovimiento) =>
-    Number(m.Cambio) > 0 ? Number(m.Monto) / Number(m.Cambio) : 0;
+    m.EsUsdPuro
+      ? Number(m.Monto)
+      : Number(m.Cambio) > 0
+        ? Number(m.Monto) / Number(m.Cambio)
+        : 0;
   const totalUsd = (rows: WesternMovimiento[]) => rows.reduce((s, m) => s + usd(m), 0);
-  const sinCotizacion = [...egresos, ...ingresos].filter((m) => !(Number(m.Cambio) > 0)).length;
+  const totalGs = (rows: WesternMovimiento[]) =>
+    rows.reduce((s, m) => s + (m.EsUsdPuro ? 0 : Number(m.Monto)), 0);
+  const sinCotizacion = [...egresos, ...ingresos].filter(
+    (m) => !m.EsUsdPuro && !(Number(m.Cambio) > 0)
+  ).length;
 
   const doc = new jsPDF("landscape");
   let y = pdfHeader(doc, "Western USD - Ingresos/Egresos", desde, hasta);
@@ -98,12 +110,12 @@ export async function generarWesternUsd(desde: string, hasta: string) {
         m.CajaDescripcion,
         m.UsuarioNombre || m.UsuarioId || "",
         Number(m.Cambio) > 0 ? formatMilesSmart(Number(m.Cambio)) : "—",
-        formatMiles(Number(m.Monto)),
-        Number(m.Cambio) > 0 ? formatMilesSmart(usd(m)) : "—",
+        m.EsUsdPuro ? "—" : formatMiles(Number(m.Monto)),
+        m.EsUsdPuro || Number(m.Cambio) > 0 ? formatMilesSmart(usd(m)) : "—",
       ]),
       foot: [
         { content: `TOTAL ${titulo}`, colSpan: 6, styles: { halign: "right" } },
-        formatMiles(rows.reduce((s, m) => s + Number(m.Monto), 0)),
+        formatMiles(totalGs(rows)),
         formatMilesSmart(totalUsd(rows)),
       ],
       headColor: color,

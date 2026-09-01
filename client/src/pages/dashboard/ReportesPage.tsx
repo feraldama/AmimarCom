@@ -125,6 +125,17 @@ const ReportesPage: React.FC = () => {
   const [transportes, setTransportes] = useState<{ id: number; desc: string }[]>([]);
   const [transporteReporte, setTransporteReporte] = useState("");
 
+  // Filtros del reporte de Movimientos de Cajas: cajas marcadas (ninguna =
+  // todas) y tipo de movimiento ("" ambos, "1" egresos, "2" ingresos)
+  const [movCajas, setMovCajas] = useState<string[]>([]);
+  const [movTipo, setMovTipo] = useState("");
+
+  const toggleMovCaja = (id: string) => {
+    setMovCajas((prev) =>
+      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
+    );
+  };
+
   useEffect(() => {
     getTiposGastoGrupo()
       .then((data: TipoGastoGrupo[]) => {
@@ -342,7 +353,8 @@ const ReportesPage: React.FC = () => {
     {
       key: "westernusd",
       title: "Western USD",
-      description: "Pagos y envíos Western en dólares con cotización",
+      description:
+        "Pagos y envíos Western en dólares, con cotización y USD puro",
       icon: <ArrowLeftRight className="size-5 text-primary" />,
       run: generarWesternUsd,
     },
@@ -393,9 +405,50 @@ const ReportesPage: React.FC = () => {
     {
       key: "mov",
       title: "Movimientos de Cajas",
-      description: "Todos los movimientos de cajas internas (CajaTipoId=1)",
+      description:
+        "Movimientos de cajas internas, con filtro por caja y tipo de movimiento",
       icon: <FileText className="size-5 text-primary" />,
-      run: generarMovimientosCajas,
+      run: (desde, hasta) =>
+        generarMovimientosCajas(desde, hasta, movCajas, movTipo),
+      extra: (
+        <>
+          <div className="mb-4">
+            <label className="block text-xs font-medium text-muted-foreground mb-1">
+              Tipo de movimiento
+            </label>
+            <select
+              value={movTipo}
+              onChange={(e) => setMovTipo(e.target.value)}
+              className={inputClassName}
+            >
+              <option value="">Ingresos y egresos</option>
+              <option value="2">Solo ingresos</option>
+              <option value="1">Solo egresos</option>
+            </select>
+          </div>
+          <div className="mb-4">
+            <label className="block text-xs font-medium text-muted-foreground mb-1">
+              Cajas (todas si no marcás ninguna)
+            </label>
+            <div className="max-h-32 overflow-y-auto rounded-lg border border-input bg-background px-3 py-2 space-y-1">
+              {cajas.map((c) => (
+                <label
+                  key={c.id}
+                  className="flex items-center gap-2 text-sm text-foreground cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={movCajas.includes(String(c.id))}
+                    onChange={() => toggleMovCaja(String(c.id))}
+                    className="accent-primary"
+                  />
+                  {c.desc}
+                </label>
+              ))}
+            </div>
+          </div>
+        </>
+      ),
     },
   ];
 

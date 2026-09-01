@@ -50,6 +50,7 @@ router.get(
 );
 router.get("/:id", authMiddleware, registroDiarioCajaController.getById);
 router.post("/", authMiddleware, registroDiarioCajaController.create);
+router.post("/pase", authMiddleware, registroDiarioCajaController.createPase);
 router.post(
   "/apertura-cierre",
   authMiddleware,

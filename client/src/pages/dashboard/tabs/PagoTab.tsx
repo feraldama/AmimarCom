@@ -84,7 +84,14 @@ export default function PagosTab() {
   }, [user]);
 
   const gruposFiltrados = tiposGastoGrupo
-    .filter((g) => g.TipoGastoId === tipoGastoId)
+    .filter(
+      (g) =>
+        g.TipoGastoId === tipoGastoId &&
+        // Los grupos "PASE ..." se cargan sólo desde la pestaña Pase de Cajas,
+        // que crea las dos patas (egreso + ingreso) del movimiento. Cargar una
+        // sola pata por acá desbalancea el cierre de la caja contraparte.
+        !g.TipoGastoGrupoDescripcion.trim().toUpperCase().startsWith("PASE ")
+    )
     .sort((a, b) =>
       a.TipoGastoGrupoDescripcion.localeCompare(b.TipoGastoGrupoDescripcion)
     );

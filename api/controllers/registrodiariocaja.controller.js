@@ -80,8 +80,32 @@ exports.getById = async (req, res) => {
 };
 
 // Crear un nuevo registro
+// Indica si el grupo de gasto corresponde a un pase entre cajas
+// (descripción "PASE ..."). Esos movimientos sólo pueden crearse por el
+// endpoint /pase, que genera las dos patas en una transacción.
+const esGrupoPase = async (tipoGastoId, tipoGastoGrupoId) => {
+  if (!tipoGastoId || !tipoGastoGrupoId) return false;
+  const result = await db.query(
+    `SELECT 1 FROM "tipogastogrupo"
+     WHERE "TipoGastoId" = $1 AND "TipoGastoGrupoId" = $2
+       AND TRIM("TipoGastoGrupoDescripcion") ILIKE 'PASE %'`,
+    [tipoGastoId, tipoGastoGrupoId]
+  );
+  return result.rows.length > 0;
+};
+
 exports.create = async (req, res) => {
   try {
+    // Los grupos "PASE ..." quedan reservados al endpoint /pase: crear una
+    // sola pata por acá deja el pase desbalanceado (sobrante/faltante en el
+    // cierre de la caja contraparte).
+    if (await esGrupoPase(req.body.TipoGastoId, req.body.TipoGastoGrupoId)) {
+      return res.status(400).json({
+        message:
+          "Los pases entre cajas deben registrarse desde la pestaña Pase de Cajas, que genera el egreso y el ingreso juntos.",
+      });
+    }
+
     const registro = await RegistroDiarioCaja.create({
       ...req.body,
       UsuarioId: req.user.id, // Asumiendo que tienes el usuario en req.user
@@ -91,6 +115,53 @@ exports.create = async (req, res) => {
       data: registro,
     });
   } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+// Crear un pase entre cajas (egreso en origen + ingreso en destino, atómico)
+exports.createPase = async (req, res) => {
+  try {
+    const {
+      CajaOrigenId,
+      CajaDestinoId,
+      RegistroDiarioCajaFecha,
+      RegistroDiarioCajaDetalle,
+      RegistroDiarioCajaMonto,
+    } = req.body;
+
+    if (!CajaOrigenId || !CajaDestinoId) {
+      return res
+        .status(400)
+        .json({ message: "Caja origen y caja destino son requeridas" });
+    }
+    if (Number(CajaOrigenId) === Number(CajaDestinoId)) {
+      return res
+        .status(400)
+        .json({ message: "La caja origen y la caja destino no pueden ser la misma" });
+    }
+    const monto = Number(RegistroDiarioCajaMonto);
+    if (!monto || isNaN(monto) || monto <= 0) {
+      return res
+        .status(400)
+        .json({ message: "El monto debe ser un número mayor a cero" });
+    }
+
+    const resultado = await RegistroDiarioCaja.createPase({
+      CajaOrigenId,
+      CajaDestinoId,
+      RegistroDiarioCajaFecha,
+      RegistroDiarioCajaDetalle,
+      RegistroDiarioCajaMonto: monto,
+      UsuarioId: req.user.id,
+    });
+
+    res.status(201).json({
+      message: "Pase registrado exitosamente",
+      data: resultado,
+    });
+  } catch (error) {
+    console.error("Error al registrar pase entre cajas:", error);
     res.status(400).json({ message: error.message });
   }
 };
@@ -118,6 +189,20 @@ exports.delete = async (req, res) => {
     const registro = await RegistroDiarioCaja.getById(req.params.id);
     if (!registro) {
       return res.status(404).json({ message: "Registro no encontrado" });
+    }
+
+    // Los pases entre cajas se eliminan por par: la pata pedida y su
+    // contrapartida (si existe), revirtiendo ambos saldos en una transacción.
+    // Este camino no pasa por la lógica de cajagasto de más abajo porque un
+    // pase sólo afecta a las dos cajas involucradas.
+    if (await esGrupoPase(registro.TipoGastoId, registro.TipoGastoGrupoId)) {
+      const resultado = await RegistroDiarioCaja.deletePase(registro);
+      return res.json({
+        message: resultado.contrapartidaId
+          ? "Pase eliminado exitosamente (egreso e ingreso)"
+          : "Registro de pase eliminado exitosamente (no se encontró contrapartida)",
+        data: resultado,
+      });
     }
 
     const {
@@ -622,7 +707,9 @@ exports.reportePaseCajas = async (req, res) => {
 // Reporte de movimientos de todas las cajas (CajaTipoId=1)
 exports.reporteMovimientosCajas = async (req, res) => {
   try {
-    const { fechaInicio, fechaFin, cajaId } = req.query;
+    // cajaIds: lista separada por comas (ej: "4,5"); se mantiene cajaId
+    // (individual) por compatibilidad. tipo: 1=egresos, 2=ingresos.
+    const { fechaInicio, fechaFin, cajaId, cajaIds, tipo } = req.query;
 
     if (!fechaInicio || !fechaFin) {
       return res.status(400).json({
@@ -630,10 +717,24 @@ exports.reporteMovimientosCajas = async (req, res) => {
       });
     }
 
+    let listaCajas = [];
+    if (cajaIds) {
+      listaCajas = String(cajaIds)
+        .split(",")
+        .map((id) => Number(id.trim()))
+        .filter((id) => !isNaN(id) && id > 0);
+    } else if (cajaId) {
+      listaCajas = [Number(cajaId)];
+    }
+
+    const tipoGastoId =
+      tipo === "1" || tipo === "2" ? Number(tipo) : undefined;
+
     const registros = await RegistroDiarioCaja.getReporteMovimientosCajas(
       fechaInicio,
       fechaFin,
-      cajaId,
+      listaCajas,
+      tipoGastoId,
     );
 
     res.json({
@@ -705,11 +806,16 @@ exports.reporteWestern = async (req, res) => {
       return res.status(400).json({ message: "Faltan los parámetros fechaInicio y fechaFin" });
     }
 
-    const prefijo = moneda === "usd" ? "2 WESTERN" : "1 WESTERN";
+    // Grupos por moneda: "1 WESTERN ..." son pagos/envíos en Gs.;
+    // "2 WESTERN ..." son USD con cotización (monto en Gs. + cambio) y
+    // "3 WESTERN ..." son USD puro (el monto ya está en dólares, sin cambio),
+    // por eso el reporte USD incluye ambos prefijos.
+    const prefijos =
+      moneda === "usd" ? ["2 WESTERN", "3 WESTERN"] : ["1 WESTERN"];
     const registros = await RegistroDiarioCaja.getReporteWestern(
       fechaInicio,
       fechaFin,
-      prefijo,
+      prefijos,
     );
 
     const mapear = (m) => ({
@@ -723,13 +829,24 @@ exports.reporteWestern = async (req, res) => {
       CajaDescripcion: (m.CajaDescripcion || "").trim(),
       UsuarioId: m.UsuarioId,
       UsuarioNombre: (m.UsuarioNombre || "").trim(),
+      // En los grupos "3 WESTERN ..." el monto ya está en USD (no en Gs.)
+      EsUsdPuro: (m.TipoGastoGrupoDescripcion || "")
+        .trim()
+        .toUpperCase()
+        .startsWith("3 WESTERN"),
     });
 
     // TipoGastoId === 2 es ingreso, TipoGastoId === 1 es egreso
     const egresos = registros.filter((m) => m.TipoGastoId === 1).map(mapear);
     const ingresos = registros.filter((m) => m.TipoGastoId === 2).map(mapear);
-    const totalEgresos = egresos.reduce((s, m) => s + m.Monto, 0);
-    const totalIngresos = ingresos.reduce((s, m) => s + m.Monto, 0);
+    // Totales en Gs.: los montos USD puro no se suman acá porque están en
+    // otra moneda (el reporte USD calcula sus totales en dólares aparte).
+    const totalEgresos = egresos
+      .filter((m) => !m.EsUsdPuro)
+      .reduce((s, m) => s + m.Monto, 0);
+    const totalIngresos = ingresos
+      .filter((m) => !m.EsUsdPuro)
+      .reduce((s, m) => s + m.Monto, 0);
 
     res.json({
       fechaInicio,

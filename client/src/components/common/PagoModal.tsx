@@ -55,7 +55,11 @@ const PagoModal: React.FC<PagoModalProps> = ({
   }, [show]);
 
   const gruposFiltrados = tiposGastoGrupo.filter(
-    (g) => g.TipoGastoId === tipoGastoId
+    (g) =>
+      g.TipoGastoId === tipoGastoId &&
+      // Los grupos "PASE ..." se cargan sólo desde la pestaña Pase de Cajas,
+      // que crea las dos patas (egreso + ingreso) del movimiento.
+      !g.TipoGastoGrupoDescripcion.trim().toUpperCase().startsWith("PASE ")
   );
 
   const handleSubmit = async (e: React.FormEvent) => {

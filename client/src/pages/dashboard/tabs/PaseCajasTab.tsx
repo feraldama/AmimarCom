@@ -3,10 +3,9 @@ import CampoFecha from "@/components/common/CampoFecha";
 import { useAuth } from "../../../contexts/useAuth";
 import { getEstadoAperturaPorUsuario } from "../../../services/registrodiariocaja.service";
 import { getCajaById, getCajas } from "../../../services/cajas.service";
-import { createRegistroDiarioCaja } from "../../../services/registros.service";
+import { createPaseCaja } from "../../../services/registros.service";
 import { getTiposGasto } from "../../../services/tipogasto.service";
 import { getTiposGastoGrupo } from "../../../services/tipogastogrupo.service";
-import { updateCajaMonto } from "../../../services/cajas.service";
 import Swal from "sweetalert2";
 import { formatMiles } from "../../../utils/utils";
 
@@ -192,52 +191,16 @@ export default function PaseCajasTab() {
         return;
       }
 
-      const montoNumero = Number(montoEgreso);
-
-      // Registro EGRESO en la caja aperturada
-      await createRegistroDiarioCaja({
-        CajaId: cajaIdEgreso,
+      // El backend crea el egreso en la aperturada y el ingreso en la caja
+      // destino, y ajusta ambos saldos, todo en una única transacción: no
+      // puede quedar una pata sin la otra.
+      await createPaseCaja({
+        CajaOrigenId: cajaIdEgreso,
+        CajaDestinoId: cajaSeleccionadaEgreso,
         RegistroDiarioCajaFecha: fechaEgreso,
-        TipoGastoId: tipoGastoIdEgreso,
-        TipoGastoGrupoId: grupoEgresoAperturada.TipoGastoGrupoId,
         RegistroDiarioCajaDetalle: detalleEgreso,
-        RegistroDiarioCajaMonto: montoEgreso,
-        UsuarioId: user.id,
-        RegistroDiarioCajaCambio: 0,
-        RegistroDiarioCajaMTCN: 0,
-        RegistroDiarioCajaCargoEnvio: 0,
+        RegistroDiarioCajaMonto: Number(montoEgreso),
       });
-
-      // Registro INGRESO en la caja destino
-      await createRegistroDiarioCaja({
-        CajaId: cajaSeleccionadaEgreso,
-        RegistroDiarioCajaFecha: fechaEgreso,
-        TipoGastoId: tipoGastoIdIngreso,
-        TipoGastoGrupoId: grupoIngresoDestino.TipoGastoGrupoId,
-        RegistroDiarioCajaDetalle: detalleEgreso,
-        RegistroDiarioCajaMonto: montoEgreso,
-        UsuarioId: user.id,
-        RegistroDiarioCajaCambio: 0,
-        RegistroDiarioCajaMTCN: 0,
-        RegistroDiarioCajaCargoEnvio: 0,
-      });
-
-      // Ajuste de saldos: aperturada -monto, destino +monto
-      const cajaAperturadaActual = await getCajaById(Number(cajaIdEgreso));
-      const cajaAperturadaMontoActual = Number(cajaAperturadaActual.CajaMonto);
-      await updateCajaMonto(
-        Number(cajaIdEgreso),
-        cajaAperturadaMontoActual - montoNumero
-      );
-
-      const cajaSeleccionadaActual = await getCajaById(cajaSeleccionadaEgreso);
-      const cajaSeleccionadaMontoActual = Number(
-        cajaSeleccionadaActual.CajaMonto
-      );
-      await updateCajaMonto(
-        Number(cajaSeleccionadaEgreso),
-        cajaSeleccionadaMontoActual + montoNumero
-      );
 
       Swal.fire(
         "Egreso registrado",
@@ -260,7 +223,8 @@ export default function PaseCajasTab() {
       setFechaEgreso(`${yyyy}-${mm}-${dd}T${hh}:${min}`);
     } catch (err: unknown) {
       const errorMsg =
-        err instanceof Error ? err.message : "No se pudo registrar el egreso";
+        (err as { message?: string })?.message ||
+        "No se pudo registrar el egreso";
       Swal.fire("Error", errorMsg, "error");
     } finally {
       setIsSubmittingEgreso(false);
@@ -311,52 +275,16 @@ export default function PaseCajasTab() {
         return;
       }
 
-      const montoNumero = Number(montoIngreso);
-
-      // Registro INGRESO en la caja aperturada
-      await createRegistroDiarioCaja({
-        CajaId: cajaIdIngreso,
+      // El backend crea el egreso en la caja origen y el ingreso en la
+      // aperturada, y ajusta ambos saldos, todo en una única transacción: no
+      // puede quedar una pata sin la otra.
+      await createPaseCaja({
+        CajaOrigenId: cajaSeleccionadaIngreso,
+        CajaDestinoId: cajaIdIngreso,
         RegistroDiarioCajaFecha: fechaIngreso,
-        TipoGastoId: tipoGastoIdIngreso,
-        TipoGastoGrupoId: grupoIngresoAperturada.TipoGastoGrupoId,
         RegistroDiarioCajaDetalle: detalleIngreso,
-        RegistroDiarioCajaMonto: montoIngreso,
-        UsuarioId: user.id,
-        RegistroDiarioCajaCambio: 0,
-        RegistroDiarioCajaMTCN: 0,
-        RegistroDiarioCajaCargoEnvio: 0,
+        RegistroDiarioCajaMonto: Number(montoIngreso),
       });
-
-      // Registro EGRESO en la caja origen
-      await createRegistroDiarioCaja({
-        CajaId: cajaSeleccionadaIngreso,
-        RegistroDiarioCajaFecha: fechaIngreso,
-        TipoGastoId: tipoGastoIdEgreso,
-        TipoGastoGrupoId: grupoEgresoOrigen.TipoGastoGrupoId,
-        RegistroDiarioCajaDetalle: detalleIngreso,
-        RegistroDiarioCajaMonto: montoIngreso,
-        UsuarioId: user.id,
-        RegistroDiarioCajaCambio: 0,
-        RegistroDiarioCajaMTCN: 0,
-        RegistroDiarioCajaCargoEnvio: 0,
-      });
-
-      // Ajuste de saldos: aperturada +monto, origen -monto
-      const cajaAperturadaActual = await getCajaById(Number(cajaIdIngreso));
-      const cajaAperturadaMontoActual = Number(cajaAperturadaActual.CajaMonto);
-      await updateCajaMonto(
-        Number(cajaIdIngreso),
-        cajaAperturadaMontoActual + montoNumero
-      );
-
-      const cajaSeleccionadaActual = await getCajaById(cajaSeleccionadaIngreso);
-      const cajaSeleccionadaMontoActual = Number(
-        cajaSeleccionadaActual.CajaMonto
-      );
-      await updateCajaMonto(
-        Number(cajaSeleccionadaIngreso),
-        cajaSeleccionadaMontoActual - montoNumero
-      );
 
       Swal.fire(
         "Ingreso registrado",
@@ -379,7 +307,8 @@ export default function PaseCajasTab() {
       setFechaIngreso(`${yyyy}-${mm}-${dd}T${hh}:${min}`);
     } catch (err: unknown) {
       const errorMsg =
-        err instanceof Error ? err.message : "No se pudo registrar el ingreso";
+        (err as { message?: string })?.message ||
+        "No se pudo registrar el ingreso";
       Swal.fire("Error", errorMsg, "error");
     } finally {
       setIsSubmittingIngreso(false);

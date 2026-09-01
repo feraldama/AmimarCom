@@ -13,9 +13,21 @@ import {
 } from "../utils/pdfReport";
 import type { RegistroCaja } from "./types";
 
-export async function generarMovimientosCajas(desde: string, hasta: string) {
+// cajaIds: cajas a incluir (vacío = todas). tipoGastoId: "1" egresos,
+// "2" ingresos, "" ambos.
+export async function generarMovimientosCajas(
+  desde: string,
+  hasta: string,
+  cajaIds: (string | number)[] = [],
+  tipoGastoId: string = ""
+) {
   validarRango(desde, hasta);
-  const response = await getReporteMovimientosCajas(desde, hasta);
+  const response = await getReporteMovimientosCajas(
+    desde,
+    hasta,
+    cajaIds,
+    tipoGastoId
+  );
   const movimientos = (response.data || []) as RegistroCaja[];
   if (!movimientos.length) {
     throw new SinDatosError("No hay datos para el periodo seleccionado");
@@ -34,8 +46,15 @@ export async function generarMovimientosCajas(desde: string, hasta: string) {
     else caja.tEgr += monto;
   });
 
+  const titulo =
+    tipoGastoId === "1"
+      ? "Movimientos de Cajas - Egresos"
+      : tipoGastoId === "2"
+        ? "Movimientos de Cajas - Ingresos"
+        : "Movimientos de Cajas";
+
   const doc = new jsPDF();
-  let y = pdfHeader(doc, "Movimientos de Cajas", desde, hasta);
+  let y = pdfHeader(doc, titulo, desde, hasta);
 
   porCaja.forEach(({ desc, regs, tIng, tEgr }) => {
     y = pdfSeccion(doc, y, desc, {

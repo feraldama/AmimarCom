@@ -26,6 +26,50 @@ function normalizeRegistroFecha(value) {
   return isNaN(d.getTime()) ? new Date() : d;
 }
 
+// Mapeo override para cajas cuyo grupo PASE no sigue la convención
+// "PASE <CajaDescripcion>" en tipogastogrupo (misma convención que usa el
+// frontend en PaseCajasTab). Ej: CAJA AMIL usa el grupo "PASE JEFE".
+const PASE_GRUPO_OVERRIDE = {
+  "CAJA AMIL": "PASE JEFE",
+};
+
+// Resuelve el grupo PASE de tipogastogrupo para una caja dada y un
+// TipoGastoId (1=Egreso, 2=Ingreso). Devuelve undefined si no existe.
+async function resolvePaseGrupo(client, caja, tipoGastoId) {
+  const desc = String(caja.CajaDescripcion || "")
+    .trim()
+    .toUpperCase();
+  const target = PASE_GRUPO_OVERRIDE[desc] || `PASE ${desc}`;
+  const result = await client.query(
+    `SELECT "TipoGastoId", "TipoGastoGrupoId", "TipoGastoGrupoDescripcion"
+     FROM "tipogastogrupo"
+     WHERE "TipoGastoId" = $1
+       AND UPPER(TRIM("TipoGastoGrupoDescripcion")) = $2`,
+    [tipoGastoId, target]
+  );
+  return result.rows[0];
+}
+
+const INSERT_REGISTRO_QUERY = `
+  INSERT INTO "registrodiariocaja" (
+    "CajaId",
+    "RegistroDiarioCajaFecha",
+    "TipoGastoId",
+    "TipoGastoGrupoId",
+    "RegistroDiarioCajaCambio",
+    "RegistroDiarioCajaDetalle",
+    "RegistroDiarioCajaMTCN",
+    "RegistroDiarioCajaCargoEnvio",
+    "RegistroDiarioCajaMonto",
+    "RegistroDiarioCajaPendiente1",
+    "RegistroDiarioCajaPendiente2",
+    "RegistroDiarioCajaPendiente3",
+    "RegistroDiarioCajaPendiente4",
+    "UsuarioId"
+  ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+  RETURNING "RegistroDiarioCajaId"
+`;
+
 const RegistroDiarioCaja = {
   getAll: async () => {
     const result = await db.query('SELECT * FROM "registrodiariocaja"');
@@ -272,6 +316,185 @@ const RegistroDiarioCaja = {
     return registro;
   },
 
+  // Crea un pase entre cajas de forma atómica: inserta el EGRESO en la caja
+  // origen y el INGRESO en la caja destino, y ajusta ambos saldos, todo dentro
+  // de una única transacción. Los grupos PASE se resuelven acá (no se confía
+  // en el cliente) según la convención "PASE <CajaDescripcion>".
+  createPase: async ({
+    CajaOrigenId,
+    CajaDestinoId,
+    RegistroDiarioCajaFecha,
+    RegistroDiarioCajaDetalle,
+    RegistroDiarioCajaMonto,
+    UsuarioId,
+  }) => {
+    const origenId = Number(CajaOrigenId);
+    const destinoId = Number(CajaDestinoId);
+    const monto = Number(RegistroDiarioCajaMonto);
+    const client = await db.connect();
+    try {
+      await client.query("BEGIN");
+
+      // Bloquear ambas cajas en orden estable (por CajaId) para evitar
+      // deadlocks entre pases concurrentes.
+      const cajasResult = await client.query(
+        `SELECT "CajaId", "CajaDescripcion" FROM "caja"
+         WHERE "CajaId" = ANY($1::int[])
+         ORDER BY "CajaId"
+         FOR UPDATE`,
+        [[origenId, destinoId]]
+      );
+      const cajaOrigen = cajasResult.rows.find(
+        (c) => Number(c.CajaId) === origenId
+      );
+      const cajaDestino = cajasResult.rows.find(
+        (c) => Number(c.CajaId) === destinoId
+      );
+      if (!cajaOrigen || !cajaDestino) {
+        throw new Error("Caja origen o destino no encontrada");
+      }
+
+      // Grupo del EGRESO en la caja origen: "PASE <destino>".
+      // Grupo del INGRESO en la caja destino: "PASE <origen>".
+      const grupoEgreso = await resolvePaseGrupo(client, cajaDestino, 1);
+      const grupoIngreso = await resolvePaseGrupo(client, cajaOrigen, 2);
+      if (!grupoEgreso || !grupoIngreso) {
+        throw new Error(
+          "Falta el grupo 'PASE <CajaDescripcion>' en tipogastogrupo para una de las cajas involucradas"
+        );
+      }
+
+      const fecha = normalizeRegistroFecha(RegistroDiarioCajaFecha);
+
+      const egresoResult = await client.query(INSERT_REGISTRO_QUERY, [
+        origenId,
+        fecha,
+        1,
+        grupoEgreso.TipoGastoGrupoId,
+        0,
+        RegistroDiarioCajaDetalle,
+        0,
+        0,
+        monto,
+        0,
+        0,
+        0,
+        0,
+        UsuarioId,
+      ]);
+      const ingresoResult = await client.query(INSERT_REGISTRO_QUERY, [
+        destinoId,
+        fecha,
+        2,
+        grupoIngreso.TipoGastoGrupoId,
+        0,
+        RegistroDiarioCajaDetalle,
+        0,
+        0,
+        monto,
+        0,
+        0,
+        0,
+        0,
+        UsuarioId,
+      ]);
+
+      await client.query(
+        'UPDATE "caja" SET "CajaMonto" = "CajaMonto" - $1 WHERE "CajaId" = $2',
+        [monto, origenId]
+      );
+      await client.query(
+        'UPDATE "caja" SET "CajaMonto" = "CajaMonto" + $1 WHERE "CajaId" = $2',
+        [monto, destinoId]
+      );
+
+      await client.query("COMMIT");
+      return {
+        egresoId: egresoResult.rows[0].RegistroDiarioCajaId,
+        ingresoId: ingresoResult.rows[0].RegistroDiarioCajaId,
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
+  // Elimina una pata de un pase entre cajas junto con su contrapartida (si se
+  // puede identificar), revirtiendo los saldos de las cajas involucradas.
+  // Todo dentro de una transacción. La contrapartida se identifica por:
+  // tipo opuesto, grupo "PASE ...", mismo monto, misma fecha, mismo usuario y
+  // distinta caja. Si no existe (pata huérfana), se elimina sólo el registro
+  // recibido y se revierte únicamente su caja.
+  deletePase: async (registro) => {
+    const registroId = Number(registro.RegistroDiarioCajaId);
+    const monto = Number(registro.RegistroDiarioCajaMonto) || 0;
+    const tipoOpuesto = Number(registro.TipoGastoId) === 1 ? 2 : 1;
+    const client = await db.connect();
+    try {
+      await client.query("BEGIN");
+
+      const contrapartidaResult = await client.query(
+        `SELECT r."RegistroDiarioCajaId", r."CajaId", r."TipoGastoId",
+                r."RegistroDiarioCajaMonto"
+         FROM "registrodiariocaja" r
+         JOIN "tipogastogrupo" tg
+           ON r."TipoGastoId" = tg."TipoGastoId"
+          AND r."TipoGastoGrupoId" = tg."TipoGastoGrupoId"
+         WHERE r."TipoGastoId" = $1
+           AND TRIM(tg."TipoGastoGrupoDescripcion") ILIKE 'PASE %'
+           AND r."RegistroDiarioCajaMonto" = $2
+           AND r."RegistroDiarioCajaFecha" = $3
+           AND r."UsuarioId" = $4
+           AND r."CajaId" <> $5
+           AND r."RegistroDiarioCajaId" <> $6
+         ORDER BY r."RegistroDiarioCajaId"
+         LIMIT 1
+         FOR UPDATE OF r`,
+        [
+          tipoOpuesto,
+          monto,
+          registro.RegistroDiarioCajaFecha,
+          registro.UsuarioId,
+          registro.CajaId,
+          registroId,
+        ]
+      );
+      const contrapartida = contrapartidaResult.rows[0] || null;
+
+      const patas = contrapartida ? [registro, contrapartida] : [registro];
+      for (const pata of patas) {
+        // Revertir: un EGRESO había restado (ahora suma), un INGRESO había
+        // sumado (ahora resta).
+        const esEgreso = Number(pata.TipoGastoId) === 1;
+        const montoPata = Number(pata.RegistroDiarioCajaMonto) || 0;
+        await client.query(
+          `UPDATE "caja" SET "CajaMonto" = "CajaMonto" ${esEgreso ? "+" : "-"} $1
+           WHERE "CajaId" = $2`,
+          [montoPata, pata.CajaId]
+        );
+        await client.query(
+          'DELETE FROM "registrodiariocaja" WHERE "RegistroDiarioCajaId" = $1',
+          [pata.RegistroDiarioCajaId]
+        );
+      }
+
+      await client.query("COMMIT");
+      return {
+        eliminados: patas.map((p) => Number(p.RegistroDiarioCajaId)),
+        contrapartidaId: contrapartida
+          ? Number(contrapartida.RegistroDiarioCajaId)
+          : null,
+      };
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+  },
+
   update: async (id, registroData) => {
     // Construir la consulta dinamicamente
     let updateFields = [];
@@ -468,12 +691,24 @@ const RegistroDiarioCaja = {
     return { cajas: cajasResult.rows, movimientos: movsResult.rows };
   },
 
-  getReporteMovimientosCajas: async (fechaDesde, fechaHasta, cajaId) => {
+  // cajaIds: lista opcional de CajaId a incluir (vacía/undefined = todas).
+  // tipoGastoId: opcional, 1=egresos o 2=ingresos (undefined = ambos).
+  getReporteMovimientosCajas: async (
+    fechaDesde,
+    fechaHasta,
+    cajaIds,
+    tipoGastoId
+  ) => {
     const params = [fechaDesde, fechaHasta];
     let filtroCaja = "";
-    if (cajaId) {
-      params.push(cajaId);
-      filtroCaja = `AND r."CajaId" = $${params.length}`;
+    if (Array.isArray(cajaIds) && cajaIds.length > 0) {
+      params.push(cajaIds.map(Number));
+      filtroCaja = `AND r."CajaId" = ANY($${params.length}::int[])`;
+    }
+    let filtroTipo = "";
+    if (tipoGastoId) {
+      params.push(Number(tipoGastoId));
+      filtroTipo = `AND r."TipoGastoId" = $${params.length}`;
     }
     const result = await db.query(
       `SELECT r.*,
@@ -491,6 +726,7 @@ const RegistroDiarioCaja = {
         AND r."RegistroDiarioCajaFecha"::date >= $1::date
         AND r."RegistroDiarioCajaFecha"::date <= $2::date
         ${filtroCaja}
+        ${filtroTipo}
       ORDER BY r."RegistroDiarioCajaId" ASC`,
       params
     );
@@ -539,7 +775,10 @@ const RegistroDiarioCaja = {
 
   // Movimientos Western: los grupos siguen la convención "1 WESTERN ..." (Gs.)
   // y "2 WESTERN ..." (USD con cotización); prefijo selecciona la moneda.
-  getReporteWestern: async (fechaDesde, fechaHasta, prefijo) => {
+  // prefijos: lista de prefijos de descripción de grupo a incluir
+  // (ej: ["1 WESTERN"] o ["2 WESTERN", "3 WESTERN"]).
+  getReporteWestern: async (fechaDesde, fechaHasta, prefijos) => {
+    const patrones = prefijos.map((p) => `${p}%`);
     const result = await db.query(
       `SELECT r.*,
         c."CajaDescripcion",
@@ -549,11 +788,11 @@ const RegistroDiarioCaja = {
       JOIN "tipogastogrupo" tg ON r."TipoGastoId" = tg."TipoGastoId" AND r."TipoGastoGrupoId" = tg."TipoGastoGrupoId"
       LEFT JOIN "caja" c ON r."CajaId" = c."CajaId"
       LEFT JOIN "usuario" u ON r."UsuarioId" = u."UsuarioId"
-      WHERE TRIM(tg."TipoGastoGrupoDescripcion") ILIKE $3
+      WHERE TRIM(tg."TipoGastoGrupoDescripcion") ILIKE ANY($3)
         AND r."RegistroDiarioCajaFecha"::date >= $1::date
         AND r."RegistroDiarioCajaFecha"::date <= $2::date
       ORDER BY r."TipoGastoId", r."RegistroDiarioCajaId" ASC`,
-      [fechaDesde, fechaHasta, `${prefijo}%`]
+      [fechaDesde, fechaHasta, patrones]
     );
     return result.rows;
   },

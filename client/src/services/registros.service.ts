@@ -102,6 +102,27 @@ export const createRegistroDiarioCaja = async (
   }
 };
 
+// Registra un pase entre cajas de forma atómica: el backend crea el egreso
+// en la caja origen y el ingreso en la caja destino, y ajusta ambos saldos,
+// dentro de una única transacción.
+export const createPaseCaja = async (paseData: {
+  CajaOrigenId: string | number;
+  CajaDestinoId: string | number;
+  RegistroDiarioCajaFecha: string;
+  RegistroDiarioCajaDetalle: string;
+  RegistroDiarioCajaMonto: number;
+}) => {
+  try {
+    const response = await api.post("/registrodiariocaja/pase", paseData);
+    return response.data;
+  } catch (error) {
+    const axiosError = error as AxiosError<{ message?: string }>;
+    throw (
+      axiosError.response?.data || { message: "Error al registrar el pase" }
+    );
+  }
+};
+
 export const updateRegistroDiarioCaja = async (
   id: string | number,
   registroData: Record<string, unknown>
@@ -184,11 +205,13 @@ export const getReportePaseCajas = async (
 export const getReporteMovimientosCajas = async (
   fechaInicio: string,
   fechaFin: string,
-  cajaId?: string | number
+  cajaIds?: (string | number)[],
+  tipoGastoId?: string | number
 ) => {
   try {
     const params: { [key: string]: string | number } = { fechaInicio, fechaFin };
-    if (cajaId) params.cajaId = cajaId;
+    if (cajaIds && cajaIds.length > 0) params.cajaIds = cajaIds.join(",");
+    if (tipoGastoId) params.tipo = tipoGastoId;
     const response = await api.get(
       "/registrodiariocaja/reporte-movimientos-cajas",
       { params }
