@@ -4,6 +4,7 @@ import { formatMiles } from "../utils/utils";
 import {
   PDF_COLORS,
   pdfHeader,
+  pdfFiltroCajas,
   pdfFooter,
   pdfSeccion,
   abrirPdf,
@@ -12,20 +13,20 @@ import {
   SinDatosError,
   validarRango,
 } from "../utils/pdfReport";
-import type { RegistroCaja } from "./types";
+import type { RegistroCaja, CajaFiltro } from "./types";
 
 async function generar(
   desde: string,
   hasta: string,
   titulo: string,
   archivo: string,
-  cajaId?: string | number
+  cajasFiltro: CajaFiltro[] = []
 ) {
   validarRango(desde, hasta);
   const response = await getReporteMovimientosCajas(
     desde,
     hasta,
-    cajaId ? [cajaId] : []
+    cajasFiltro.map((c) => c.id)
   );
   const movimientos = (response.data || []) as RegistroCaja[];
   if (!movimientos.length) {
@@ -43,6 +44,7 @@ async function generar(
 
   const doc = new jsPDF("landscape");
   let y = pdfHeader(doc, titulo, desde, hasta);
+  y = pdfFiltroCajas(doc, y, cajasFiltro.map((c) => c.desc));
 
   porCaja.forEach(({ desc, regs }) => {
     y = pdfSeccion(doc, y, desc, {
@@ -112,12 +114,25 @@ async function generar(
 }
 
 /** Todos los movimientos de todas las cajas tipo 1, con control de cierre. */
-export const generarRegistroDiario = (desde: string, hasta: string) =>
-  generar(desde, hasta, "Registro Diario - Apertura/Cierre", "registro-diario.pdf");
+export const generarRegistroDiario = (
+  desde: string,
+  hasta: string,
+  cajasFiltro: CajaFiltro[] = []
+) =>
+  generar(
+    desde,
+    hasta,
+    "Registro Diario - Apertura/Cierre",
+    "registro-diario.pdf",
+    cajasFiltro
+  );
 
 /** Igual que Registro Diario pero filtrado a una sola caja. */
 export const generarIngresoEgresoPorCaja = (
   desde: string,
   hasta: string,
   cajaId: string | number
-) => generar(desde, hasta, "Ingreso/Egreso por Caja", "ingreso-egreso-por-caja.pdf", cajaId);
+) =>
+  generar(desde, hasta, "Ingreso/Egreso por Caja", "ingreso-egreso-por-caja.pdf", [
+    { id: cajaId, desc: "" },
+  ]);

@@ -3,6 +3,7 @@ import { getReporteAnticipos } from "../services/registros.service";
 import { formatMiles, formatMilesSmart } from "../utils/utils";
 import {
   pdfHeader,
+  pdfFiltroCajas,
   pdfFooter,
   pdfSeccion,
   pdfCuadroControl,
@@ -11,6 +12,7 @@ import {
   SinDatosError,
   validarRango,
 } from "../utils/pdfReport";
+import type { CajaFiltro } from "./types";
 
 interface AnticipoMovimiento {
   RegistroDiarioCajaId: number;
@@ -26,16 +28,27 @@ interface AnticipoMovimiento {
   UsuarioNombre: string;
 }
 
-export async function generarAnticipos(desde: string, hasta: string, grupo: string) {
+export async function generarAnticipos(
+  desde: string,
+  hasta: string,
+  grupo: string,
+  cajasFiltro: CajaFiltro[] = []
+) {
   validarRango(desde, hasta);
-  const r = await getReporteAnticipos(desde, hasta, grupo);
+  const r = await getReporteAnticipos(
+    desde,
+    hasta,
+    grupo,
+    cajasFiltro.map((c) => c.id)
+  );
   const movimientos = (r.movimientos || []) as AnticipoMovimiento[];
   if (!movimientos.length) {
     throw new SinDatosError("No hay movimientos del grupo en el periodo seleccionado");
   }
 
   const doc = new jsPDF("landscape");
-  const y0 = pdfHeader(doc, `Anticipos - ${grupo}`, desde, hasta);
+  let y0 = pdfHeader(doc, `Anticipos - ${grupo}`, desde, hasta);
+  y0 = pdfFiltroCajas(doc, y0, cajasFiltro.map((c) => c.desc));
 
   const y = pdfSeccion(doc, y0, "", {
     head: ["Registro", "Tipo", "Detalle", "Fecha", "Egreso Gs.", "Ingreso Gs.", "Cotización", "Monto U$D", "Usuario"],

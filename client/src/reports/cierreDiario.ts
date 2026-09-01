@@ -3,12 +3,14 @@ import { getReporteCierreDiario } from "../services/registros.service";
 import { formatMiles } from "../utils/utils";
 import {
   pdfHeader,
+  pdfFiltroCajas,
   pdfFooter,
   pdfSeccion,
   abrirPdf,
   SinDatosError,
   validarRango,
 } from "../utils/pdfReport";
+import type { CajaFiltro } from "./types";
 
 interface CierreCaja {
   CajaDescripcion: string;
@@ -18,9 +20,17 @@ interface CierreCaja {
   CantMovimientos: number;
 }
 
-export async function generarCierreDiario(desde: string, hasta: string) {
+export async function generarCierreDiario(
+  desde: string,
+  hasta: string,
+  cajasFiltro: CajaFiltro[] = []
+) {
   validarRango(desde, hasta);
-  const response = await getReporteCierreDiario(desde, hasta);
+  const response = await getReporteCierreDiario(
+    desde,
+    hasta,
+    cajasFiltro.map((c) => c.id)
+  );
   const data = (response.data || []) as CierreCaja[];
   if (!data.length) {
     throw new SinDatosError("No hay datos para el periodo seleccionado");
@@ -30,7 +40,8 @@ export async function generarCierreDiario(desde: string, hasta: string) {
   const totEgr = data.reduce((s, r) => s + Number(r.TotalEgresos), 0);
 
   const doc = new jsPDF();
-  const y = pdfHeader(doc, "Cierre Diario de Caja", desde, hasta);
+  let y = pdfHeader(doc, "Cierre Diario de Caja", desde, hasta);
+  y = pdfFiltroCajas(doc, y, cajasFiltro.map((c) => c.desc));
 
   pdfSeccion(doc, y, "", {
     head: ["Caja", "Ingresos Gs.", "Egresos Gs.", "Saldo Gs.", "Mov."],

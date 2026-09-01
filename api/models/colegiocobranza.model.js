@@ -337,7 +337,14 @@ const ColegioCobranza = {
 
   // Cobranzas de un colegio en un rango de fechas, con alumno, curso e
   // importe de la cuota. Ordenado por curso y alumno para el reporte.
-  getReporteCobranzas: async (fechaDesde, fechaHasta, colegioId) => {
+  // cajaIds: lista opcional de CajaId a incluir (vacía = todas)
+  getReporteCobranzas: async (fechaDesde, fechaHasta, colegioId, cajaIds) => {
+    const params = [fechaDesde, fechaHasta, colegioId];
+    let filtroCajas = "";
+    if (Array.isArray(cajaIds) && cajaIds.length > 0) {
+      params.push(cajaIds.map(Number));
+      filtroCajas = `AND cc."CajaId" = ANY($${params.length}::int[])`;
+    }
     const result = await db.query(
       `SELECT cc.*,
         n."NominaNombre",
@@ -357,8 +364,9 @@ const ColegioCobranza = {
       WHERE n."ColegioId" = $3
         AND cc."ColegioCobranzaFecha"::date >= $1::date
         AND cc."ColegioCobranzaFecha"::date <= $2::date
+        ${filtroCajas}
       ORDER BY cur."ColegioCursoNombre", n."NominaApellido", n."NominaNombre", cc."ColegioCobranzaFecha"`,
-      [fechaDesde, fechaHasta, colegioId]
+      params
     );
     return result.rows;
   },

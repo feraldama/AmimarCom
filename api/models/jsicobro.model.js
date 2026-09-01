@@ -278,7 +278,14 @@ const JSICobro = {
 
   // Cobros JSI de un rango de fechas con el cliente, para el reporte de
   // rendición a la Junta de Saneamiento.
-  getReporteCobros: async (fechaDesde, fechaHasta) => {
+  // cajaIds: lista opcional de CajaId a incluir (vacía = todas)
+  getReporteCobros: async (fechaDesde, fechaHasta, cajaIds) => {
+    const params = [fechaDesde, fechaHasta];
+    let filtroCajas = "";
+    if (Array.isArray(cajaIds) && cajaIds.length > 0) {
+      params.push(cajaIds.map(Number));
+      filtroCajas = `AND j."CajaId" = ANY($${params.length}::int[])`;
+    }
     const result = await db.query(
       `SELECT j.*,
         cl."ClienteNombre",
@@ -289,8 +296,9 @@ const JSICobro = {
       LEFT JOIN "usuario" u ON j."JSICobroUsuarioId" = u."UsuarioId"
       WHERE j."JSICobroFecha"::date >= $1::date
         AND j."JSICobroFecha"::date <= $2::date
+        ${filtroCajas}
       ORDER BY j."JSICobroFecha" ASC, j."JSICobroId" ASC`,
-      [fechaDesde, fechaHasta]
+      params
     );
     return result.rows;
   },

@@ -4,6 +4,7 @@ import { formatMiles, formatMilesSmart } from "../utils/utils";
 import {
   PDF_COLORS,
   pdfHeader,
+  pdfFiltroCajas,
   pdfFooter,
   pdfSeccion,
   pdfCuadroControl,
@@ -12,6 +13,7 @@ import {
   validarRango,
   type RGB,
 } from "../utils/pdfReport";
+import type { CajaFiltro } from "./types";
 
 interface GrupoComercio {
   TipoGastoId: number;
@@ -22,9 +24,17 @@ interface GrupoComercio {
   CantMovimientos: number;
 }
 
-export async function generarElComercio(desde: string, hasta: string) {
+export async function generarElComercio(
+  desde: string,
+  hasta: string,
+  cajasFiltro: CajaFiltro[] = []
+) {
   validarRango(desde, hasta);
-  const r = await getReporteElComercio(desde, hasta);
+  const r = await getReporteElComercio(
+    desde,
+    hasta,
+    cajasFiltro.map((c) => c.id)
+  );
   const egresos = (r.egresos || []) as GrupoComercio[];
   const ingresos = (r.ingresos || []) as GrupoComercio[];
   if (!egresos.length && !ingresos.length) {
@@ -33,6 +43,7 @@ export async function generarElComercio(desde: string, hasta: string) {
 
   const doc = new jsPDF();
   let y = pdfHeader(doc, "El Comercio - Ingresos/Egresos", desde, hasta);
+  y = pdfFiltroCajas(doc, y, cajasFiltro.map((c) => c.desc));
 
   const seccion = (titulo: string, rows: GrupoComercio[], totalGs: number, totalUsd: number, color: RGB) =>
     pdfSeccion(doc, y, titulo, {

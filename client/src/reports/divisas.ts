@@ -3,12 +3,14 @@ import { getReporteDivisas } from "../services/registros.service";
 import { formatMilesSmart } from "../utils/utils";
 import {
   pdfHeader,
+  pdfFiltroCajas,
   pdfFooter,
   pdfSeccion,
   abrirPdf,
   SinDatosError,
   validarRango,
 } from "../utils/pdfReport";
+import type { CajaFiltro } from "./types";
 
 interface DivisaResumen {
   DivisaNombre: string;
@@ -31,9 +33,17 @@ interface DivisaMovimiento {
   CajaDescripcion: string;
 }
 
-export async function generarDivisas(desde: string, hasta: string) {
+export async function generarDivisas(
+  desde: string,
+  hasta: string,
+  cajasFiltro: CajaFiltro[] = []
+) {
   validarRango(desde, hasta);
-  const response = await getReporteDivisas(desde, hasta);
+  const response = await getReporteDivisas(
+    desde,
+    hasta,
+    cajasFiltro.map((c) => c.id)
+  );
   const resumen = (response.resumen || []) as DivisaResumen[];
   const data = (response.data || []) as DivisaMovimiento[];
   if (!data.length) {
@@ -42,6 +52,7 @@ export async function generarDivisas(desde: string, hasta: string) {
 
   const doc = new jsPDF("landscape");
   let y = pdfHeader(doc, "Historial de Cambio de Divisas", desde, hasta);
+  y = pdfFiltroCajas(doc, y, cajasFiltro.map((c) => c.desc));
 
   if (resumen.length) {
     y = pdfSeccion(doc, y, "Resumen por Divisa", {

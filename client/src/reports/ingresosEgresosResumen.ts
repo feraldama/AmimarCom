@@ -4,6 +4,7 @@ import { formatMiles } from "../utils/utils";
 import {
   PDF_COLORS,
   pdfHeader,
+  pdfFiltroCajas,
   pdfFooter,
   pdfSeccion,
   abrirPdf,
@@ -12,6 +13,7 @@ import {
   validarRango,
   type RGB,
 } from "../utils/pdfReport";
+import type { CajaFiltro } from "./types";
 
 interface GrupoResumen {
   TipoGastoId: number;
@@ -21,9 +23,17 @@ interface GrupoResumen {
   CantMovimientos: number;
 }
 
-export async function generarIngresosEgresosResumen(desde: string, hasta: string) {
+export async function generarIngresosEgresosResumen(
+  desde: string,
+  hasta: string,
+  cajasFiltro: CajaFiltro[] = []
+) {
   validarRango(desde, hasta);
-  const r = await getReporteIngresosEgresos(desde, hasta);
+  const r = await getReporteIngresosEgresos(
+    desde,
+    hasta,
+    cajasFiltro.map((c) => c.id)
+  );
   const egresos = (r.egresos || []) as GrupoResumen[];
   const ingresos = (r.ingresos || []) as GrupoResumen[];
   if (!egresos.length && !ingresos.length) {
@@ -32,6 +42,7 @@ export async function generarIngresosEgresosResumen(desde: string, hasta: string
 
   const doc = new jsPDF();
   let y = pdfHeader(doc, "Ingresos / Egresos - Resumen", desde, hasta);
+  y = pdfFiltroCajas(doc, y, cajasFiltro.map((c) => c.desc));
 
   const seccion = (titulo: string, rows: GrupoResumen[], total: number, color: RGB) =>
     pdfSeccion(doc, y, titulo, {

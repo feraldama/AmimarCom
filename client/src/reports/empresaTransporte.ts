@@ -3,6 +3,7 @@ import { getReporteEmpresaTransporte } from "../services/pagotrans.service";
 import { formatMiles, formatMilesSmart } from "../utils/utils";
 import {
   pdfHeader,
+  pdfFiltroCajas,
   pdfFooter,
   pdfSeccion,
   pdfCuadroControl,
@@ -11,6 +12,7 @@ import {
   SinDatosError,
   validarRango,
 } from "../utils/pdfReport";
+import type { CajaFiltro } from "./types";
 
 interface PagoTransporte {
   PagoTransId: number;
@@ -29,22 +31,29 @@ export async function generarEmpresaTransporte(
   desde: string,
   hasta: string,
   transporteId: string | number,
-  transporteNombre: string
+  transporteNombre: string,
+  cajasFiltro: CajaFiltro[] = []
 ) {
   validarRango(desde, hasta);
-  const r = await getReporteEmpresaTransporte(desde, hasta, transporteId);
+  const r = await getReporteEmpresaTransporte(
+    desde,
+    hasta,
+    transporteId,
+    cajasFiltro.map((c) => c.id)
+  );
   const data = (r.data || []) as PagoTransporte[];
   if (!data.length) {
     throw new SinDatosError("No hay ventas de pasajes de la empresa en el periodo seleccionado");
   }
 
   const doc = new jsPDF();
-  const y0 = pdfHeader(
+  let y0 = pdfHeader(
     doc,
     `Empresa de Transporte - ${transporteNombre || r.transporteNombre || ""}`.trim(),
     desde,
     hasta
   );
+  y0 = pdfFiltroCajas(doc, y0, cajasFiltro.map((c) => c.desc));
 
   const y = pdfSeccion(doc, y0, "", {
     head: ["N° Boleto", "Fecha Venta", "Pasajero", "Monto Gs.", "Liquidación Gs.", "Usuario"],

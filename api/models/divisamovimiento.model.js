@@ -306,7 +306,14 @@ const DivisaMovimiento = {
 
   // ── REPORTES ──
 
-  getReporteHistorial: async (fechaDesde, fechaHasta) => {
+  // cajaIds: lista opcional de CajaId a incluir (vacía = todas)
+  getReporteHistorial: async (fechaDesde, fechaHasta, cajaIds) => {
+    const params = [fechaDesde, fechaHasta];
+    let filtroCajas = "";
+    if (Array.isArray(cajaIds) && cajaIds.length > 0) {
+      params.push(cajaIds.map(Number));
+      filtroCajas = `AND dm."CajaId" = ANY($${params.length}::int[])`;
+    }
     const result = await db.query(
       `SELECT
         dm.*,
@@ -319,13 +326,21 @@ const DivisaMovimiento = {
       LEFT JOIN "caja" c ON dm."CajaId" = c."CajaId"
       WHERE dm."DivisaMovimientoFecha"::date >= $1::date
         AND dm."DivisaMovimientoFecha"::date <= $2::date
+        ${filtroCajas}
       ORDER BY dm."DivisaMovimientoFecha" ASC, dm."DivisaMovimientoId" ASC`,
-      [fechaDesde, fechaHasta]
+      params
     );
     return result.rows;
   },
 
-  getReporteResumen: async (fechaDesde, fechaHasta) => {
+  // cajaIds: lista opcional de CajaId a incluir (vacía = todas)
+  getReporteResumen: async (fechaDesde, fechaHasta, cajaIds) => {
+    const params = [fechaDesde, fechaHasta];
+    let filtroCajas = "";
+    if (Array.isArray(cajaIds) && cajaIds.length > 0) {
+      params.push(cajaIds.map(Number));
+      filtroCajas = `AND dm."CajaId" = ANY($${params.length}::int[])`;
+    }
     const result = await db.query(
       `SELECT
         d."DivisaId",
@@ -339,9 +354,10 @@ const DivisaMovimiento = {
       JOIN "divisa" d ON dm."DivisaId" = d."DivisaId"
       WHERE dm."DivisaMovimientoFecha"::date >= $1::date
         AND dm."DivisaMovimientoFecha"::date <= $2::date
+        ${filtroCajas}
       GROUP BY d."DivisaId", d."DivisaNombre"
       ORDER BY d."DivisaNombre"`,
-      [fechaDesde, fechaHasta]
+      params
     );
     return result.rows;
   },

@@ -14,6 +14,11 @@ router.get(
   registroDiarioCajaController.estadoAperturaPorUsuario
 );
 router.get(
+  "/ultimo-cierre",
+  authMiddleware,
+  registroDiarioCajaController.ultimoCierrePorCaja
+);
+router.get(
   "/reporte-pase-cajas",
   authMiddleware,
   registroDiarioCajaController.reportePaseCajas

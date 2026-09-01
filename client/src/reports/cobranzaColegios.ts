@@ -3,6 +3,7 @@ import { getReporteCobranzaColegio } from "../services/colegiocobranza.service";
 import { formatMiles, formatMilesSmart } from "../utils/utils";
 import {
   pdfHeader,
+  pdfFiltroCajas,
   pdfFooter,
   pdfSeccion,
   pdfCuadroControl,
@@ -11,6 +12,7 @@ import {
   SinDatosError,
   validarRango,
 } from "../utils/pdfReport";
+import type { CajaFiltro } from "./types";
 
 interface CobranzaColegio {
   ColegioCobranzaId: number;
@@ -35,10 +37,16 @@ export async function generarCobranzaColegios(
   desde: string,
   hasta: string,
   colegioId: string | number,
-  colegioNombre: string
+  colegioNombre: string,
+  cajasFiltro: CajaFiltro[] = []
 ) {
   validarRango(desde, hasta);
-  const r = await getReporteCobranzaColegio(desde, hasta, colegioId);
+  const r = await getReporteCobranzaColegio(
+    desde,
+    hasta,
+    colegioId,
+    cajasFiltro.map((c) => c.id)
+  );
   const data = (r.data || []) as CobranzaColegio[];
   if (!data.length) {
     throw new SinDatosError("No hay cobranzas del colegio en el periodo seleccionado");
@@ -53,6 +61,7 @@ export async function generarCobranzaColegios(
 
   const doc = new jsPDF("landscape");
   let y = pdfHeader(doc, `Cobranza - ${colegioNombre || r.colegioNombre || "Colegio"}`, desde, hasta);
+  y = pdfFiltroCajas(doc, y, cajasFiltro.map((c) => c.desc));
 
   porCurso.forEach((rows, curso) => {
     const sum = (fn: (c: CobranzaColegio) => number) =>

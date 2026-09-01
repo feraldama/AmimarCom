@@ -148,12 +148,13 @@ export const searchJSICobros = async (
 
 export const getReporteJSICobros = async (
   fechaInicio: string,
-  fechaFin: string
+  fechaFin: string,
+  cajaIds?: (string | number)[]
 ) => {
   try {
-    const response = await api.get("/jsicobro/reporte", {
-      params: { fechaInicio, fechaFin },
-    });
+    const params: { [key: string]: string | number } = { fechaInicio, fechaFin };
+    if (cajaIds && cajaIds.length > 0) params.cajaIds = cajaIds.join(",");
+    const response = await api.get("/jsicobro/reporte", { params });
     return response.data;
   } catch (error) {
     const axiosError = error as AxiosError<{ message?: string }>;

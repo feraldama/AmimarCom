@@ -9,6 +9,11 @@ export interface RegistroDiarioCajaFiltros {
   tipoGastoGrupoId?: string | number;
 }
 
+// Convierte la lista de cajas seleccionadas al parámetro `cajaIds` que
+// esperan los endpoints de reportes (lista vacía = todas las cajas).
+const cajaIdsParam = (cajaIds?: (string | number)[]) =>
+  cajaIds && cajaIds.length > 0 ? { cajaIds: cajaIds.join(",") } : {};
+
 const buildFiltrosParams = (filtros?: RegistroDiarioCajaFiltros) => {
   const params: { [key: string]: string | number } = {};
   if (!filtros) return params;
@@ -185,11 +190,12 @@ export const findRegistroDiarioCajaByDivisaMovimientoId = async (
 
 export const getReportePaseCajas = async (
   fechaInicio: string,
-  fechaFin: string
+  fechaFin: string,
+  cajaIds?: (string | number)[]
 ) => {
   try {
     const response = await api.get("/registrodiariocaja/reporte-pase-cajas", {
-      params: { fechaInicio, fechaFin },
+      params: { fechaInicio, fechaFin, ...cajaIdsParam(cajaIds) },
     });
     return response.data;
   } catch (error) {
@@ -229,12 +235,13 @@ export const getReporteMovimientosCajas = async (
 
 export const getReporteCierreDiario = async (
   fechaInicio: string,
-  fechaFin: string
+  fechaFin: string,
+  cajaIds?: (string | number)[]
 ) => {
   try {
     const response = await api.get(
       "/registrodiariocaja/reporte-cierre-diario",
-      { params: { fechaInicio, fechaFin } }
+      { params: { fechaInicio, fechaFin, ...cajaIdsParam(cajaIds) } }
     );
     return response.data;
   } catch (error) {
@@ -249,12 +256,13 @@ export const getReporteCierreDiario = async (
 
 export const getReporteIngresosEgresos = async (
   fechaInicio: string,
-  fechaFin: string
+  fechaFin: string,
+  cajaIds?: (string | number)[]
 ) => {
   try {
     const response = await api.get(
       "/registrodiariocaja/reporte-ingresos-egresos",
-      { params: { fechaInicio, fechaFin } }
+      { params: { fechaInicio, fechaFin, ...cajaIdsParam(cajaIds) } }
     );
     return response.data;
   } catch (error) {
@@ -270,11 +278,12 @@ export const getReporteIngresosEgresos = async (
 export const getReporteWestern = async (
   fechaInicio: string,
   fechaFin: string,
-  moneda: "gs" | "usd" = "gs"
+  moneda: "gs" | "usd" = "gs",
+  cajaIds?: (string | number)[]
 ) => {
   try {
     const response = await api.get("/registrodiariocaja/reporte-western", {
-      params: { fechaInicio, fechaFin, moneda },
+      params: { fechaInicio, fechaFin, moneda, ...cajaIdsParam(cajaIds) },
     });
     return response.data;
   } catch (error) {
@@ -290,11 +299,12 @@ export const getReporteWestern = async (
 export const getReporteAnticipos = async (
   fechaInicio: string,
   fechaFin: string,
-  grupo: string
+  grupo: string,
+  cajaIds?: (string | number)[]
 ) => {
   try {
     const response = await api.get("/registrodiariocaja/reporte-anticipos", {
-      params: { fechaInicio, fechaFin, grupo },
+      params: { fechaInicio, fechaFin, grupo, ...cajaIdsParam(cajaIds) },
     });
     return response.data;
   } catch (error) {
@@ -309,12 +319,13 @@ export const getReporteAnticipos = async (
 
 export const getReporteElComercio = async (
   fechaInicio: string,
-  fechaFin: string
+  fechaFin: string,
+  cajaIds?: (string | number)[]
 ) => {
   try {
     const response = await api.get(
       "/registrodiariocaja/reporte-el-comercio",
-      { params: { fechaInicio, fechaFin } }
+      { params: { fechaInicio, fechaFin, ...cajaIdsParam(cajaIds) } }
     );
     return response.data;
   } catch (error) {
@@ -381,11 +392,12 @@ export const getReporteDeudasPendientes = async () => {
 
 export const getReporteDivisas = async (
   fechaInicio: string,
-  fechaFin: string
+  fechaFin: string,
+  cajaIds?: (string | number)[]
 ) => {
   try {
     const response = await api.get("/divisamovimiento/reporte-historial", {
-      params: { fechaInicio, fechaFin },
+      params: { fechaInicio, fechaFin, ...cajaIdsParam(cajaIds) },
     });
     return response.data;
   } catch (error) {

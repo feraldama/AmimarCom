@@ -1,6 +1,7 @@
 const RegistroDiarioCaja = require("../models/registrodiariocaja.model");
 const CajaGasto = require("../models/cajagasto.model");
 const db = require("../config/db");
+const { parseCajaIds } = require("../utils/reportes");
 
 // Obtener todos los registros con paginación
 // Lee los parámetros de filtro de la query (compartidos por getAll y search)
@@ -505,6 +506,29 @@ exports.delete = async (req, res) => {
   }
 };
 
+// Último cierre de una caja (monto y fecha). El frontend lo usa para mostrar
+// el monto con el que se va a aperturar. cierre: null si nunca se cerró.
+exports.ultimoCierrePorCaja = async (req, res) => {
+  try {
+    const { cajaId } = req.query;
+    if (!cajaId) {
+      return res.status(400).json({ message: "Falta el parámetro cajaId" });
+    }
+    const cierre = await RegistroDiarioCaja.getUltimoCierre(cajaId);
+    res.json({
+      cierre: cierre
+        ? {
+            monto: Number(cierre.RegistroDiarioCajaMonto) || 0,
+            fecha: cierre.RegistroDiarioCajaFecha,
+          }
+        : null,
+    });
+  } catch (error) {
+    console.error("Error al consultar último cierre de caja:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 exports.aperturaCierreCaja = async (req, res) => {
   try {
     const {
@@ -577,9 +601,14 @@ exports.aperturaCierreCaja = async (req, res) => {
     );
     const caja = cajaResult.rows[0];
     const CajaDescripcion = caja ? caja.CajaDescripcion : "";
-    // APERTURA: el monto de apertura es el CajaMonto de la caja (valor fijo)
+    // APERTURA: se abre con el monto del último cierre de la caja — lo que
+    // realmente quedó en el cajón según el arqueo, incluido el sobrante o
+    // faltante con el que se cerró. Si la caja nunca se cerró, se usa el
+    // CajaMonto como valor inicial.
     if (apertura == 0) {
-      const montoApertura = Number(caja?.CajaMonto) || 0;
+      const montoApertura = cierreReg
+        ? Number(cierreReg.RegistroDiarioCajaMonto) || 0
+        : Number(caja?.CajaMonto) || 0;
       // Crear registro de apertura
       await RegistroDiarioCaja.create({
         CajaId,
@@ -655,6 +684,7 @@ exports.reportePaseCajas = async (req, res) => {
     const { cajas, movimientos } = await RegistroDiarioCaja.getReportePaseCajas(
       fechaInicio,
       fechaFin,
+      parseCajaIds(req.query),
     );
 
     // Todas las cajas tipo 1 se listan, tengan o no pases en el período
@@ -709,7 +739,7 @@ exports.reporteMovimientosCajas = async (req, res) => {
   try {
     // cajaIds: lista separada por comas (ej: "4,5"); se mantiene cajaId
     // (individual) por compatibilidad. tipo: 1=egresos, 2=ingresos.
-    const { fechaInicio, fechaFin, cajaId, cajaIds, tipo } = req.query;
+    const { fechaInicio, fechaFin, cajaId, tipo } = req.query;
 
     if (!fechaInicio || !fechaFin) {
       return res.status(400).json({
@@ -717,13 +747,8 @@ exports.reporteMovimientosCajas = async (req, res) => {
       });
     }
 
-    let listaCajas = [];
-    if (cajaIds) {
-      listaCajas = String(cajaIds)
-        .split(",")
-        .map((id) => Number(id.trim()))
-        .filter((id) => !isNaN(id) && id > 0);
-    } else if (cajaId) {
+    let listaCajas = parseCajaIds(req.query);
+    if (listaCajas.length === 0 && cajaId) {
       listaCajas = [Number(cajaId)];
     }
 
@@ -755,7 +780,11 @@ exports.reporteCierreDiario = async (req, res) => {
     if (!fechaInicio || !fechaFin) {
       return res.status(400).json({ message: "Faltan los parámetros fechaInicio y fechaFin" });
     }
-    const data = await RegistroDiarioCaja.getCierreDiario(fechaInicio, fechaFin);
+    const data = await RegistroDiarioCaja.getCierreDiario(
+      fechaInicio,
+      fechaFin,
+      parseCajaIds(req.query),
+    );
     res.json({ fechaInicio, fechaFin, data });
   } catch (error) {
     console.error("Error al generar reporte cierre diario:", error);
@@ -774,6 +803,7 @@ exports.reporteIngresosEgresos = async (req, res) => {
     const grupos = await RegistroDiarioCaja.getReporteIngresosEgresos(
       fechaInicio,
       fechaFin,
+      parseCajaIds(req.query),
     );
 
     // TipoGastoId === 2 es ingreso, TipoGastoId === 1 es egreso
@@ -816,6 +846,7 @@ exports.reporteWestern = async (req, res) => {
       fechaInicio,
       fechaFin,
       prefijos,
+      parseCajaIds(req.query),
     );
 
     const mapear = (m) => ({
@@ -879,6 +910,7 @@ exports.reporteAnticipos = async (req, res) => {
       fechaInicio,
       fechaFin,
       grupo,
+      parseCajaIds(req.query),
     );
 
     let totalEgresos = 0;
@@ -949,6 +981,7 @@ exports.reporteElComercio = async (req, res) => {
     const grupos = await RegistroDiarioCaja.getReporteElComercio(
       fechaInicio,
       fechaFin,
+      parseCajaIds(req.query),
     );
 
     // TipoGastoId === 2 es ingreso, TipoGastoId === 1 es egreso

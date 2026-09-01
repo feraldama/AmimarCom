@@ -1,4 +1,5 @@
 const JSICobro = require("../models/jsicobro.model");
+const { parseCajaIds } = require("../utils/reportes");
 const RegistroDiarioCaja = require("../models/registrodiariocaja.model");
 const CajaGasto = require("../models/cajagasto.model");
 const db = require("../config/db");
@@ -260,7 +261,11 @@ exports.reporteCobros = async (req, res) => {
       });
     }
 
-    const registros = await JSICobro.getReporteCobros(fechaInicio, fechaFin);
+    const registros = await JSICobro.getReporteCobros(
+      fechaInicio,
+      fechaFin,
+      parseCajaIds(req.query),
+    );
 
     const data = registros.map((r) => ({
       JSICobroId: r.JSICobroId,

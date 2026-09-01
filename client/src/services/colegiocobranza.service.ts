@@ -138,12 +138,17 @@ export const deleteColegioCobranza = async (id: string | number) => {
 export const getReporteCobranzaColegio = async (
   fechaInicio: string,
   fechaFin: string,
-  colegioId: string | number
+  colegioId: string | number,
+  cajaIds?: (string | number)[]
 ) => {
   try {
-    const response = await api.get("/colegiocobranza/reporte", {
-      params: { fechaInicio, fechaFin, colegioId },
-    });
+    const params: { [key: string]: string | number } = {
+      fechaInicio,
+      fechaFin,
+      colegioId,
+    };
+    if (cajaIds && cajaIds.length > 0) params.cajaIds = cajaIds.join(",");
+    const response = await api.get("/colegiocobranza/reporte", { params });
     return response.data;
   } catch (error) {
     const axiosError = error as AxiosError<{ message?: string }>;

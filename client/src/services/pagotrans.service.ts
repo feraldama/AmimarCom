@@ -161,12 +161,17 @@ export const searchPagosTrans = async (
 export const getReporteEmpresaTransporte = async (
   fechaInicio: string,
   fechaFin: string,
-  transporteId: string | number
+  transporteId: string | number,
+  cajaIds?: (string | number)[]
 ) => {
   try {
-    const response = await api.get("/pagotrans/reporte", {
-      params: { fechaInicio, fechaFin, transporteId },
-    });
+    const params: { [key: string]: string | number } = {
+      fechaInicio,
+      fechaFin,
+      transporteId,
+    };
+    if (cajaIds && cajaIds.length > 0) params.cajaIds = cajaIds.join(",");
+    const response = await api.get("/pagotrans/reporte", { params });
     return response.data;
   } catch (error) {
     const axiosError = error as AxiosError<{ message?: string }>;

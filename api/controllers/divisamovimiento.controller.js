@@ -1,4 +1,5 @@
 const DivisaMovimiento = require("../models/divisamovimiento.model");
+const { parseCajaIds } = require("../utils/reportes");
 
 // Lee los parámetros de filtro de la query (compartidos por getAll y search)
 const parseFiltros = (query) => ({
@@ -156,8 +157,9 @@ exports.reporteHistorial = async (req, res) => {
     if (!fechaInicio || !fechaFin) {
       return res.status(400).json({ message: "Faltan los parámetros fechaInicio y fechaFin" });
     }
-    const data = await DivisaMovimiento.getReporteHistorial(fechaInicio, fechaFin);
-    const resumen = await DivisaMovimiento.getReporteResumen(fechaInicio, fechaFin);
+    const cajaIds = parseCajaIds(req.query);
+    const data = await DivisaMovimiento.getReporteHistorial(fechaInicio, fechaFin, cajaIds);
+    const resumen = await DivisaMovimiento.getReporteResumen(fechaInicio, fechaFin, cajaIds);
     res.json({ fechaInicio, fechaFin, data, resumen });
   } catch (error) {
     res.status(500).json({ message: error.message });

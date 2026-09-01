@@ -22,6 +22,7 @@ import { generarEmpresaTransporte } from "../../reports/empresaTransporte";
 import PageHeader from "../../components/common/PageHeader";
 import { Button } from "@/components/ui/button";
 import CampoFecha from "@/components/common/CampoFecha";
+import type { CajaFiltro } from "../../reports/types";
 
 // ── Componente ReportCard ──
 
@@ -84,6 +85,42 @@ function DateRange({ fechaInicio, fechaFin, onChangeFechaInicio, onChangeFechaFi
   );
 }
 
+// ── Componente SelectorCajas ──
+// Filtro de cajas común a todos los reportes: casillas de verificación,
+// ninguna marcada = todas las cajas (sin filtro).
+
+interface SelectorCajasProps {
+  cajas: { id: number; desc: string }[];
+  seleccion: string[];
+  onToggle: (id: string) => void;
+}
+
+function SelectorCajas({ cajas, seleccion, onToggle }: SelectorCajasProps) {
+  return (
+    <div className="mb-4">
+      <label className="block text-xs font-medium text-muted-foreground mb-1">
+        Cajas (todas si no marcás ninguna)
+      </label>
+      <div className="max-h-32 overflow-y-auto rounded-lg border border-input bg-background px-3 py-2 space-y-1">
+        {cajas.map((c) => (
+          <label
+            key={c.id}
+            className="flex items-center gap-2 text-sm text-foreground cursor-pointer"
+          >
+            <input
+              type="checkbox"
+              checked={seleccion.includes(String(c.id))}
+              onChange={() => onToggle(String(c.id))}
+              className="accent-primary"
+            />
+            {c.desc}
+          </label>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── Pagina principal ──
 
 const ReportesPage: React.FC = () => {
@@ -125,16 +162,33 @@ const ReportesPage: React.FC = () => {
   const [transportes, setTransportes] = useState<{ id: number; desc: string }[]>([]);
   const [transporteReporte, setTransporteReporte] = useState("");
 
-  // Filtros del reporte de Movimientos de Cajas: cajas marcadas (ninguna =
-  // todas) y tipo de movimiento ("" ambos, "1" egresos, "2" ingresos)
-  const [movCajas, setMovCajas] = useState<string[]>([]);
-  const [movTipo, setMovTipo] = useState("");
+  // Filtro de cajas por reporte (clave = key del reporte). Lista vacía o
+  // ausente = todas las cajas. Compartido por todas las tarjetas.
+  const [cajasSel, setCajasSel] = useState<Record<string, string[]>>({});
 
-  const toggleMovCaja = (id: string) => {
-    setMovCajas((prev) =>
-      prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]
-    );
+  const toggleCajaSel = (key: string, id: string) => {
+    setCajasSel((prev) => {
+      const actual = prev[key] || [];
+      return {
+        ...prev,
+        [key]: actual.includes(id)
+          ? actual.filter((c) => c !== id)
+          : [...actual, id],
+      };
+    });
   };
+
+  // Cajas seleccionadas de un reporte como CajaFiltro[] (con descripción,
+  // para que el PDF pueda listar por qué cajas se filtró)
+  const cajasFiltroDe = (key: string): CajaFiltro[] =>
+    (cajasSel[key] || [])
+      .map((id) => cajas.find((c) => String(c.id) === id))
+      .filter((c): c is { id: number; desc: string } => c !== undefined)
+      .map((c) => ({ id: c.id, desc: c.desc }));
+
+  // Tipo de movimiento del reporte de Movimientos de Cajas
+  // ("" ambos, "1" egresos, "2" ingresos)
+  const [movTipo, setMovTipo] = useState("");
 
   useEffect(() => {
     getTiposGastoGrupo()
@@ -228,9 +282,15 @@ const ReportesPage: React.FC = () => {
     title: string;
     description: string;
     icon: React.ReactNode;
-    run: (desde: string, hasta: string) => Promise<void>;
+    run: (
+      desde: string,
+      hasta: string,
+      cajasFiltro: CajaFiltro[]
+    ) => Promise<void>;
     disabled?: boolean;
     extra?: React.ReactNode;
+    /** Oculta el filtro de cajas común (para reportes con selector propio). */
+    sinFiltroCajas?: boolean;
   }
 
   const reportes: ReporteDef[] = [
@@ -255,6 +315,7 @@ const ReportesPage: React.FC = () => {
       icon: <Wallet className="size-5 text-primary" />,
       run: (desde, hasta) => generarIngresoEgresoPorCaja(desde, hasta, cajaReporte),
       disabled: !cajaReporte,
+      sinFiltroCajas: true,
       extra: (
         <div className="mb-4">
           <label className="block text-xs font-medium text-muted-foreground mb-1">Caja</label>
@@ -276,12 +337,13 @@ const ReportesPage: React.FC = () => {
       title: "Cobranza Colegios",
       description: "Cobranzas por curso y alumno: cuotas, multas, exámenes y descuentos",
       icon: <FileText className="size-5 text-primary" />,
-      run: (desde, hasta) =>
+      run: (desde, hasta, cajasFiltro) =>
         generarCobranzaColegios(
           desde,
           hasta,
           colegioReporte,
-          colegios.find((c) => String(c.id) === colegioReporte)?.desc || ""
+          colegios.find((c) => String(c.id) === colegioReporte)?.desc || "",
+          cajasFiltro
         ),
       disabled: !colegioReporte,
       extra: (
@@ -319,12 +381,13 @@ const ReportesPage: React.FC = () => {
       title: "Empresa de Transporte",
       description: "Ventas de pasajes con liquidación y comisión de la empresa",
       icon: <FileText className="size-5 text-primary" />,
-      run: (desde, hasta) =>
+      run: (desde, hasta, cajasFiltro) =>
         generarEmpresaTransporte(
           desde,
           hasta,
           transporteReporte,
-          transportes.find((t) => String(t.id) === transporteReporte)?.desc || ""
+          transportes.find((t) => String(t.id) === transporteReporte)?.desc || "",
+          cajasFiltro
         ),
       disabled: !transporteReporte,
       extra: (
@@ -363,7 +426,8 @@ const ReportesPage: React.FC = () => {
       title: "Anticipos",
       description: "Movimientos de un grupo de gasto: egresos, ingresos y equivalente USD",
       icon: <HandCoins className="size-5 text-primary" />,
-      run: (desde, hasta) => generarAnticipos(desde, hasta, grupoAnticipo),
+      run: (desde, hasta, cajasFiltro) =>
+        generarAnticipos(desde, hasta, grupoAnticipo, cajasFiltro),
       disabled: !grupoAnticipo,
       extra: (
         <div className="mb-4">
@@ -408,46 +472,23 @@ const ReportesPage: React.FC = () => {
       description:
         "Movimientos de cajas internas, con filtro por caja y tipo de movimiento",
       icon: <FileText className="size-5 text-primary" />,
-      run: (desde, hasta) =>
-        generarMovimientosCajas(desde, hasta, movCajas, movTipo),
+      run: (desde, hasta, cajasFiltro) =>
+        generarMovimientosCajas(desde, hasta, cajasFiltro, movTipo),
       extra: (
-        <>
-          <div className="mb-4">
-            <label className="block text-xs font-medium text-muted-foreground mb-1">
-              Tipo de movimiento
-            </label>
-            <select
-              value={movTipo}
-              onChange={(e) => setMovTipo(e.target.value)}
-              className={inputClassName}
-            >
-              <option value="">Ingresos y egresos</option>
-              <option value="2">Solo ingresos</option>
-              <option value="1">Solo egresos</option>
-            </select>
-          </div>
-          <div className="mb-4">
-            <label className="block text-xs font-medium text-muted-foreground mb-1">
-              Cajas (todas si no marcás ninguna)
-            </label>
-            <div className="max-h-32 overflow-y-auto rounded-lg border border-input bg-background px-3 py-2 space-y-1">
-              {cajas.map((c) => (
-                <label
-                  key={c.id}
-                  className="flex items-center gap-2 text-sm text-foreground cursor-pointer"
-                >
-                  <input
-                    type="checkbox"
-                    checked={movCajas.includes(String(c.id))}
-                    onChange={() => toggleMovCaja(String(c.id))}
-                    className="accent-primary"
-                  />
-                  {c.desc}
-                </label>
-              ))}
-            </div>
-          </div>
-        </>
+        <div className="mb-4">
+          <label className="block text-xs font-medium text-muted-foreground mb-1">
+            Tipo de movimiento
+          </label>
+          <select
+            value={movTipo}
+            onChange={(e) => setMovTipo(e.target.value)}
+            className={inputClassName}
+          >
+            <option value="">Ingresos y egresos</option>
+            <option value="2">Solo ingresos</option>
+            <option value="1">Solo egresos</option>
+          </select>
+        </div>
       ),
     },
   ];
@@ -460,6 +501,13 @@ const ReportesPage: React.FC = () => {
         {reportes.map((rep) => (
           <ReportCard key={rep.key} title={rep.title} description={rep.description} icon={rep.icon}>
             {rep.extra}
+            {!rep.sinFiltroCajas && (
+              <SelectorCajas
+                cajas={cajas}
+                seleccion={cajasSel[rep.key] || []}
+                onToggle={(id) => toggleCajaSel(rep.key, id)}
+              />
+            )}
             <DateRange
               fechaInicio={f[rep.key][0]}
               fechaFin={f[rep.key][1]}
@@ -467,7 +515,11 @@ const ReportesPage: React.FC = () => {
               onChangeFechaFin={(v) => updateF(rep.key, 1, v)}
             />
             <Button
-              onClick={() => runReport(rep.key, () => rep.run(f[rep.key][0], f[rep.key][1]))}
+              onClick={() =>
+                runReport(rep.key, () =>
+                  rep.run(f[rep.key][0], f[rep.key][1], cajasFiltroDe(rep.key))
+                )
+              }
               disabled={loading === rep.key || rep.disabled}
               className="w-full"
             >

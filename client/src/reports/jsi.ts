@@ -4,6 +4,7 @@ import { formatMiles } from "../utils/utils";
 import {
   PDF_COLORS,
   pdfHeader,
+  pdfFiltroCajas,
   pdfFooter,
   pdfSeccion,
   abrirPdf,
@@ -13,6 +14,7 @@ import {
   SinDatosError,
   validarRango,
 } from "../utils/pdfReport";
+import type { CajaFiltro } from "./types";
 import { formatMilesSmart } from "../utils/utils";
 
 interface JSICobro {
@@ -36,9 +38,17 @@ const MESES = [
   "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
 ];
 
-export async function generarJSI(desde: string, hasta: string) {
+export async function generarJSI(
+  desde: string,
+  hasta: string,
+  cajasFiltro: CajaFiltro[] = []
+) {
   validarRango(desde, hasta);
-  const r = await getReporteJSICobros(desde, hasta);
+  const r = await getReporteJSICobros(
+    desde,
+    hasta,
+    cajasFiltro.map((c) => c.id)
+  );
   const data = (r.data || []) as JSICobro[];
   if (!data.length) {
     throw new SinDatosError("No hay cobros JSI en el periodo seleccionado");
@@ -46,6 +56,7 @@ export async function generarJSI(desde: string, hasta: string) {
 
   const doc = new jsPDF();
   let y = pdfHeader(doc, "Junta de Saneamiento de Itauguá", desde, hasta);
+  y = pdfFiltroCajas(doc, y, cajasFiltro.map((c) => c.desc));
 
   // Campos de la rendición que se completan a mano al entregar el reporte
   const campos = [

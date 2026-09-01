@@ -5,6 +5,7 @@ import ActionButton from "../../components/common/Button/ActionButton";
 import {
   aperturaCierreCaja,
   getEstadoAperturaPorUsuario,
+  getUltimoCierrePorCaja,
 } from "../../services/registrodiariocaja.service";
 import { createCierreDiarioSnapshot } from "../../services/cierrediario.service";
 import { useAuth } from "../../contexts/useAuth";
@@ -75,6 +76,11 @@ export default function AperturaCierreCajaPage() {
     { monto: 0, detalle: "" },
   ]);
   const [montoApertura, setMontoApertura] = useState<number>(0);
+  // Fecha del último cierre de la caja seleccionada (null = nunca cerró,
+  // en cuyo caso la apertura usa el monto fijo de la caja)
+  const [fechaUltimoCierre, setFechaUltimoCierre] = useState<string | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -137,14 +143,31 @@ export default function AperturaCierreCajaPage() {
     fetchCajas();
   }, []);
 
-  // Monto de apertura = CajaMonto de la caja seleccionada (valor fijo)
+  // Monto de apertura = monto del último cierre de la caja (lo que realmente
+  // quedó en el cajón, incluido el sobrante/faltante del arqueo). Si la caja
+  // nunca se cerró, se usa el CajaMonto como valor inicial. El backend aplica
+  // la misma regla al confirmar.
   useEffect(() => {
-    if (tipo === "0" && cajaId && todasLasCajas.length > 0) {
+    if (tipo !== "0" || !cajaId || todasLasCajas.length === 0) return;
+    let cancelado = false;
+    const cargarMontoApertura = async () => {
       const caja = todasLasCajas.find((c) => c.CajaId == cajaId);
-      if (caja != null) {
-        setMontoApertura(Number(caja.CajaMonto) || 0);
+      const montoFijo = caja != null ? Number(caja.CajaMonto) || 0 : 0;
+      try {
+        const { cierre } = await getUltimoCierrePorCaja(cajaId);
+        if (cancelado) return;
+        setMontoApertura(cierre ? cierre.monto : montoFijo);
+        setFechaUltimoCierre(cierre ? cierre.fecha : null);
+      } catch {
+        if (cancelado) return;
+        setMontoApertura(montoFijo);
+        setFechaUltimoCierre(null);
       }
-    }
+    };
+    cargarMontoApertura();
+    return () => {
+      cancelado = true;
+    };
   }, [tipo, cajaId, todasLasCajas]);
 
   useEffect(() => {
@@ -819,7 +842,18 @@ export default function AperturaCierreCajaPage() {
               value={montoApertura ? formatMiles(montoApertura) : ""}
             />
             <p className="mt-1 text-xs text-gray-500">
-              Corresponde al monto fijo de la caja seleccionada.
+              {fechaUltimoCierre
+                ? `Corresponde al monto contado en el último cierre (${new Date(
+                    fechaUltimoCierre,
+                  ).toLocaleString("es-PY", {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                    hour12: false,
+                  })}), incluido el sobrante o faltante de ese arqueo.`
+                : "La caja no tiene cierres previos: corresponde al monto fijo de la caja seleccionada."}
             </p>
           </div>
         )}

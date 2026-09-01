@@ -1,4 +1,5 @@
 const PagoTrans = require("../models/pagotrans.model");
+const { parseCajaIds } = require("../utils/reportes");
 const RegistroDiarioCaja = require("../models/registrodiariocaja.model");
 const CajaGasto = require("../models/cajagasto.model");
 const db = require("../config/db");
@@ -276,6 +277,7 @@ exports.reportePagos = async (req, res) => {
       fechaInicio,
       fechaFin,
       transporteId,
+      parseCajaIds(req.query),
     );
 
     const comisionPct = registros.length

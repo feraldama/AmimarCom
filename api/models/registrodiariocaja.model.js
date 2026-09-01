@@ -50,6 +50,14 @@ async function resolvePaseGrupo(client, caja, tipoGastoId) {
   return result.rows[0];
 }
 
+// Si hay cajas seleccionadas, las agrega a params y devuelve la cláusula
+// "AND <columna> = ANY($n::int[])"; si no, devuelve cadena vacía (todas).
+function filtroCajasSql(params, cajaIds, columna) {
+  if (!Array.isArray(cajaIds) || cajaIds.length === 0) return "";
+  params.push(cajaIds.map(Number));
+  return `AND ${columna} = ANY($${params.length}::int[])`;
+}
+
 const INSERT_REGISTRO_QUERY = `
   INSERT INTO "registrodiariocaja" (
     "CajaId",
@@ -669,10 +677,17 @@ const RegistroDiarioCaja = {
   // Pases entre cajas: registros cuyo grupo sigue la convención "PASE <caja>"
   // (incluye overrides como "PASE JEFE"). Devuelve también todas las cajas
   // tipo 1 para que el reporte las liste aunque no tengan pases.
-  getReportePaseCajas: async (fechaDesde, fechaHasta) => {
+  getReportePaseCajas: async (fechaDesde, fechaHasta, cajaIds) => {
+    const cajasParams = [];
+    const filtroCajasLista = filtroCajasSql(cajasParams, cajaIds, '"CajaId"');
     const cajasResult = await db.query(
-      `SELECT "CajaId", "CajaDescripcion" FROM "caja" WHERE "CajaTipoId" = 1 ORDER BY "CajaId"`
+      `SELECT "CajaId", "CajaDescripcion" FROM "caja"
+       WHERE "CajaTipoId" = 1 ${filtroCajasLista}
+       ORDER BY "CajaId"`,
+      cajasParams
     );
+    const movsParams = [fechaDesde, fechaHasta];
+    const filtroCajasMovs = filtroCajasSql(movsParams, cajaIds, 'r."CajaId"');
     const movsResult = await db.query(
       `SELECT r.*,
         c."CajaDescripcion",
@@ -685,8 +700,9 @@ const RegistroDiarioCaja = {
       WHERE TRIM(tg."TipoGastoGrupoDescripcion") ILIKE 'PASE %'
         AND r."RegistroDiarioCajaFecha"::date >= $1::date
         AND r."RegistroDiarioCajaFecha"::date <= $2::date
+        ${filtroCajasMovs}
       ORDER BY r."CajaId", r."RegistroDiarioCajaId" ASC`,
-      [fechaDesde, fechaHasta]
+      movsParams
     );
     return { cajas: cajasResult.rows, movimientos: movsResult.rows };
   },
@@ -733,7 +749,9 @@ const RegistroDiarioCaja = {
     return result.rows;
   },
 
-  getCierreDiario: async (fechaDesde, fechaHasta) => {
+  getCierreDiario: async (fechaDesde, fechaHasta, cajaIds) => {
+    const params = [fechaDesde, fechaHasta];
+    const filtroCajas = filtroCajasSql(params, cajaIds, 'r."CajaId"');
     const result = await db.query(
       `SELECT
         c."CajaId",
@@ -747,14 +765,17 @@ const RegistroDiarioCaja = {
       JOIN "caja" c ON r."CajaId" = c."CajaId"
       WHERE r."RegistroDiarioCajaFecha"::date >= $1::date
         AND r."RegistroDiarioCajaFecha"::date <= $2::date
+        ${filtroCajas}
       GROUP BY c."CajaId", c."CajaDescripcion"
       ORDER BY c."CajaDescripcion"`,
-      [fechaDesde, fechaHasta]
+      params
     );
     return result.rows;
   },
 
-  getReporteIngresosEgresos: async (fechaDesde, fechaHasta) => {
+  getReporteIngresosEgresos: async (fechaDesde, fechaHasta, cajaIds) => {
+    const params = [fechaDesde, fechaHasta];
+    const filtroCajas = filtroCajasSql(params, cajaIds, 'r."CajaId"');
     const result = await db.query(
       `SELECT
         r."TipoGastoId",
@@ -766,9 +787,10 @@ const RegistroDiarioCaja = {
       LEFT JOIN "tipogastogrupo" tg ON r."TipoGastoId" = tg."TipoGastoId" AND r."TipoGastoGrupoId" = tg."TipoGastoGrupoId"
       WHERE r."RegistroDiarioCajaFecha"::date >= $1::date
         AND r."RegistroDiarioCajaFecha"::date <= $2::date
+        ${filtroCajas}
       GROUP BY r."TipoGastoId", r."TipoGastoGrupoId", tg."TipoGastoGrupoDescripcion"
       ORDER BY r."TipoGastoId", r."TipoGastoGrupoId"`,
-      [fechaDesde, fechaHasta]
+      params
     );
     return result.rows;
   },
@@ -777,8 +799,10 @@ const RegistroDiarioCaja = {
   // y "2 WESTERN ..." (USD con cotización); prefijo selecciona la moneda.
   // prefijos: lista de prefijos de descripción de grupo a incluir
   // (ej: ["1 WESTERN"] o ["2 WESTERN", "3 WESTERN"]).
-  getReporteWestern: async (fechaDesde, fechaHasta, prefijos) => {
+  getReporteWestern: async (fechaDesde, fechaHasta, prefijos, cajaIds) => {
     const patrones = prefijos.map((p) => `${p}%`);
+    const params = [fechaDesde, fechaHasta, patrones];
+    const filtroCajas = filtroCajasSql(params, cajaIds, 'r."CajaId"');
     const result = await db.query(
       `SELECT r.*,
         c."CajaDescripcion",
@@ -791,8 +815,9 @@ const RegistroDiarioCaja = {
       WHERE TRIM(tg."TipoGastoGrupoDescripcion") ILIKE ANY($3)
         AND r."RegistroDiarioCajaFecha"::date >= $1::date
         AND r."RegistroDiarioCajaFecha"::date <= $2::date
+        ${filtroCajas}
       ORDER BY r."TipoGastoId", r."RegistroDiarioCajaId" ASC`,
-      [fechaDesde, fechaHasta, patrones]
+      params
     );
     return result.rows;
   },
@@ -801,7 +826,9 @@ const RegistroDiarioCaja = {
   // asociados (vía cajagasto) a las cajas WEPA y WEPA USD, que son las
   // operaciones que pasan por la financiera El Comercio. Incluye el
   // equivalente USD de los movimientos con cotización.
-  getReporteElComercio: async (fechaDesde, fechaHasta) => {
+  getReporteElComercio: async (fechaDesde, fechaHasta, cajaIds) => {
+    const params = [fechaDesde, fechaHasta];
+    const filtroCajas = filtroCajasSql(params, cajaIds, 'r."CajaId"');
     const result = await db.query(
       `SELECT
         r."TipoGastoId",
@@ -822,16 +849,19 @@ const RegistroDiarioCaja = {
         )
         AND r."RegistroDiarioCajaFecha"::date >= $1::date
         AND r."RegistroDiarioCajaFecha"::date <= $2::date
+        ${filtroCajas}
       GROUP BY r."TipoGastoId", r."TipoGastoGrupoId", tg."TipoGastoGrupoDescripcion"
       ORDER BY r."TipoGastoId", r."TipoGastoGrupoId"`,
-      [fechaDesde, fechaHasta]
+      params
     );
     return result.rows;
   },
 
   // Movimientos de un grupo de gasto (por descripción, en ambos tipos:
   // egresos e ingresos). Usado por el reporte de Anticipos.
-  getReporteGrupo: async (fechaDesde, fechaHasta, grupoDescripcion) => {
+  getReporteGrupo: async (fechaDesde, fechaHasta, grupoDescripcion, cajaIds) => {
+    const params = [fechaDesde, fechaHasta, grupoDescripcion];
+    const filtroCajas = filtroCajasSql(params, cajaIds, 'r."CajaId"');
     const result = await db.query(
       `SELECT r.*,
         c."CajaDescripcion",
@@ -844,8 +874,9 @@ const RegistroDiarioCaja = {
       WHERE UPPER(TRIM(tg."TipoGastoGrupoDescripcion")) = UPPER(TRIM($3))
         AND r."RegistroDiarioCajaFecha"::date >= $1::date
         AND r."RegistroDiarioCajaFecha"::date <= $2::date
+        ${filtroCajas}
       ORDER BY r."RegistroDiarioCajaId" ASC`,
-      [fechaDesde, fechaHasta, grupoDescripcion]
+      params
     );
     return result.rows;
   },

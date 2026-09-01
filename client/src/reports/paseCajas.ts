@@ -4,6 +4,7 @@ import { formatMiles } from "../utils/utils";
 import {
   PDF_COLORS,
   pdfHeader,
+  pdfFiltroCajas,
   pdfFooter,
   pdfSeccion,
   pdfCuadroControl,
@@ -11,6 +12,7 @@ import {
   SinDatosError,
   validarRango,
 } from "../utils/pdfReport";
+import type { CajaFiltro } from "./types";
 
 interface PaseMovimiento {
   RegistroDiarioCajaId: number;
@@ -29,9 +31,17 @@ interface ReportePaseCaja {
   pases: PaseMovimiento[];
 }
 
-export async function generarPaseCajas(desde: string, hasta: string) {
+export async function generarPaseCajas(
+  desde: string,
+  hasta: string,
+  cajasFiltro: CajaFiltro[] = []
+) {
   validarRango(desde, hasta);
-  const response = await getReportePaseCajas(desde, hasta);
+  const response = await getReportePaseCajas(
+    desde,
+    hasta,
+    cajasFiltro.map((c) => c.id)
+  );
   const data = (response.data || []) as ReportePaseCaja[];
   if (!data.length) {
     throw new SinDatosError("No hay datos para el periodo seleccionado");
@@ -39,6 +49,7 @@ export async function generarPaseCajas(desde: string, hasta: string) {
 
   const doc = new jsPDF();
   let y = pdfHeader(doc, "Pase de Cajas", desde, hasta);
+  y = pdfFiltroCajas(doc, y, cajasFiltro.map((c) => c.desc));
 
   data.forEach((caja) => {
     y = pdfSeccion(doc, y, caja.CajaDescripcion, {

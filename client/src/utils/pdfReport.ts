@@ -235,6 +235,32 @@ export const pdfCuadroControl = (
   });
 };
 
+/**
+ * Nota "Cajas: ..." bajo el encabezado cuando el reporte se generó filtrado
+ * por cajas específicas. Sin filtro (lista vacía) no dibuja nada.
+ * Devuelve la Y donde puede continuar el contenido.
+ */
+export const pdfFiltroCajas = (
+  doc: jsPDF,
+  y: number,
+  nombres: string[]
+): number => {
+  nombres = nombres.filter((n) => (n || "").trim() !== "");
+  if (!nombres.length) return y;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  doc.setFontSize(9);
+  doc.setFont("helvetica", "italic");
+  doc.setTextColor(...PDF_COLORS.textMuted);
+  const lineas = doc.splitTextToSize(
+    `Cajas: ${nombres.join(", ")}`,
+    pageWidth - 28
+  ) as string[];
+  doc.text(lineas, 14, y);
+  doc.setFont("helvetica", "normal");
+  doc.setTextColor(...PDF_COLORS.textDark);
+  return y + lineas.length * 4 + 4;
+};
+
 /** Nota al pie de una sección, en cursiva y color tenue. */
 export const pdfNota = (doc: jsPDF, y: number, texto: string): number => {
   y = asegurarEspacio(doc, y, 20);

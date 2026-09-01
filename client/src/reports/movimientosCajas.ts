@@ -4,6 +4,7 @@ import { formatMiles } from "../utils/utils";
 import {
   PDF_COLORS,
   pdfHeader,
+  pdfFiltroCajas,
   pdfFooter,
   pdfSeccion,
   abrirPdf,
@@ -11,21 +12,21 @@ import {
   SinDatosError,
   validarRango,
 } from "../utils/pdfReport";
-import type { RegistroCaja } from "./types";
+import type { RegistroCaja, CajaFiltro } from "./types";
 
-// cajaIds: cajas a incluir (vacío = todas). tipoGastoId: "1" egresos,
+// cajasFiltro: cajas a incluir (vacío = todas). tipoGastoId: "1" egresos,
 // "2" ingresos, "" ambos.
 export async function generarMovimientosCajas(
   desde: string,
   hasta: string,
-  cajaIds: (string | number)[] = [],
+  cajasFiltro: CajaFiltro[] = [],
   tipoGastoId: string = ""
 ) {
   validarRango(desde, hasta);
   const response = await getReporteMovimientosCajas(
     desde,
     hasta,
-    cajaIds,
+    cajasFiltro.map((c) => c.id),
     tipoGastoId
   );
   const movimientos = (response.data || []) as RegistroCaja[];
@@ -55,6 +56,7 @@ export async function generarMovimientosCajas(
 
   const doc = new jsPDF();
   let y = pdfHeader(doc, titulo, desde, hasta);
+  y = pdfFiltroCajas(doc, y, cajasFiltro.map((c) => c.desc));
 
   porCaja.forEach(({ desc, regs, tIng, tEgr }) => {
     y = pdfSeccion(doc, y, desc, {

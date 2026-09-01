@@ -340,7 +340,14 @@ const PagoTrans = {
 
   // Ventas de pasajes de una empresa de transporte en un rango de fechas,
   // con la comisión de la empresa para calcular la liquidación.
-  getReportePagos: async (fechaDesde, fechaHasta, transporteId) => {
+  // cajaIds: lista opcional de CajaId a incluir (vacía = todas)
+  getReportePagos: async (fechaDesde, fechaHasta, transporteId, cajaIds) => {
+    const params = [fechaDesde, fechaHasta, transporteId];
+    let filtroCajas = "";
+    if (Array.isArray(cajaIds) && cajaIds.length > 0) {
+      params.push(cajaIds.map(Number));
+      filtroCajas = `AND p."CajaId" = ANY($${params.length}::int[])`;
+    }
     const result = await db.query(
       `SELECT p.*,
         t."TransporteNombre",
@@ -352,8 +359,9 @@ const PagoTrans = {
       WHERE p."TransporteId" = $3
         AND p."PagoTransFecha"::date >= $1::date
         AND p."PagoTransFecha"::date <= $2::date
+        ${filtroCajas}
       ORDER BY p."PagoTransFecha" ASC, p."PagoTransId" ASC`,
-      [fechaDesde, fechaHasta, transporteId]
+      params
     );
     return result.rows;
   },

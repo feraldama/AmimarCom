@@ -1,4 +1,5 @@
 const ColegioCobranza = require("../models/colegiocobranza.model");
+const { parseCajaIds } = require("../utils/reportes");
 const RegistroDiarioCaja = require("../models/registrodiariocaja.model");
 const CajaGasto = require("../models/cajagasto.model");
 const Nomina = require("../models/nomina.model");
@@ -293,6 +294,7 @@ exports.reporteCobranzas = async (req, res) => {
       fechaInicio,
       fechaFin,
       colegioId,
+      parseCajaIds(req.query),
     );
 
     const MULTA_POR_DIA = 1000;

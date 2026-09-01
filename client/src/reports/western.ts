@@ -4,6 +4,7 @@ import { formatMiles, formatMilesSmart } from "../utils/utils";
 import {
   PDF_COLORS,
   pdfHeader,
+  pdfFiltroCajas,
   pdfFooter,
   pdfSeccion,
   pdfCuadroControl,
@@ -13,6 +14,7 @@ import {
   validarRango,
   type RGB,
 } from "../utils/pdfReport";
+import type { CajaFiltro } from "./types";
 
 interface WesternMovimiento {
   RegistroDiarioCajaId: number;
@@ -29,9 +31,18 @@ interface WesternMovimiento {
   EsUsdPuro?: boolean;
 }
 
-export async function generarWesternGs(desde: string, hasta: string) {
+export async function generarWesternGs(
+  desde: string,
+  hasta: string,
+  cajasFiltro: CajaFiltro[] = []
+) {
   validarRango(desde, hasta);
-  const r = await getReporteWestern(desde, hasta, "gs");
+  const r = await getReporteWestern(
+    desde,
+    hasta,
+    "gs",
+    cajasFiltro.map((c) => c.id)
+  );
   const egresos = (r.egresos || []) as WesternMovimiento[];
   const ingresos = (r.ingresos || []) as WesternMovimiento[];
   if (!egresos.length && !ingresos.length) {
@@ -40,6 +51,7 @@ export async function generarWesternGs(desde: string, hasta: string) {
 
   const doc = new jsPDF();
   let y = pdfHeader(doc, "Western - Ingresos/Egresos (Gs.)", desde, hasta);
+  y = pdfFiltroCajas(doc, y, cajasFiltro.map((c) => c.desc));
 
   const seccion = (titulo: string, rows: WesternMovimiento[], total: number, color: RGB) =>
     pdfSeccion(doc, y, titulo, {
@@ -73,9 +85,18 @@ export async function generarWesternGs(desde: string, hasta: string) {
   abrirPdf(doc, "western-gs.pdf");
 }
 
-export async function generarWesternUsd(desde: string, hasta: string) {
+export async function generarWesternUsd(
+  desde: string,
+  hasta: string,
+  cajasFiltro: CajaFiltro[] = []
+) {
   validarRango(desde, hasta);
-  const r = await getReporteWestern(desde, hasta, "usd");
+  const r = await getReporteWestern(
+    desde,
+    hasta,
+    "usd",
+    cajasFiltro.map((c) => c.id)
+  );
   const egresos = (r.egresos || []) as WesternMovimiento[];
   const ingresos = (r.ingresos || []) as WesternMovimiento[];
   if (!egresos.length && !ingresos.length) {
@@ -99,6 +120,7 @@ export async function generarWesternUsd(desde: string, hasta: string) {
 
   const doc = new jsPDF("landscape");
   let y = pdfHeader(doc, "Western USD - Ingresos/Egresos", desde, hasta);
+  y = pdfFiltroCajas(doc, y, cajasFiltro.map((c) => c.desc));
 
   const seccion = (titulo: string, rows: WesternMovimiento[], color: RGB) =>
     pdfSeccion(doc, y, titulo, {

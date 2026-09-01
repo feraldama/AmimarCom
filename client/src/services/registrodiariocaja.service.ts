@@ -27,6 +27,26 @@ export const aperturaCierreCaja = async (data: {
   }
 };
 
+// Último cierre de una caja (monto contado en el arqueo y fecha), o
+// cierre: null si la caja nunca se cerró. Es el monto con el que se apertura.
+export const getUltimoCierrePorCaja = async (
+  cajaId: string | number,
+): Promise<{ cierre: { monto: number; fecha: string } | null }> => {
+  try {
+    const response = await api.get(`/registrodiariocaja/ultimo-cierre`, {
+      params: { cajaId },
+    });
+    return response.data;
+  } catch (error) {
+    const axiosError = error as AxiosError<{ message?: string }>;
+    throw (
+      axiosError.response?.data || {
+        message: "Error al consultar el último cierre de la caja",
+      }
+    );
+  }
+};
+
 export const getEstadoAperturaPorUsuario = async (
   usuarioId: string | number,
 ) => {
