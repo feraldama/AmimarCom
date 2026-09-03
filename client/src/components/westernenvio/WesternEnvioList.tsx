@@ -110,6 +110,43 @@ export default function WesternEnvioList({
   const [tiposGasto, setTiposGasto] = useState<TipoGasto[]>([]);
   const [tiposGastoGrupo, setTiposGastoGrupo] = useState<TipoGastoGrupo[]>([]);
 
+  // Texto en edición de los campos decimales: mientras el campo tiene foco se
+  // muestra lo que el usuario escribe; al salir se vuelve al valor formateado.
+  type CampoDecimal = "WesternEnvioCargoEnvio" | "WesternEnvioCambio";
+  const [textoDecimal, setTextoDecimal] = useState<
+    Partial<Record<CampoDecimal, string>>
+  >({});
+
+  const handleDecimalFocus = (campo: CampoDecimal) => {
+    const valor = Number(formData[campo]) || 0;
+    setTextoDecimal((prev) => ({
+      ...prev,
+      [campo]: valor ? String(valor).replace(".", ",") : "",
+    }));
+  };
+
+  const handleDecimalChange = (campo: CampoDecimal, valor: string) => {
+    // El punto (teclado numérico) también ingresa la coma decimal
+    let texto = valor.replace(/\./g, ",").replace(/[^\d,]/g, "");
+    const primeraComa = texto.indexOf(",");
+    if (primeraComa !== -1) {
+      texto =
+        texto.slice(0, primeraComa + 1) +
+        texto.slice(primeraComa + 1).replace(/,/g, "");
+    }
+    setTextoDecimal((prev) => ({ ...prev, [campo]: texto }));
+    const num = parseFloat(texto.replace(",", "."));
+    setFormData((prev) => ({ ...prev, [campo]: isNaN(num) ? 0 : num }));
+  };
+
+  const handleDecimalBlur = (campo: CampoDecimal) => {
+    setTextoDecimal((prev) => {
+      const next = { ...prev };
+      delete next[campo];
+      return next;
+    });
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -161,6 +198,7 @@ export default function WesternEnvioList({
         id: "",
       });
     }
+    setTextoDecimal({});
   }, [currentEnvio, isModalOpen]);
 
   const handleInputChange = (
@@ -170,10 +208,7 @@ export default function WesternEnvioList({
     setFormData((prev) => ({
       ...prev,
       [name]:
-        name === "WesternEnvioMonto" ||
-        name === "WesternEnvioCambio" ||
         name === "WesternEnvioMTCN" ||
-        name === "WesternEnvioCargoEnvio" ||
         name === "CajaId" ||
         name === "TipoGastoId" ||
         name === "TipoGastoGrupoId"
@@ -266,7 +301,7 @@ export default function WesternEnvioList({
       key: "WesternEnvioCargoEnvio",
       label: "Cargo Envío",
       render: (item: WesternEnvio) =>
-        `Gs. ${formatMiles(item.WesternEnvioCargoEnvio || 0)}`,
+        `Gs. ${formatMilesWithDecimals(item.WesternEnvioCargoEnvio || 0)}`,
     },
     {
       key: "WesternEnvioCambio",
@@ -480,29 +515,19 @@ export default function WesternEnvioList({
                     </label>
                     <input
                       type="text"
+                      inputMode="decimal"
                       name="WesternEnvioCambio"
                       id="WesternEnvioCambio"
                       value={
-                        formData.WesternEnvioCambio !== undefined &&
-                        formData.WesternEnvioCambio !== null
-                          ? formatMilesWithDecimals(formData.WesternEnvioCambio)
-                          : "0"
+                        textoDecimal.WesternEnvioCambio !== undefined
+                          ? textoDecimal.WesternEnvioCambio
+                          : formatMilesWithDecimals(formData.WesternEnvioCambio || 0)
                       }
-                      onChange={(e) => {
-                        let raw = e.target.value
-                          .replace(/\s/g, "")
-                          .replace(/\./g, "");
-                        raw = raw.replace(/,/g, ".");
-                        const num = parseFloat(raw);
-                        if (!isNaN(num)) {
-                          setFormData((prev) => ({
-                            ...prev,
-                            WesternEnvioCambio: num,
-                          }));
-                        } else if (raw === "") {
-                          setFormData((prev) => ({ ...prev, WesternEnvioCambio: 0 }));
-                        }
-                      }}
+                      onFocus={() => handleDecimalFocus("WesternEnvioCambio")}
+                      onChange={(e) =>
+                        handleDecimalChange("WesternEnvioCambio", e.target.value)
+                      }
+                      onBlur={() => handleDecimalBlur("WesternEnvioCambio")}
                       className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
                     />
                   </div>
@@ -531,28 +556,21 @@ export default function WesternEnvioList({
                     </label>
                     <input
                       type="text"
+                      inputMode="decimal"
                       name="WesternEnvioCargoEnvio"
                       id="WesternEnvioCargoEnvio"
                       value={
-                        formData.WesternEnvioCargoEnvio !== undefined &&
-                        formData.WesternEnvioCargoEnvio !== null
-                          ? formatMiles(formData.WesternEnvioCargoEnvio)
-                          : "0"
+                        textoDecimal.WesternEnvioCargoEnvio !== undefined
+                          ? textoDecimal.WesternEnvioCargoEnvio
+                          : formatMilesWithDecimals(
+                              formData.WesternEnvioCargoEnvio || 0
+                            )
                       }
-                      onChange={(e) => {
-                        const raw = e.target.value
-                          .replace(/\s/g, "")
-                          .replace(/\./g, "");
-                        const num = parseFloat(raw);
-                        if (!isNaN(num)) {
-                          setFormData((prev) => ({
-                            ...prev,
-                            WesternEnvioCargoEnvio: num,
-                          }));
-                        } else if (raw === "") {
-                          setFormData((prev) => ({ ...prev, WesternEnvioCargoEnvio: 0 }));
-                        }
-                      }}
+                      onFocus={() => handleDecimalFocus("WesternEnvioCargoEnvio")}
+                      onChange={(e) =>
+                        handleDecimalChange("WesternEnvioCargoEnvio", e.target.value)
+                      }
+                      onBlur={() => handleDecimalBlur("WesternEnvioCargoEnvio")}
                       className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
                     />
                   </div>

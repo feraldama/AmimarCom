@@ -93,6 +93,8 @@ export default function WesternPagosTab() {
   const [detalleEnvios, setDetalleEnvios] = useState("");
   const [mtcnEnvios, setMtcnEnvios] = useState<number | "">("");
   const [cargoEnvioEnvios, setCargoEnvioEnvios] = useState<number | "">("");
+  // Texto crudo del "Cargo Envio" para permitir escribir la coma decimal
+  const [cargoEnvioEnviosStr, setCargoEnvioEnviosStr] = useState("");
   const [montoEnvios, setMontoEnvios] = useState<number | "">("");
   const [valorEspecialEnvios, setValorEspecialEnvios] = useState<number | "">("");
   // Texto crudo del "Monto en Dólares" para permitir escribir la coma decimal
@@ -590,6 +592,7 @@ export default function WesternPagosTab() {
       setDetalleEnvios("");
       setMtcnEnvios("");
       setCargoEnvioEnvios("");
+      setCargoEnvioEnviosStr("");
       setMontoEnvios("");
       setValorEspecialEnvios("");
       setValorEspecialEnviosStr("");
@@ -641,6 +644,7 @@ export default function WesternPagosTab() {
     setDetalleEnvios("");
     setMtcnEnvios("");
     setCargoEnvioEnvios("");
+    setCargoEnvioEnviosStr("");
     setMontoEnvios("");
     setValorEspecialEnvios("");
     setValorEspecialEnviosStr("");
@@ -692,7 +696,9 @@ export default function WesternPagosTab() {
     autoFocusGrupo: boolean = false,
     isSubmitting: boolean = false,
     valorEspecialStr: string = "",
-    setValorEspecialStr: (value: string) => void = () => {}
+    setValorEspecialStr: (value: string) => void = () => {},
+    cargoEnvioStr: string = "",
+    setCargoEnvioStr: (value: string) => void = () => {}
   ) => {
     // Determinar si debe mostrar el input especial (Monto en Dólares)
     // PAGOS  (TipoGastoId=1) -> grupo 8  ("USD CON COTIZACION")
@@ -813,16 +819,39 @@ export default function WesternPagosTab() {
               </label>
               <input
                 type="text"
-                value={cargoEnvio !== "" ? formatMiles(cargoEnvio) : ""}
+                value={cargoEnvioStr}
+                onFocus={() => {
+                  // Pasar a texto editable sin separadores de miles
+                  setCargoEnvioStr(
+                    cargoEnvio !== ""
+                      ? String(cargoEnvio).replace(".", ",")
+                      : ""
+                  );
+                }}
                 onChange={(e) => {
-                  const raw = e.target.value
-                    .replace(/\./g, "")
-                    .replace(/,/g, ".");
-                  const num = Number(raw);
-                  setCargoEnvio(isNaN(num) ? "" : num);
+                  // El punto (teclado numérico) también ingresa la coma decimal;
+                  // solo se admiten dígitos y una única coma
+                  let input = e.target.value
+                    .replace(/\./g, ",")
+                    .replace(/[^\d,]/g, "");
+                  const primeraComa = input.indexOf(",");
+                  if (primeraComa !== -1) {
+                    input =
+                      input.slice(0, primeraComa + 1) +
+                      input.slice(primeraComa + 1).replace(/,/g, "");
+                  }
+                  setCargoEnvioStr(input);
+                  const num = Number(input.replace(",", "."));
+                  setCargoEnvio(input === "" || isNaN(num) ? "" : num);
+                }}
+                onBlur={() => {
+                  // Al salir, reformatear con separador de miles y hasta 2 decimales
+                  setCargoEnvioStr(
+                    cargoEnvio !== "" ? formatMilesSmart(cargoEnvio) : ""
+                  );
                 }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                inputMode="numeric"
+                inputMode="decimal"
               />
             </div>
           )}
@@ -836,20 +865,35 @@ export default function WesternPagosTab() {
               <input
                 type="text"
                 value={valorEspecialStr}
+                onFocus={() => {
+                  // Pasar a texto editable sin separadores de miles
+                  setValorEspecialStr(
+                    valorEspecial !== ""
+                      ? String(valorEspecial).replace(".", ",")
+                      : ""
+                  );
+                }}
                 onChange={(e) => {
-                  // Permitir solo dígitos, puntos (miles) y una única coma decimal
-                  const input = e.target.value.replace(/[^\d.,]/g, "");
+                  // El punto (teclado numérico) también ingresa la coma decimal;
+                  // solo se admiten dígitos y una única coma
+                  let input = e.target.value
+                    .replace(/\./g, ",")
+                    .replace(/[^\d,]/g, "");
+                  const primeraComa = input.indexOf(",");
+                  if (primeraComa !== -1) {
+                    input =
+                      input.slice(0, primeraComa + 1) +
+                      input.slice(primeraComa + 1).replace(/,/g, "");
+                  }
                   setValorEspecialStr(input);
-                  // Normalizar a número: quitar puntos de miles y coma -> punto decimal
-                  const raw = input.replace(/\./g, "").replace(/,/g, ".");
-                  const num = Number(raw);
+                  const num = Number(input.replace(",", "."));
                   setValorEspecial(input === "" || isNaN(num) ? "" : num);
                 }}
                 onBlur={() => {
                   // Al salir, reformatear con separador de miles y hasta 2 decimales
-                  if (valorEspecial !== "") {
-                    setValorEspecialStr(formatMilesSmart(valorEspecial));
-                  }
+                  setValorEspecialStr(
+                    valorEspecial !== "" ? formatMilesSmart(valorEspecial) : ""
+                  );
                 }}
                 required
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
@@ -1104,7 +1148,9 @@ export default function WesternPagosTab() {
             false, // autoFocus
             isSubmittingEnvios,
             valorEspecialEnviosStr,
-            setValorEspecialEnviosStr
+            setValorEspecialEnviosStr,
+            cargoEnvioEnviosStr,
+            setCargoEnvioEnviosStr
           )}
         </div>
       </div>

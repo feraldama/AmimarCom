@@ -68,7 +68,7 @@ export async function generarCobranzaColegios(
       rows.reduce((s, c) => s + fn(c), 0);
 
     y = pdfSeccion(doc, y, curso, {
-      head: ["Apellidos", "Nombres", "Fecha", "Mes Pagado", "Importe", "Mes", "Subtotal", "Días", "Multa", "Examen", "Descuento", "Total", "Comisión"],
+      head: ["Apellidos", "Nombres", "Fecha", "Mes Pagado", "Importe", "Mes", "Subtotal", "Días", "Multa", "Examen", "Total", "Comisión"],
       body: rows.map((c) => [
         c.Apellido,
         c.Nombre,
@@ -80,7 +80,6 @@ export async function generarCobranzaColegios(
         c.DiasMora || "",
         c.Multa ? formatMiles(c.Multa) : "",
         c.Examen ? formatMiles(c.Examen) : "",
-        c.Descuento ? formatMiles(c.Descuento) : "",
         formatMiles(c.Total),
         c.Comision ? formatMilesSmart(c.Comision) : "",
       ]),
@@ -90,7 +89,6 @@ export async function generarCobranzaColegios(
         "",
         formatMiles(sum((c) => c.Multa)),
         formatMiles(sum((c) => c.Examen)),
-        formatMiles(sum((c) => c.Descuento)),
         formatMiles(sum((c) => c.Total)),
         formatMilesSmart(sum((c) => c.Comision)),
       ],
@@ -104,7 +102,6 @@ export async function generarCobranzaColegios(
         9: { halign: "right" },
         10: { halign: "right" },
         11: { halign: "right" },
-        12: { halign: "right" },
       },
     });
   });
@@ -115,7 +112,6 @@ export async function generarCobranzaColegios(
     ["SUBTOTAL CUOTAS", formatMiles(Number(totales.Subtotal) || 0)],
     ["MULTAS", formatMiles(Number(totales.Multa) || 0)],
     ["EXÁMENES", formatMiles(Number(totales.Examen) || 0)],
-    ["DESCUENTOS", formatMiles(Number(totales.Descuento) || 0)],
     ["TOTAL GENERAL", formatMiles(Number(totales.Total) || 0)],
     [`COMISIÓN (${formatMilesSmart(comisionPct)}%)`, formatMilesSmart(Number(totales.Comision) || 0)],
   ]);
