@@ -625,8 +625,7 @@ exports.aperturaCierreCaja = async (req, res) => {
         message: "Apertura realizada correctamente",
       });
     } else {
-      // CIERRE: CajaMonto en la tabla Caja no se modifica (queda fijo)
-      // Crear registro de cierre (con pendientes 1-4)
+      // CIERRE: crear registro de cierre (con pendientes 1-4)
       await RegistroDiarioCaja.create({
         CajaId,
         RegistroDiarioCajaFecha: new Date(),
@@ -640,6 +639,15 @@ exports.aperturaCierreCaja = async (req, res) => {
         RegistroDiarioCajaPendiente3: Number(RegistroDiarioCajaPendiente3) || 0,
         RegistroDiarioCajaPendiente4: Number(RegistroDiarioCajaPendiente4) || 0,
       });
+      // Durante el turno cada movimiento va ajustando CajaMonto (saldo
+      // teórico). Al cerrar, la caja queda con lo que se contó en el arqueo
+      // (efectivo + pendientes, el mismo "Cierre" del ticket), así Gestión de
+      // Cajas, el Cierre Diario y la próxima apertura muestran el mismo monto
+      // y el sobrante/faltante no se sigue arrastrando de un turno al otro.
+      await db.query('UPDATE "caja" SET "CajaMonto" = $1 WHERE "CajaId" = $2', [
+        Number(Monto) || 0,
+        CajaId,
+      ]);
       return res.json({
         success: true,
         message: "Cierre realizado correctamente",
