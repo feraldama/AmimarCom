@@ -27,13 +27,18 @@ exports.getHistorial = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const { fechaDesde, fechaHasta, sortBy, sortOrder } = req.query;
+    // cajaId opcional: sólo se pasa si es un entero válido, así un valor basura
+    // se ignora en lugar de romper el cast a int de la consulta.
+    const cajaIdNum = parseInt(req.query.cajaId, 10);
+    const cajaId = Number.isInteger(cajaIdNum) && cajaIdNum > 0 ? cajaIdNum : undefined;
     const result = await CierreDiario.getDatesPaginated(
       page,
       limit,
       fechaDesde,
       fechaHasta,
       sortBy,
-      sortOrder
+      sortOrder,
+      cajaId
     );
     res.json(result);
   } catch (err) {

@@ -12,6 +12,9 @@ export interface CierreDiarioDateRow {
   Fecha: string;
   CantCajas: number;
   Total: string | number;
+  // Diferencia contra el cierre anterior de la misma serie. null en el cierre
+  // más viejo, que no tiene anterior con qué compararse.
+  Variacion: string | number | null;
 }
 
 export interface CierreDiarioDetailRow {
@@ -51,7 +54,8 @@ export const getCierreDiarioHistorial = async (
   fechaDesde?: string,
   fechaHasta?: string,
   sortBy?: string,
-  sortOrder?: "asc" | "desc"
+  sortOrder?: "asc" | "desc",
+  cajaId?: string | number
 ): Promise<HistorialResponse> => {
   try {
     const params: Record<string, string | number> = { page, limit };
@@ -59,6 +63,7 @@ export const getCierreDiarioHistorial = async (
     if (fechaHasta) params.fechaHasta = fechaHasta;
     if (sortBy) params.sortBy = sortBy;
     if (sortOrder) params.sortOrder = sortOrder;
+    if (cajaId) params.cajaId = cajaId;
     const response = await api.get<HistorialResponse>("/cierrediario", {
       params,
     });

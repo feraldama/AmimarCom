@@ -2,11 +2,13 @@ import { jsPDF } from "jspdf";
 import { getReporteDivisas } from "../services/registros.service";
 import { formatMilesSmart } from "../utils/utils";
 import {
+  PDF_COLORS,
   pdfHeader,
   pdfFiltroCajas,
   pdfFooter,
   pdfSeccion,
   abrirPdf,
+  asegurarEspacio,
   SinDatosError,
   validarRango,
 } from "../utils/pdfReport";
@@ -30,6 +32,7 @@ interface DivisaMovimiento {
   DivisaMovimientoCantidad: number;
   DivisaMovimientoMonto: number;
   UsuarioNombre: string;
+  CajaId: number;
   CajaDescripcion: string;
 }
 
@@ -76,24 +79,57 @@ export async function generarDivisas(
     });
   }
 
-  pdfSeccion(doc, y, "Detalle de Operaciones", {
-    head: ["ID", "Fecha", "Divisa", "Tipo", "Cambio", "Cantidad", "Monto Gs.", "Usuario", "Caja"],
-    body: data.map((r) => [
-      r.DivisaMovimientoId,
-      new Date(r.DivisaMovimientoFecha).toLocaleDateString("es-PY"),
-      (r.DivisaNombre || "").trim(),
-      r.DivisaMovimientoTipo === "C" ? "Compra" : "Venta",
-      formatMilesSmart(Number(r.DivisaMovimientoCambio)),
-      formatMilesSmart(Number(r.DivisaMovimientoCantidad)),
-      formatMilesSmart(Number(r.DivisaMovimientoMonto)),
-      (r.UsuarioNombre || "").trim(),
-      (r.CajaDescripcion || "").trim(),
-    ]),
-    columnStyles: {
-      4: { halign: "right" },
-      5: { halign: "right" },
-      6: { halign: "right" },
-    },
+  // Agrupar el detalle por caja
+  const porCaja = new Map<
+    number,
+    { desc: string; regs: DivisaMovimiento[]; tCompra: number; tVenta: number }
+  >();
+  data.forEach((r) => {
+    if (!porCaja.has(r.CajaId)) {
+      porCaja.set(r.CajaId, {
+        desc: (r.CajaDescripcion || `Caja ${r.CajaId}`).trim(),
+        regs: [],
+        tCompra: 0,
+        tVenta: 0,
+      });
+    }
+    const caja = porCaja.get(r.CajaId)!;
+    caja.regs.push(r);
+    const monto = Number(r.DivisaMovimientoMonto) || 0;
+    if (r.DivisaMovimientoTipo === "C") caja.tCompra += monto;
+    else caja.tVenta += monto;
+  });
+
+  porCaja.forEach(({ desc, regs, tCompra, tVenta }) => {
+    y = pdfSeccion(doc, y, `Detalle de Operaciones - ${desc}`, {
+      head: ["ID", "Fecha", "Divisa", "Tipo", "Cambio", "Cantidad", "Monto Gs.", "Usuario"],
+      body: regs.map((r) => [
+        r.DivisaMovimientoId,
+        new Date(r.DivisaMovimientoFecha).toLocaleDateString("es-PY"),
+        (r.DivisaNombre || "").trim(),
+        r.DivisaMovimientoTipo === "C" ? "Compra" : "Venta",
+        formatMilesSmart(Number(r.DivisaMovimientoCambio)),
+        formatMilesSmart(Number(r.DivisaMovimientoCantidad)),
+        formatMilesSmart(Number(r.DivisaMovimientoMonto)),
+        (r.UsuarioNombre || "").trim(),
+      ]),
+      columnStyles: {
+        4: { halign: "right" },
+        5: { halign: "right" },
+        6: { halign: "right" },
+      },
+    });
+    y -= 6;
+
+    y = asegurarEspacio(doc, y, 20);
+    doc.setFontSize(9);
+    doc.setTextColor(...PDF_COLORS.textMuted);
+    doc.text(
+      `Compras: Gs. ${formatMilesSmart(tCompra)}  |  Ventas: Gs. ${formatMilesSmart(tVenta)}  |  Operaciones: ${regs.length}`,
+      14, y
+    );
+    doc.setTextColor(...PDF_COLORS.textDark);
+    y += 12;
   });
 
   pdfFooter(doc);

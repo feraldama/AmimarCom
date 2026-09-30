@@ -12,8 +12,14 @@ import {
   type CierreDiarioDateRow,
   type CierreDiarioDetailRow,
 } from "../../services/cierrediario.service";
+import { getCajas } from "../../services/cajas.service";
 import { usePermiso } from "../../hooks/usePermiso";
 import { formatMiles } from "../../utils/utils";
+
+interface CajaOpcion {
+  CajaId: number;
+  CajaDescripcion: string;
+}
 
 interface PaginationData {
   totalItems: number;
@@ -49,8 +55,13 @@ export default function CierreDiarioHistorialPage() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [fechaDesde, setFechaDesde] = useState("");
   const [fechaHasta, setFechaHasta] = useState("");
+  const [cajaId, setCajaId] = useState("");
   const [appliedDesde, setAppliedDesde] = useState("");
   const [appliedHasta, setAppliedHasta] = useState("");
+  const [appliedCaja, setAppliedCaja] = useState("");
+  // El snapshot guarda una fila por cada caja de la tabla `caja` (no sólo las
+  // tipo 1), así que el buscador tiene que ofrecerlas todas.
+  const [cajas, setCajas] = useState<CajaOpcion[]>([]);
   const [sortKey, setSortKey] = useState<string>("Fecha");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
   const [loading, setLoading] = useState(true);
@@ -72,7 +83,8 @@ export default function CierreDiarioHistorialPage() {
         appliedDesde || undefined,
         appliedHasta || undefined,
         sortKey,
-        sortOrder
+        sortOrder,
+        appliedCaja || undefined
       );
       setRows(result.data);
       setPagination(result.pagination);
@@ -82,23 +94,53 @@ export default function CierreDiarioHistorialPage() {
     } finally {
       setLoading(false);
     }
-  }, [puedeLeer, page, itemsPerPage, appliedDesde, appliedHasta, sortKey, sortOrder]);
+  }, [
+    puedeLeer,
+    page,
+    itemsPerPage,
+    appliedDesde,
+    appliedHasta,
+    appliedCaja,
+    sortKey,
+    sortOrder,
+  ]);
 
   useEffect(() => {
     fetchHistorial();
   }, [fetchHistorial]);
 
+  useEffect(() => {
+    if (!puedeLeer) return;
+    getCajas(1, 1000)
+      .then((data: { data: CajaOpcion[] }) => setCajas(data.data || []))
+      .catch((err) => console.error("Error al cargar cajas:", err));
+  }, [puedeLeer]);
+
+  // La columna Variación sólo existe con una caja filtrada; si el orden quedó
+  // en esa columna y se vuelve a la vista consolidada, hay que soltarlo.
+  const resetSortSiSobra = (nuevaCaja: string) => {
+    if (!nuevaCaja && sortKey === "Variacion") {
+      setSortKey("Fecha");
+      setSortOrder("desc");
+    }
+  };
+
   const handleApplyFilter = () => {
     setAppliedDesde(fechaDesde);
     setAppliedHasta(fechaHasta);
+    setAppliedCaja(cajaId);
+    resetSortSiSobra(cajaId);
     setPage(1);
   };
 
   const handleClearFilter = () => {
     setFechaDesde("");
     setFechaHasta("");
+    setCajaId("");
     setAppliedDesde("");
     setAppliedHasta("");
+    setAppliedCaja("");
+    resetSortSiSobra("");
     setPage(1);
   };
 
@@ -145,22 +187,59 @@ export default function CierreDiarioHistorialPage() {
     id: r.CierreDiarioId,
   }));
 
+  // Con una caja filtrada cada fila es el monto de esa caja, así que la
+  // cantidad de cajas siempre sería 1 y el "total" deja de ser una suma.
+  const cajaFiltrada = Boolean(appliedCaja);
+  const descripcionCajaFiltrada =
+    cajas.find((c) => String(c.CajaId) === appliedCaja)?.CajaDescripcion ||
+    `Caja ${appliedCaja}`;
+
+  const renderVariacion = (row: HistorialRow) => {
+    if (row.Variacion === null || row.Variacion === undefined) {
+      return <span className="text-gray-400">—</span>;
+    }
+    const v = Number(row.Variacion);
+    if (v === 0) return <span className="text-gray-500">0</span>;
+    return (
+      <span className={v > 0 ? "text-success-600" : "text-danger-600"}>
+        {v > 0 ? "+" : "-"}
+        {formatMiles(Math.abs(v))}
+      </span>
+    );
+  };
+
   const historialColumns = [
     {
       key: "Fecha",
       label: "Fecha",
       render: (row: HistorialRow) => formatFecha(row.Fecha),
     },
-    {
-      key: "CantCajas",
-      label: "Cantidad de Cajas",
-      render: (row: HistorialRow) => row.CantCajas,
-    },
+    ...(cajaFiltrada
+      ? []
+      : [
+          {
+            key: "CantCajas",
+            label: "Cantidad de Cajas",
+            render: (row: HistorialRow) => row.CantCajas,
+          },
+        ]),
     {
       key: "Total",
-      label: "Total Gs.",
+      label: cajaFiltrada ? "Monto Gs." : "Total Gs.",
       render: (row: HistorialRow) => formatMiles(Number(row.Total)),
     },
+    // La variación se muestra sólo al filtrar por caja: es la que pidió el
+    // cliente y la que se lee sin ambigüedad (el saldo de esa caja contra su
+    // cierre anterior).
+    ...(cajaFiltrada
+      ? [
+          {
+            key: "Variacion",
+            label: "Variación Gs.",
+            render: renderVariacion,
+          },
+        ]
+      : []),
   ];
 
   const detailColumns = [
@@ -186,7 +265,11 @@ export default function CierreDiarioHistorialPage() {
     <div className="w-full">
       <PageHeader
         title="Historial de Cierres Diarios"
-        subtitle={`${pagination.totalItems} cierre(s) registrado(s)`}
+        subtitle={
+          cajaFiltrada
+            ? `${pagination.totalItems} cierre(s) de ${descripcionCajaFiltrada}`
+            : `${pagination.totalItems} cierre(s) registrado(s)`
+        }
         icon={CalendarCheck}
       />
 
@@ -227,6 +310,27 @@ export default function CierreDiarioHistorialPage() {
               onChange={(e) => setFechaHasta(e.target.value)}
               className="w-full border border-gray-300 rounded-lg p-2 text-sm"
             />
+          </div>
+          <div>
+            <label
+              htmlFor="cajaId"
+              className="block text-xs font-medium text-gray-700 mb-1"
+            >
+              Caja
+            </label>
+            <select
+              id="cajaId"
+              value={cajaId}
+              onChange={(e) => setCajaId(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white"
+            >
+              <option value="">Todas las cajas</option>
+              {cajas.map((c) => (
+                <option key={c.CajaId} value={c.CajaId}>
+                  {c.CajaDescripcion}
+                </option>
+              ))}
+            </select>
           </div>
           <div className="flex gap-2">
             <ActionButton label="Filtrar" onClick={handleApplyFilter} />

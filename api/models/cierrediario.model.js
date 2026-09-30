@@ -21,47 +21,83 @@ const CierreDiario = {
     return result.rowCount;
   },
 
-  // Paginated list of distinct dates with aggregations. Optional date range filter.
+  // Paginated list of distinct dates with aggregations. Filtros opcionales de
+  // rango de fechas y de caja. Con `cajaId` cada fecha agrupa una sola fila, o
+  // sea que "Total" pasa a ser el monto de esa caja en esa fecha.
   getDatesPaginated: async (
     page,
     limit,
     fechaDesde,
     fechaHasta,
     sortBy = "Fecha",
-    sortOrder = "desc"
+    sortOrder = "desc",
+    cajaId
   ) => {
     const offset = (page - 1) * limit;
-    const filters = [];
+    // El filtro de caja se aplica al agrupar (dentro del CTE) y el de fechas
+    // recién después, para que la variación se calcule siempre contra el
+    // cierre inmediatamente anterior de esa caja aunque quede fuera del rango.
+    const cajaFilters = [];
+    const fechaFilters = [];
     const params = [];
+    if (cajaId) {
+      params.push(cajaId);
+      cajaFilters.push(`"CajaId" = $${params.length}::int`);
+    }
     if (fechaDesde) {
       params.push(fechaDesde);
-      filters.push(`"CierreDiarioFecha" >= $${params.length}::date`);
+      fechaFilters.push(`"CierreDiarioFecha" >= $${params.length}::date`);
     }
     if (fechaHasta) {
       params.push(fechaHasta);
-      filters.push(`"CierreDiarioFecha" <= $${params.length}::date`);
+      fechaFilters.push(`"CierreDiarioFecha" <= $${params.length}::date`);
     }
-    const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+    const toWhere = (arr) => (arr.length ? `WHERE ${arr.join(" AND ")}` : "");
+    const cajaWhere = toWhere(cajaFilters);
+    const fechaWhere = toWhere(fechaFilters);
+    const countWhere = toWhere([...cajaFilters, ...fechaFilters]);
 
     // Whitelist allowed sort columns; everything else falls back to Fecha.
+    // Son los nombres que expone el CTE, no las expresiones agregadas.
     const sortColumns = {
       Fecha: `"CierreDiarioFecha"`,
-      CantCajas: `COUNT(*)`,
-      Total: `COALESCE(SUM("CierreDiarioCajaMonto"), 0)`,
+      CantCajas: `"CantCajas"`,
+      Total: `"Total"`,
+      Variacion: `"Variacion"`,
     };
     const orderExpr = sortColumns[sortBy] || sortColumns.Fecha;
     const orderDir = String(sortOrder).toLowerCase() === "asc" ? "ASC" : "DESC";
 
     const dataParams = [...params, limit, offset];
+    // La variación es NULL en el cierre más viejo de la serie (no hay anterior
+    // con qué comparar); NULLS LAST la deja al final al ordenar por esa columna.
     const dataQuery = `
+      WITH "porFecha" AS (
+        SELECT
+          "CierreDiarioFecha",
+          COUNT(*)::int AS "CantCajas",
+          COALESCE(SUM("CierreDiarioCajaMonto"), 0)::numeric AS "Total"
+        FROM "cierrediario"
+        ${cajaWhere}
+        GROUP BY "CierreDiarioFecha"
+      ),
+      "conVariacion" AS (
+        SELECT
+          "CierreDiarioFecha",
+          "CantCajas",
+          "Total",
+          "Total" - LAG("Total") OVER (ORDER BY "CierreDiarioFecha")
+            AS "Variacion"
+        FROM "porFecha"
+      )
       SELECT
         "CierreDiarioFecha"::text AS "Fecha",
-        COUNT(*)::int AS "CantCajas",
-        COALESCE(SUM("CierreDiarioCajaMonto"), 0)::numeric AS "Total"
-      FROM "cierrediario"
-      ${where}
-      GROUP BY "CierreDiarioFecha"
-      ORDER BY ${orderExpr} ${orderDir}
+        "CantCajas",
+        "Total",
+        "Variacion"
+      FROM "conVariacion"
+      ${fechaWhere}
+      ORDER BY ${orderExpr} ${orderDir} NULLS LAST
       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `;
     const data = await db.query(dataQuery, dataParams);
@@ -69,7 +105,7 @@ const CierreDiario = {
     const countQuery = `
       SELECT COUNT(DISTINCT "CierreDiarioFecha")::int AS total
       FROM "cierrediario"
-      ${where}
+      ${countWhere}
     `;
     const count = await db.query(countQuery, params);
 
