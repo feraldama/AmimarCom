@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const colegiocobranzaController = require("../controllers/colegiocobranza.controller");
 const authMiddleware = require("../middlewares/auth");
+const reportePermiso = require("../middlewares/reportePermiso");
 
 // Aplicar middleware de autenticación a todas las rutas
 router.use(authMiddleware);
@@ -12,6 +13,7 @@ router.get("/search", authMiddleware, colegiocobranzaController.search);
 router.get(
   "/reporte",
   authMiddleware,
+  reportePermiso("REPORTECOLEGIOS"),
   colegiocobranzaController.reporteCobranzas
 );
 router.get("/:id", authMiddleware, colegiocobranzaController.getById);

@@ -28,12 +28,8 @@ import PerfilesPage from "./pages/perfiles/PerfilesPage";
 import MenusPage from "./pages/menus/MenusPage";
 import HorarioUsoPage from "./pages/horariouso/HorarioUsoPage";
 import ProductsPage from "./pages/products/ProductsPage";
-import VentasPage from "./pages/ventas/VentasPage";
-import CreditoPagosPage from "./pages/ventas/CreditoPagosPage";
 import ReportesPage from "./pages/dashboard/ReportesPage";
 import FacturasPage from "./pages/facturas/FacturasPage";
-import Compras from "./pages/compras/Compras";
-import ComprasPage from "./pages/compras/ComprasPage";
 import TransportesPage from "./pages/transporte/TransportesPage";
 import PagosTransportePage from "./pages/pagotrans/PagosTransportePage";
 import ColegiosPage from "./pages/colegios/ColegiosPage";
@@ -55,20 +51,12 @@ function App() {
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="/login" element={<Login />} />
 
-          {/* Rutas sin Layout (Sales y Compras) */}
+          {/* Ruta sin Layout (Sales) */}
           <Route
             path="/ventas"
             element={
               <PrivateRoute>
                 <Sales />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/compras"
-            element={
-              <PrivateRoute>
-                <Compras />
               </PrivateRoute>
             }
           />
@@ -123,9 +111,6 @@ function App() {
             <Route path="/menus" element={<MenusPage />} />
             <Route path="/horariouso" element={<HorarioUsoPage />} />
             <Route path="/products" element={<ProductsPage />} />
-            <Route path="/modifications/ventas" element={<VentasPage />} />
-            <Route path="/modifications/compras" element={<ComprasPage />} />
-            <Route path="/credito-pagos" element={<CreditoPagosPage />} />
             <Route path="/reportes" element={<ReportesPage />} />
             <Route path="/facturas" element={<FacturasPage />} />
           </Route>

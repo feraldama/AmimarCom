@@ -208,6 +208,15 @@ export const getReportePaseCajas = async (
   }
 };
 
+// Caja del usuario logueado (la abierta o la de su última apertura); null si nunca abrió una
+export const getMiCaja = async (): Promise<{
+  CajaId: number;
+  CajaDescripcion: string;
+} | null> => {
+  const response = await api.get("/registrodiariocaja/mi-caja");
+  return response.data;
+};
+
 export const getReporteMovimientosCajas = async (
   fechaInicio: string,
   fechaFin: string,

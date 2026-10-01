@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const registroDiarioCajaController = require("../controllers/registrodiariocaja.controller");
 const authMiddleware = require("../middlewares/auth");
+const reportePermiso = require("../middlewares/reportePermiso");
 
 // Aplicar middleware de autenticación a todas las rutas
 router.use(authMiddleware);
@@ -13,6 +14,7 @@ router.get(
   "/estado-apertura",
   registroDiarioCajaController.estadoAperturaPorUsuario
 );
+router.get("/mi-caja", registroDiarioCajaController.miCaja);
 router.get(
   "/ultimo-cierre",
   authMiddleware,
@@ -21,36 +23,43 @@ router.get(
 router.get(
   "/reporte-pase-cajas",
   authMiddleware,
+  reportePermiso("REPORTEPASECAJAS"),
   registroDiarioCajaController.reportePaseCajas
 );
 router.get(
   "/reporte-movimientos-cajas",
   authMiddleware,
+  reportePermiso("REPORTEREGISTRODIARIO", "REPORTEPORCAJA", "REPORTEMOVIMIENTOSCAJAS"),
   registroDiarioCajaController.reporteMovimientosCajas
 );
 router.get(
   "/reporte-cierre-diario",
   authMiddleware,
+  reportePermiso("REPORTECIERREDIARIO"),
   registroDiarioCajaController.reporteCierreDiario
 );
 router.get(
   "/reporte-ingresos-egresos",
   authMiddleware,
+  reportePermiso("REPORTEINGRESOSEGRESOS"),
   registroDiarioCajaController.reporteIngresosEgresos
 );
 router.get(
   "/reporte-western",
   authMiddleware,
+  reportePermiso("REPORTEWESTERN", "REPORTEWESTERNUSD"),
   registroDiarioCajaController.reporteWestern
 );
 router.get(
   "/reporte-anticipos",
   authMiddleware,
+  reportePermiso("REPORTEANTICIPOS"),
   registroDiarioCajaController.reporteAnticipos
 );
 router.get(
   "/reporte-el-comercio",
   authMiddleware,
+  reportePermiso("REPORTEELCOMERCIO"),
   registroDiarioCajaController.reporteElComercio
 );
 router.get("/:id", authMiddleware, registroDiarioCajaController.getById);

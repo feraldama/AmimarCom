@@ -2,8 +2,10 @@ import { BarChart3, FileText, Wallet, ArrowLeftRight, AlertTriangle, HandCoins }
 import React, { useState, useEffect } from "react";
 import Swal from "sweetalert2";
 import { usePermiso } from "../../hooks/usePermiso";
+import { useAuth } from "../../contexts/useAuth";
 import { getTiposGastoGrupo, type TipoGastoGrupo } from "../../services/tipogastogrupo.service";
 import { getCajas } from "../../services/cajas.service";
+import { getMiCaja } from "../../services/registros.service";
 import { getColegios } from "../../services/colegio.service";
 import { getTransportes } from "../../services/transporte.service";
 import { SinDatosError } from "../../utils/pdfReport";
@@ -93,13 +95,15 @@ interface SelectorCajasProps {
   cajas: { id: number; desc: string }[];
   seleccion: string[];
   onToggle: (id: string) => void;
+  /** Selección fija (usuario limitado a su caja): casillas no editables. */
+  bloqueado?: boolean;
 }
 
-function SelectorCajas({ cajas, seleccion, onToggle }: SelectorCajasProps) {
+function SelectorCajas({ cajas, seleccion, onToggle, bloqueado }: SelectorCajasProps) {
   return (
     <div className="mb-4">
       <label className="block text-xs font-medium text-muted-foreground mb-1">
-        Cajas (todas si no marcás ninguna)
+        {bloqueado ? "Caja" : "Cajas (todas si no marcás ninguna)"}
       </label>
       <div className="max-h-32 overflow-y-auto rounded-lg border border-input bg-background px-3 py-2 space-y-1">
         {cajas.map((c) => (
@@ -111,6 +115,7 @@ function SelectorCajas({ cajas, seleccion, onToggle }: SelectorCajasProps) {
               type="checkbox"
               checked={seleccion.includes(String(c.id))}
               onChange={() => onToggle(String(c.id))}
+              disabled={bloqueado}
               className="accent-primary"
             />
             {c.desc}
@@ -121,10 +126,39 @@ function SelectorCajas({ cajas, seleccion, onToggle }: SelectorCajasProps) {
   );
 }
 
+// ── Permisos ──
+// REPORTES (leer) habilita todos los reportes con todas las cajas. Sin él, el
+// permiso específico de cada reporte lo habilita limitado a la caja del
+// usuario (el backend aplica la misma regla en cada endpoint).
+
+const PERMISO_REPORTE = {
+  resumen: "REPORTEINGRESOSEGRESOS",
+  registro: "REPORTEREGISTRODIARIO",
+  porcaja: "REPORTEPORCAJA",
+  colegios: "REPORTECOLEGIOS",
+  jsi: "REPORTEJSI",
+  comercio: "REPORTEELCOMERCIO",
+  transporte: "REPORTETRANSPORTE",
+  westerngs: "REPORTEWESTERN",
+  westernusd: "REPORTEWESTERNUSD",
+  anticipos: "REPORTEANTICIPOS",
+  cierre: "REPORTECIERREDIARIO",
+  divisas: "REPORTEDIVISAS",
+  pase: "REPORTEPASECAJAS",
+  mov: "REPORTEMOVIMIENTOSCAJAS",
+} as const;
+
+type ReporteKey = keyof typeof PERMISO_REPORTE;
+
 // ── Pagina principal ──
 
 const ReportesPage: React.FC = () => {
-  const puedeLeer = usePermiso("REPORTES", "leer");
+  const { permisos } = useAuth();
+  const puedeLeerTodos = usePermiso("REPORTES", "leer");
+  const puedeVer = (key: ReporteKey) =>
+    puedeLeerTodos || !!permisos?.[PERMISO_REPORTE[key]]?.leer;
+  const soloSuCaja = !puedeLeerTodos;
+  const puedeLeer = (Object.keys(PERMISO_REPORTE) as ReporteKey[]).some(puedeVer);
   const [loading, setLoading] = useState<string | null>(null);
   const today = new Date().toISOString().slice(0, 10);
 
@@ -180,8 +214,12 @@ const ReportesPage: React.FC = () => {
 
   // Cajas seleccionadas de un reporte como CajaFiltro[] (con descripción,
   // para que el PDF pueda listar por qué cajas se filtró)
+  // (limitado a su caja: siempre la única caja cargada)
+  const seleccionDe = (key: string): string[] =>
+    soloSuCaja ? cajas.map((c) => String(c.id)) : cajasSel[key] || [];
+
   const cajasFiltroDe = (key: string): CajaFiltro[] =>
-    (cajasSel[key] || [])
+    seleccionDe(key)
       .map((id) => cajas.find((c) => String(c.id) === id))
       .filter((c): c is { id: number; desc: string } => c !== undefined)
       .map((c) => ({ id: c.id, desc: c.desc }));
@@ -202,16 +240,28 @@ const ReportesPage: React.FC = () => {
       })
       .catch((err) => console.error("Error al cargar grupos de gasto:", err));
 
-    getCajas(1, 1000, undefined, undefined, 1)
-      .then((data: { data: { CajaId: number; CajaDescripcion: string }[] }) => {
-        setCajas(
-          (data.data || []).map((c) => ({
-            id: c.CajaId,
-            desc: (c.CajaDescripcion || `Caja ${c.CajaId}`).trim(),
-          }))
-        );
-      })
-      .catch((err) => console.error("Error al cargar cajas:", err));
+    if (soloSuCaja) {
+      // Única caja disponible, ya seleccionada (el backend además la fuerza)
+      getMiCaja()
+        .then((caja) => {
+          if (!caja) return;
+          const desc = (caja.CajaDescripcion || `Caja ${caja.CajaId}`).trim();
+          setCajas([{ id: caja.CajaId, desc }]);
+          setCajaReporte(String(caja.CajaId));
+        })
+        .catch((err) => console.error("Error al cargar la caja del usuario:", err));
+    } else {
+      getCajas(1, 1000, undefined, undefined, 1)
+        .then((data: { data: { CajaId: number; CajaDescripcion: string }[] }) => {
+          setCajas(
+            (data.data || []).map((c) => ({
+              id: c.CajaId,
+              desc: (c.CajaDescripcion || `Caja ${c.CajaId}`).trim(),
+            }))
+          );
+        })
+        .catch((err) => console.error("Error al cargar cajas:", err));
+    }
 
     getColegios(1, 1000, "ColegioNombre", "asc")
       .then((data: { data: { ColegioId: number; ColegioNombre: string }[] }) => {
@@ -234,7 +284,7 @@ const ReportesPage: React.FC = () => {
         );
       })
       .catch((err) => console.error("Error al cargar transportes:", err));
-  }, []);
+  }, [soloSuCaja]);
 
   const updateF = (key: keyof typeof f, idx: 0 | 1, val: string) => {
     setF((prev) => {
@@ -293,7 +343,7 @@ const ReportesPage: React.FC = () => {
     sinFiltroCajas?: boolean;
   }
 
-  const reportes: ReporteDef[] = [
+  const todosLosReportes: ReporteDef[] = [
     {
       key: "resumen",
       title: "Ingresos/Egresos Resumen",
@@ -493,6 +543,13 @@ const ReportesPage: React.FC = () => {
     },
   ];
 
+  // Limitado a su caja y sin caja (nunca abrió una): no se puede generar
+  const reportes = todosLosReportes
+    .filter((r) => puedeVer(r.key))
+    .map((r) =>
+      soloSuCaja && cajas.length === 0 ? { ...r, disabled: true } : r
+    );
+
   return (
     <div className="w-full">
       <PageHeader title="Reportes" icon={BarChart3} subtitle="Genera reportes en PDF" />
@@ -504,8 +561,9 @@ const ReportesPage: React.FC = () => {
             {!rep.sinFiltroCajas && (
               <SelectorCajas
                 cajas={cajas}
-                seleccion={cajasSel[rep.key] || []}
+                seleccion={seleccionDe(rep.key)}
                 onToggle={(id) => toggleCajaSel(rep.key, id)}
+                bloqueado={soloSuCaja}
               />
             )}
             <DateRange

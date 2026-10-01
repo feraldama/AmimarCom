@@ -3,6 +3,16 @@ const CajaGasto = require("../models/cajagasto.model");
 const db = require("../config/db");
 const { parseCajaIds } = require("../utils/reportes");
 
+// Caja del usuario logueado (la abierta o la de su última apertura)
+exports.miCaja = async (req, res) => {
+  try {
+    const caja = await RegistroDiarioCaja.getCajaDelUsuario(req.user.id);
+    res.json(caja || null);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // Obtener todos los registros con paginación
 // Lee los parámetros de filtro de la query (compartidos por getAll y search)
 const parseFiltros = (query) => ({

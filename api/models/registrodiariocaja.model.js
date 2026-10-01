@@ -672,6 +672,28 @@ const RegistroDiarioCaja = {
       cajaId: null,
     };
   },
+  // Caja del usuario: la que tiene abierta o, si no tiene ninguna, la de su
+  // última apertura. Devuelve undefined si el usuario nunca abrió una caja.
+  getCajaDelUsuario: async (usuarioId) => {
+    const estado = await RegistroDiarioCaja.getEstadoAperturaPorUsuario(
+      usuarioId
+    );
+    let cajaId = estado.cajaId;
+    if (!cajaId) {
+      const ultima = await db.query(
+        `SELECT "CajaId" FROM "registrodiariocaja" WHERE "UsuarioId" = $1 AND "TipoGastoId" = 2 AND "TipoGastoGrupoId" = 2 ORDER BY "RegistroDiarioCajaId" DESC LIMIT 1`,
+        [usuarioId]
+      );
+      cajaId = ultima.rows[0]?.CajaId;
+    }
+    if (!cajaId) return undefined;
+    const caja = await db.query(
+      `SELECT "CajaId", "CajaDescripcion" FROM "caja" WHERE "CajaId" = $1`,
+      [cajaId]
+    );
+    return caja.rows[0];
+  },
+
   // ── REPORTES ──
 
   // Pases entre cajas: registros cuyo grupo sigue la convención "PASE <caja>"

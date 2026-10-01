@@ -29,13 +29,9 @@ const routeTitles: Record<string, string> = {
   "/menus": "Menús",
   "/horariouso": "Horarios de Uso",
   "/products": "Productos",
-  "/modifications/ventas": "Ventas",
-  "/modifications/compras": "Compras",
-  "/credito-pagos": "Cobro de Créditos",
   "/reportes": "Reportes",
   "/facturas": "Facturas",
   "/ventas": "Cobranzas",
-  "/compras": "Compras",
 };
 
 const DEFAULT_TITLE = "Amimar";
