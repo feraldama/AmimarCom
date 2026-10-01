@@ -1,3 +1,12 @@
+// Fecha de hoy (YYYY-MM-DD) en la zona horaria local. No usar
+// toISOString(): está en UTC y en Paraguay (UTC-3) desde las 21:00 da mañana.
+export const fechaHoyLocal = (): string => {
+  const d = new Date();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+};
+
 export const formatMiles = (value: number | string): string => {
   const parseToNumber = (value: number | string): number => {
     if (typeof value === "string") {

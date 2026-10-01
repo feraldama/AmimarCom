@@ -3,6 +3,7 @@ const router = express.Router();
 const registroDiarioCajaController = require("../controllers/registrodiariocaja.controller");
 const authMiddleware = require("../middlewares/auth");
 const reportePermiso = require("../middlewares/reportePermiso");
+const verificarPermiso = require("../middlewares/permiso");
 
 // Aplicar middleware de autenticación a todas las rutas
 router.use(authMiddleware);
@@ -15,6 +16,11 @@ router.get(
   registroDiarioCajaController.estadoAperturaPorUsuario
 );
 router.get("/mi-caja", registroDiarioCajaController.miCaja);
+router.get(
+  "/saldo-caja-abierta",
+  registroDiarioCajaController.saldoCajaAbierta
+);
+router.get("/turno-cierre", registroDiarioCajaController.turnoCierre);
 router.get(
   "/ultimo-cierre",
   authMiddleware,
@@ -70,7 +76,18 @@ router.post(
   authMiddleware,
   registroDiarioCajaController.aperturaCierreCaja
 );
-router.put("/:id", authMiddleware, registroDiarioCajaController.update);
-router.delete("/:id", authMiddleware, registroDiarioCajaController.delete);
+router.put(
+  "/:id",
+  authMiddleware,
+  verificarPermiso("REGISTRODIARIOCAJA", "editar"),
+  registroDiarioCajaController.update
+);
+// También lo usa Movimientos de Divisas para borrar el registro asociado
+router.delete(
+  "/:id",
+  authMiddleware,
+  verificarPermiso(["REGISTRODIARIOCAJA", "DIVISAMOVIMIENTO"], "eliminar"),
+  registroDiarioCajaController.delete
+);
 
 module.exports = router;

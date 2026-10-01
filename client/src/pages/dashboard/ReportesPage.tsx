@@ -9,6 +9,7 @@ import { getMiCaja } from "../../services/registros.service";
 import { getColegios } from "../../services/colegio.service";
 import { getTransportes } from "../../services/transporte.service";
 import { SinDatosError } from "../../utils/pdfReport";
+import { fechaHoyLocal } from "../../utils/utils";
 import { generarIngresosEgresosResumen } from "../../reports/ingresosEgresosResumen";
 import { generarRegistroDiario, generarIngresoEgresoPorCaja } from "../../reports/registroDiario";
 import { generarWesternGs, generarWesternUsd } from "../../reports/western";
@@ -160,7 +161,7 @@ const ReportesPage: React.FC = () => {
   const soloSuCaja = !puedeLeerTodos;
   const puedeLeer = (Object.keys(PERMISO_REPORTE) as ReporteKey[]).some(puedeVer);
   const [loading, setLoading] = useState<string | null>(null);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = fechaHoyLocal();
 
   // Rango de fechas por reporte: [desde, hasta]
   const [f, setF] = useState({

@@ -17,6 +17,7 @@ import { getCajas } from "../../services/cajas.service";
 import Swal from "sweetalert2";
 import { usePermiso } from "../../hooks/usePermiso";
 import { exportarExcel } from "../../utils/excelExport";
+import { fechaHoyLocal } from "../../utils/utils";
 
 interface CajaOption {
   CajaId: number;
@@ -268,7 +269,7 @@ export default function PagoAdminPage() {
         return;
       }
 
-      const fechaArchivo = new Date().toISOString().slice(0, 10);
+      const fechaArchivo = fechaHoyLocal();
       await exportarExcel<PagoAdmin>({
         nombreArchivo: `PagosAdmin_${fechaArchivo}.xlsx`,
         nombreHoja: "Pagos Admin",

@@ -47,6 +47,50 @@ export const getUltimoCierrePorCaja = async (
   }
 };
 
+export interface SaldoCajaAbierta {
+  cajaId: number;
+  apertura: number;
+  ingresos: number;
+  egresos: number;
+  saldoTeorico: number;
+}
+
+// Saldo teórico de la caja abierta del usuario logueado (apertura + ingresos -
+// egresos desde la apertura), para el sobrante/faltante en vivo del cierre.
+export const getSaldoCajaAbierta = async (): Promise<SaldoCajaAbierta> => {
+  try {
+    const response = await api.get(`/registrodiariocaja/saldo-caja-abierta`);
+    return response.data;
+  } catch (error) {
+    const axiosError = error as AxiosError<{ message?: string }>;
+    throw (
+      axiosError.response?.data || {
+        message: "Error al consultar el saldo de la caja",
+      }
+    );
+  }
+};
+
+// Último turno cerrado por el usuario logueado en la caja: ids de apertura y
+// cierre y todos los registros de la caja entre ambos (para el ticket).
+export const getTurnoCierre = async <T>(
+  cajaId: string | number,
+): Promise<{ aperturaId: number; cierreId: number; registros: T[] }> => {
+  try {
+    const response = await api.get(`/registrodiariocaja/turno-cierre`, {
+      params: { cajaId },
+    });
+    return response.data;
+  } catch (error) {
+    const axiosError = error as AxiosError<{ message?: string }>;
+    throw (
+      axiosError.response?.data || {
+        message: "Error al obtener los registros del cierre",
+      }
+    );
+  }
+};
+
 export const getEstadoAperturaPorUsuario = async (
   usuarioId: string | number,
 ) => {

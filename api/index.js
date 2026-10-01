@@ -110,6 +110,8 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 3013;
-app.listen(PORT, () => {
+// HOST opcional: en el VPS se usa 127.0.0.1 para que solo Caddy llegue a la API.
+const HOST = process.env.HOST || undefined;
+app.listen(PORT, HOST, () => {
   console.log(`Servidor backend corriendo en puerto ${PORT}`);
 });

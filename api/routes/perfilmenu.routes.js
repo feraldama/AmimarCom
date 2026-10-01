@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const perfilMenuController = require("../controllers/perfilmenu.controller");
 const authMiddleware = require("../middlewares/auth");
+const verificarPermiso = require("../middlewares/permiso");
 
 router.get(
   "/perfil/:perfilId",
@@ -13,11 +14,12 @@ router.get(
   authMiddleware,
   perfilMenuController.getPermisosByUsuarioId
 );
-router.post("/", authMiddleware, perfilMenuController.create);
-router.put("/:perfilId/:menuId", authMiddleware, perfilMenuController.update);
+router.post("/", authMiddleware, verificarPermiso("PERFILES", ["crear", "editar"]), perfilMenuController.create);
+router.put("/:perfilId/:menuId", authMiddleware, verificarPermiso("PERFILES", "editar"), perfilMenuController.update);
 router.delete(
   "/:perfilId/:menuId",
   authMiddleware,
+  verificarPermiso("PERFILES", "editar"),
   perfilMenuController.delete
 );
 

@@ -3,6 +3,46 @@ const CajaGasto = require("../models/cajagasto.model");
 const db = require("../config/db");
 const { parseCajaIds } = require("../utils/reportes");
 
+// Saldo teórico de la caja que el usuario logueado tiene abierta, para que el
+// cierre muestre el sobrante/faltante en vivo mientras se cuenta el efectivo.
+exports.saldoCajaAbierta = async (req, res) => {
+  try {
+    const estado = await RegistroDiarioCaja.getEstadoAperturaPorUsuario(
+      req.user.id
+    );
+    if (!estado.cajaId) {
+      return res.status(404).json({ message: "No tenés una caja abierta" });
+    }
+    const saldo = await RegistroDiarioCaja.getSaldoTeorico(
+      estado.aperturaId,
+      estado.cajaId
+    );
+    res.json({ cajaId: estado.cajaId, ...saldo });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Registros del último turno cerrado por el usuario logueado en una caja, para
+// generar el ticket de cierre (sin el límite de una consulta paginada).
+exports.turnoCierre = async (req, res) => {
+  try {
+    const { cajaId } = req.query;
+    if (!cajaId) {
+      return res.status(400).json({ message: "Falta el parámetro cajaId" });
+    }
+    const turno = await RegistroDiarioCaja.getTurnoCierre(req.user.id, cajaId);
+    if (!turno) {
+      return res.status(404).json({
+        message: "No se encontró una apertura y un cierre de esta caja para el usuario.",
+      });
+    }
+    res.json(turno);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // Caja del usuario logueado (la abierta o la de su última apertura)
 exports.miCaja = async (req, res) => {
   try {

@@ -672,6 +672,74 @@ const RegistroDiarioCaja = {
       cajaId: null,
     };
   },
+  // Último turno cerrado del usuario en una caja, para el ticket de cierre:
+  // su último cierre, la apertura previa a ese cierre y TODOS los registros de
+  // la caja entre ambos (sin filtrar usuario, para incluir los PASE recibidos).
+  // Devuelve undefined si no hay cierre o no hay apertura antes del cierre.
+  getTurnoCierre: async (usuarioId, cajaId) => {
+    const cierre = await db.query(
+      `SELECT "RegistroDiarioCajaId" FROM "registrodiariocaja"
+       WHERE "UsuarioId" = $1 AND "CajaId" = $2
+         AND "TipoGastoId" = 1 AND "TipoGastoGrupoId" = 2
+       ORDER BY "RegistroDiarioCajaId" DESC LIMIT 1`,
+      [usuarioId, cajaId]
+    );
+    const cierreId = cierre.rows[0]?.RegistroDiarioCajaId;
+    if (!cierreId) return undefined;
+    const apertura = await db.query(
+      `SELECT "RegistroDiarioCajaId" FROM "registrodiariocaja"
+       WHERE "UsuarioId" = $1 AND "CajaId" = $2
+         AND "TipoGastoId" = 2 AND "TipoGastoGrupoId" = 2
+         AND "RegistroDiarioCajaId" < $3
+       ORDER BY "RegistroDiarioCajaId" DESC LIMIT 1`,
+      [usuarioId, cajaId, cierreId]
+    );
+    const aperturaId = apertura.rows[0]?.RegistroDiarioCajaId;
+    if (!aperturaId) return undefined;
+    const registros = await db.query(
+      `SELECT r.*,
+         t."TipoGastoDescripcion",
+         tg."TipoGastoGrupoDescripcion"
+       FROM "registrodiariocaja" r
+       LEFT JOIN "tipogasto" t ON r."TipoGastoId" = t."TipoGastoId"
+       LEFT JOIN "tipogastogrupo" tg ON r."TipoGastoId" = tg."TipoGastoId" AND r."TipoGastoGrupoId" = tg."TipoGastoGrupoId"
+       WHERE r."CajaId" = $1
+         AND r."RegistroDiarioCajaId" BETWEEN $2 AND $3
+       ORDER BY r."RegistroDiarioCajaId"`,
+      [cajaId, aperturaId, cierreId]
+    );
+    return { aperturaId, cierreId, registros: registros.rows };
+  },
+
+  // Saldo teórico de una caja desde su apertura hasta ahora: misma fórmula que
+  // el ticket de cierre y el reporte de Registro Diario (apertura + ingresos -
+  // egresos, sin contar los registros de apertura/cierre, grupo 2). Se toma
+  // por CajaId, sin filtrar usuario, para incluir los PASE de otras cajas.
+  getSaldoTeorico: async (aperturaId, cajaId) => {
+    const result = await db.query(
+      `SELECT
+         (SELECT "RegistroDiarioCajaMonto" FROM "registrodiariocaja"
+           WHERE "RegistroDiarioCajaId" = $1) AS apertura,
+         COALESCE(SUM(CASE WHEN "TipoGastoId" = 2 THEN "RegistroDiarioCajaMonto" END), 0) AS ingresos,
+         COALESCE(SUM(CASE WHEN "TipoGastoId" = 1 THEN "RegistroDiarioCajaMonto" END), 0) AS egresos
+       FROM "registrodiariocaja"
+       WHERE "CajaId" = $2
+         AND "RegistroDiarioCajaId" > $1
+         AND "TipoGastoGrupoId" <> 2`,
+      [aperturaId, cajaId]
+    );
+    const row = result.rows[0];
+    const apertura = Number(row.apertura) || 0;
+    const ingresos = Number(row.ingresos) || 0;
+    const egresos = Number(row.egresos) || 0;
+    return {
+      apertura,
+      ingresos,
+      egresos,
+      saldoTeorico: apertura + ingresos - egresos,
+    };
+  },
+
   // Caja del usuario: la que tiene abierta o, si no tiene ninguna, la de su
   // última apertura. Devuelve undefined si el usuario nunca abrió una caja.
   getCajaDelUsuario: async (usuarioId) => {

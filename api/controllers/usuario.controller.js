@@ -3,6 +3,50 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const PerfilMenu = require("../models/perfilmenu.model");
 
+// Permisos por menú del usuario: todos habilitados si es admin, si no los de
+// sus perfiles.
+const obtenerPermisos = async (usuario) => {
+  if (usuario.UsuarioIsAdmin === "S") {
+    const Menu = require("../models/menu.model");
+    const menus = await Menu.getAll();
+    const permisos = {};
+    menus.forEach((menu) => {
+      permisos[menu.MenuNombre] = {
+        crear: true,
+        editar: true,
+        eliminar: true,
+        leer: true,
+      };
+    });
+    return permisos;
+  }
+  return PerfilMenu.getPermisosByUsuarioId(usuario.UsuarioId);
+};
+
+// Datos y permisos actuales del usuario logueado, para refrescar la sesión
+// sin volver a iniciarla (los permisos pueden cambiar después del login).
+exports.misPermisos = async (req, res) => {
+  try {
+    const usuario = await Usuario.getById(req.user.id);
+    if (!usuario || usuario.UsuarioEstado !== "A") {
+      return res.status(401).json({ message: "Usuario inactivo o inexistente" });
+    }
+    res.json({
+      user: {
+        id: usuario.UsuarioId,
+        email: usuario.UsuarioCorreo,
+        nombre: usuario.UsuarioNombre,
+        isAdmin: usuario.UsuarioIsAdmin,
+        estado: usuario.UsuarioEstado,
+        LocalId: usuario.LocalId,
+      },
+      permisos: await obtenerPermisos(usuario),
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // getAllUsuarios
 exports.getAllUsuarios = async (req, res) => {
   try {
@@ -180,22 +224,7 @@ exports.login = async (req, res) => {
     });
 
     // Obtener permisos del usuario
-    let permisos;
-    if (usuario.UsuarioIsAdmin === "S") {
-      const Menu = require("../models/menu.model");
-      const menus = await Menu.getAll();
-      permisos = {};
-      menus.forEach((menu) => {
-        permisos[menu.MenuNombre] = {
-          crear: true,
-          editar: true,
-          eliminar: true,
-          leer: true,
-        };
-      });
-    } else {
-      permisos = await PerfilMenu.getPermisosByUsuarioId(usuario.UsuarioId);
-    }
+    const permisos = await obtenerPermisos(usuario);
 
     res.json({
       success: true,
@@ -268,6 +297,13 @@ exports.createUsuario = async (req, res) => {
       });
     }
 
+    if (req.body.UsuarioIsAdmin === "S" && req.user.isAdmin !== "S") {
+      return res.status(403).json({
+        success: false,
+        message: "Solo un administrador puede crear administradores",
+      });
+    }
+
     if (!["A", "I"].includes(req.body.UsuarioEstado)) {
       return res.status(400).json({
         success: false,
@@ -324,6 +360,18 @@ exports.updateUsuario = async (req, res) => {
         success: false,
         message: "UsuarioNombre es un campo requerido",
       });
+    }
+
+    // Un no-administrador no puede modificar a un administrador (contraseña,
+    // estado...) ni dar el rol de administrador.
+    if (req.user.isAdmin !== "S") {
+      const actual = await Usuario.getById(id);
+      if (actual?.UsuarioIsAdmin === "S" || usuarioData.UsuarioIsAdmin === "S") {
+        return res.status(403).json({
+          success: false,
+          message: "Solo un administrador puede modificar administradores",
+        });
+      }
     }
 
     // Actualizar el usuario

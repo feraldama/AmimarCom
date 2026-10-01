@@ -1,11 +1,14 @@
 import { LockOpen, CalendarCheck } from "lucide-react";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { getCajas } from "../../services/cajas.service";
 import ActionButton from "../../components/common/Button/ActionButton";
 import {
   aperturaCierreCaja,
   getEstadoAperturaPorUsuario,
   getUltimoCierrePorCaja,
+  getSaldoCajaAbierta,
+  getTurnoCierre,
+  type SaldoCajaAbierta,
 } from "../../services/registrodiariocaja.service";
 import { createCierreDiarioSnapshot } from "../../services/cierrediario.service";
 import { useAuth } from "../../contexts/useAuth";
@@ -13,7 +16,6 @@ import Swal from "sweetalert2";
 import { formatMiles } from "../../utils/utils";
 import { useNavigate, useLocation } from "react-router-dom";
 import jsPDF from "jspdf";
-import { getRegistrosDiariosCaja } from "../../services/registros.service";
 import PageHeader from "../../components/common/PageHeader";
 import { usePermiso } from "../../hooks/usePermiso";
 
@@ -89,12 +91,15 @@ export default function AperturaCierreCajaPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const [cajaDisabled, setCajaDisabled] = useState(false);
-  const [registrosCaja, setRegistrosCaja] = useState<RegistroDiarioCaja[]>([]);
   const [descargarPDF, setDescargarPDF] = useState(false);
   const [operacionCompletada, setOperacionCompletada] = useState(false);
   const [todasLasCajas, setTodasLasCajas] = useState<Caja[]>([]);
   const [snapshotting, setSnapshotting] = useState(false);
   const puedeCrearCierreDiario = usePermiso("CIERREDIARIO", "crear");
+  // Saldo teórico de la caja abierta (cierre): contra él se calcula en vivo el
+  // sobrante/faltante a medida que se cargan billetes, monedas y pendientes.
+  const [saldo, setSaldo] = useState<SaldoCajaAbierta | null>(null);
+  const [cargandoSaldo, setCargandoSaldo] = useState(false);
 
   const subtotalesBilletes = useMemo(
     () =>
@@ -122,6 +127,33 @@ export default function AperturaCierreCajaPage() {
     const sp = pendientes.reduce((s, p) => s + (Number(p.monto) || 0), 0);
     return sb + sm + sp;
   }, [subtotalesBilletes, subtotalesMonedas, pendientes]);
+
+  // Monto a rendir: el saldo teórico en valor absoluto (un teórico negativo
+  // también es lo que la caja tiene que rendir). Diferencia = a rendir -
+  // contado (incluye pendientes): positivo = falta cargar, negativo = sobra.
+  const aRendir = saldo ? Math.abs(saldo.saldoTeorico) : 0;
+  const diferencia = saldo ? aRendir - montoTotal : null;
+
+  const cargarSaldo = useCallback(async () => {
+    setCargandoSaldo(true);
+    try {
+      setSaldo(await getSaldoCajaAbierta());
+    } catch {
+      setSaldo(null);
+    } finally {
+      setCargandoSaldo(false);
+    }
+  }, []);
+
+  // Solo con una caja abierta (cierre forzado). Se refresca al volver a la
+  // pestaña por si entraron movimientos mientras se contaba el efectivo.
+  const cierrePendiente = tipo === "1" && tipoDisabled && !operacionCompletada;
+  useEffect(() => {
+    if (!cierrePendiente) return;
+    cargarSaldo();
+    window.addEventListener("focus", cargarSaldo);
+    return () => window.removeEventListener("focus", cargarSaldo);
+  }, [cierrePendiente, cargarSaldo]);
 
   useEffect(() => {
     const fetchCajas = async () => {
@@ -223,23 +255,7 @@ export default function AperturaCierreCajaPage() {
     }
   }, [error]);
 
-  const fetchRegistrosCaja = async () => {
-    try {
-      const data = await getRegistrosDiariosCaja(1, 1000, undefined, "desc");
-      // Traemos TODOS los registros de la caja (sin filtrar por usuario) para
-      // que los movimientos de PASE hechos por el operador de otra caja
-      // (que quedan a nombre de ese usuario) también entren en el cierre.
-      const registrosFiltrados = data.data.filter(
-        (r: RegistroDiarioCaja) => r.CajaId == cajaId,
-      );
-      setRegistrosCaja(registrosFiltrados);
-    } catch {
-      setRegistrosCaja([]);
-    }
-  };
-
   const generarResumenCierrePDF = async (
-    registrosPasados?: RegistroDiarioCaja[],
     datosCierre?: {
       billetes: { denominacion: number; cantidad: number; subtotal: number }[];
       monedas: { denominacion: number; cantidad: number; subtotal: number }[];
@@ -248,88 +264,39 @@ export default function AperturaCierreCajaPage() {
   ) => {
     if (!user || !cajaId) return;
 
-    let registrosParaUsar = registrosPasados || registrosCaja;
-
-    if (registrosParaUsar.length === 0) {
-      try {
-        const data = await getRegistrosDiariosCaja(1, 1000, undefined, "desc");
-        const registrosFiltrados = data.data.filter(
-          (r: RegistroDiarioCaja) => r.CajaId == cajaId,
-        );
-        registrosParaUsar = registrosFiltrados;
-
-        if (registrosParaUsar.length === 0) {
-          Swal.fire({
-            icon: "warning",
-            title: "No hay registros",
-            text: "No se han cargado los registros de caja. Intente descargar el PDF manualmente.",
-            confirmButtonColor: "#0d9488",
-          });
-          return;
-        }
-      } catch {
-        Swal.fire({
-          icon: "warning",
-          title: "Error al cargar registros",
-          text: "No se pudieron cargar los registros de caja.",
-          confirmButtonColor: "#0d9488",
-        });
-        return;
-      }
+    // El backend devuelve el último turno cerrado del usuario en la caja:
+    // apertura, cierre y todos los registros de la caja entre ambos (sin
+    // filtrar usuario, así entran los PASE recibidos desde otras cajas).
+    let registrosFiltrados: RegistroDiarioCaja[];
+    let aperturaReg: RegistroDiarioCaja | undefined;
+    let cierreReg: RegistroDiarioCaja | undefined;
+    try {
+      const turno = await getTurnoCierre<RegistroDiarioCaja>(cajaId);
+      registrosFiltrados = turno.registros;
+      aperturaReg = registrosFiltrados.find(
+        (r) => r.RegistroDiarioCajaId === turno.aperturaId,
+      );
+      cierreReg = registrosFiltrados.find(
+        (r) => r.RegistroDiarioCajaId === turno.cierreId,
+      );
+    } catch (err) {
+      Swal.fire({
+        icon: "warning",
+        title: "Error al cargar registros",
+        text:
+          (err as { message?: string })?.message ||
+          "No se pudieron cargar los registros de caja.",
+        confirmButtonColor: "#0d9488",
+      });
+      return;
     }
+    if (!aperturaReg || !cierreReg) return;
 
     const cajaDescripcion =
       cajas.find((c) => c.CajaId == cajaId)?.CajaDescripcion || "";
     const fecha = new Date().toLocaleDateString();
     const hora = new Date().toLocaleTimeString();
 
-    const registros = registrosParaUsar.filter((r) => r.UsuarioId == user.id);
-    const aperturas = registros
-      .filter((reg) => reg.TipoGastoId === 2 && reg.TipoGastoGrupoId === 2)
-      .sort((a, b) => b.RegistroDiarioCajaId - a.RegistroDiarioCajaId);
-    const aperturaReg = aperturas[0];
-    if (!aperturaReg) {
-      Swal.fire({
-        icon: "warning",
-        title: "No se encontró apertura",
-        text: "No se encontró una apertura de caja para este usuario.",
-        confirmButtonColor: "#0d9488",
-      });
-      return;
-    }
-
-    const cierres = registros
-      .filter((reg) => reg.TipoGastoId === 1 && reg.TipoGastoGrupoId === 2)
-      .sort((a, b) => b.RegistroDiarioCajaId - a.RegistroDiarioCajaId);
-    const cierreReg = cierres[0];
-    if (!cierreReg) {
-      Swal.fire({
-        icon: "warning",
-        title: "No se encontró cierre",
-        text: "No se encontró un cierre de caja para este usuario.",
-        confirmButtonColor: "#0d9488",
-      });
-      return;
-    }
-
-    if (cierreReg.RegistroDiarioCajaId <= aperturaReg.RegistroDiarioCajaId) {
-      Swal.fire({
-        icon: "warning",
-        title: "Error en registros",
-        text: "El cierre debe ser posterior a la apertura.",
-        confirmButtonColor: "#0d9488",
-      });
-      return;
-    }
-
-    // Los movimientos del cierre se toman por CajaId dentro de la ventana
-    // apertura -> cierre (sin filtrar por usuario): así se incluyen los PASE
-    // recibidos desde otras cajas, que quedan a nombre del usuario de origen.
-    const registrosFiltrados = registrosParaUsar.filter(
-      (reg) =>
-        reg.RegistroDiarioCajaId >= aperturaReg.RegistroDiarioCajaId &&
-        reg.RegistroDiarioCajaId <= cierreReg.RegistroDiarioCajaId,
-    );
     const apertura = Number(aperturaReg.RegistroDiarioCajaMonto);
     const cierre = Number(cierreReg.RegistroDiarioCajaMonto);
     let egresos = 0;
@@ -643,15 +610,15 @@ export default function AperturaCierreCajaPage() {
         navigate("/ventas");
       } else {
         setSuccess(result.message || "Operación realizada correctamente");
-        await fetchRegistrosCaja();
         setDescargarPDF(true);
-        setTimeout(() => {
-          generarResumenCierrePDF(undefined, {
-            billetes: subtotalesBilletes,
-            monedas: subtotalesMonedas,
-            pendientes,
-          });
-        }, 2000);
+        // El cierre ya quedó grabado: un error del ticket no debe caer en el
+        // catch de abajo (re-habilitaría CONFIRMAR y permitiría cerrar dos veces).
+        // Queda el botón "Descargar Resumen PDF" para reintentar.
+        generarResumenCierrePDF({
+          billetes: subtotalesBilletes,
+          monedas: subtotalesMonedas,
+          pendientes,
+        }).catch((err) => console.error("Error al generar el ticket:", err));
       }
     } catch (err) {
       setError(
@@ -861,6 +828,47 @@ export default function AperturaCierreCajaPage() {
         {/* Cierre: Billetes, Monedas, Pendientes y total */}
         {tipo === "1" && (
           <>
+            {/* Saldo teórico de la caja (lo que debería haber en el cajón) */}
+            {cierrePendiente && (
+              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-sm font-semibold text-gray-800">
+                    Saldo teórico de la caja
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={cargarSaldo}
+                    disabled={cargandoSaldo}
+                    className="text-xs text-primary hover:underline disabled:opacity-50"
+                  >
+                    {cargandoSaldo ? "Actualizando..." : "Actualizar"}
+                  </button>
+                </div>
+                {saldo ? (
+                  <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                    <dt className="text-gray-600">Apertura</dt>
+                    <dd className="text-right">{formatMiles(saldo.apertura)}</dd>
+                    <dt className="text-gray-600">+ Ingresos</dt>
+                    <dd className="text-right">{formatMiles(saldo.ingresos)}</dd>
+                    <dt className="text-gray-600">− Egresos</dt>
+                    <dd className="text-right">{formatMiles(saldo.egresos)}</dd>
+                    <dt className="font-semibold text-gray-900 border-t border-gray-200 pt-1">
+                      Saldo teórico
+                    </dt>
+                    <dd className="text-right font-semibold text-gray-900 border-t border-gray-200 pt-1">
+                      Gs. {formatMiles(saldo.saldoTeorico)}
+                    </dd>
+                  </dl>
+                ) : (
+                  <p className="text-sm text-gray-500">
+                    {cargandoSaldo
+                      ? "Calculando..."
+                      : "No se pudo obtener el saldo de la caja."}
+                  </p>
+                )}
+              </div>
+            )}
+
             {/* Billetes */}
             <div>
               <h3 className="text-sm font-semibold text-gray-800 mb-3">
@@ -997,6 +1005,39 @@ export default function AperturaCierreCajaPage() {
                 value={formatMiles(montoTotal)}
               />
             </div>
+
+            {/* Sobrante/faltante en vivo: fijo abajo para verlo mientras se
+                cargan billetes y monedas */}
+            {cierrePendiente && saldo && diferencia !== null && (
+              <div
+                className={`sticky bottom-0 -mx-6 px-6 py-3 border-t-2 shadow-[0_-4px_8px_rgba(0,0,0,0.06)] ${
+                  diferencia === 0
+                    ? "bg-success-50 border-success-600"
+                    : "bg-danger-50 border-danger-600"
+                }`}
+              >
+                <div className="flex justify-between text-xs text-gray-600">
+                  <span>A rendir: Gs. {formatMiles(aRendir)}</span>
+                  <span>Contado: Gs. {formatMiles(montoTotal)}</span>
+                </div>
+                <div
+                  className={`mt-1 flex justify-between items-baseline font-semibold ${
+                    diferencia === 0 ? "text-success-600" : "text-danger-600"
+                  }`}
+                >
+                  <span>
+                    {diferencia > 0
+                      ? "Faltante (falta cargar)"
+                      : diferencia < 0
+                        ? "Sobrante"
+                        : "Cuadra"}
+                  </span>
+                  <span className="text-lg">
+                    Gs. {formatMiles(Math.abs(diferencia))}
+                  </span>
+                </div>
+              </div>
+            )}
           </>
         )}
 
@@ -1019,7 +1060,7 @@ export default function AperturaCierreCajaPage() {
           <ActionButton
             label="Descargar Resumen PDF"
             onClick={() =>
-              generarResumenCierrePDF(undefined, {
+              generarResumenCierrePDF({
                 billetes: subtotalesBilletes,
                 monedas: subtotalesMonedas,
                 pendientes,

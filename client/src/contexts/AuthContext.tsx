@@ -1,6 +1,7 @@
-import { createContext, useState } from "react";
+import { createContext, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { ReactNode } from "react";
+import api from "../services/api";
 
 interface User {
   // Define aquí las propiedades del usuario según tu modelo, por ejemplo:
@@ -54,6 +55,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
   });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+
+  // Refresca usuario y permisos desde el backend al abrir la app y al volver a
+  // la pestaña, para que los cambios de perfil se apliquen sin re-login.
+  // Si falla (sin red, token vencido) se mantienen los datos guardados; el
+  // interceptor de `api` ya maneja la sesión expirada.
+  const hayUsuario = user !== null;
+  useEffect(() => {
+    if (!hayUsuario) return;
+    const refrescar = () => {
+      if (!localStorage.getItem("token")) return;
+      api
+        .get("/usuarios/me/permisos")
+        .then(({ data }) => {
+          localStorage.setItem("user", JSON.stringify(data.user));
+          localStorage.setItem("permisos", JSON.stringify(data.permisos || {}));
+          setUser(data.user);
+          setPermisos(data.permisos || {});
+        })
+        .catch(() => {});
+    };
+    refrescar();
+    window.addEventListener("focus", refrescar);
+    return () => window.removeEventListener("focus", refrescar);
+  }, [hayUsuario]);
 
   const login = async (credentials: Credentials) => {
     setLoading(true);

@@ -10,6 +10,7 @@ import {
   formatMontoInput,
   parseMonto,
   montoToInput,
+  fechaHoyLocal,
 } from "../../utils/utils";
 import { getCajas } from "../../services/cajas.service";
 import { getUsuarios } from "../../services/usuarios.service";
@@ -162,7 +163,7 @@ export default function DivisasMovimientosList({
         montoToInput(Number(currentMovimiento.DivisaMovimientoCantidad) || 0)
       );
     } else {
-      const today = new Date().toISOString().split("T")[0];
+      const today = fechaHoyLocal();
       setFormData({
         id: "",
         DivisaMovimientoId: "",

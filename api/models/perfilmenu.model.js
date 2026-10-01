@@ -18,13 +18,16 @@ const PerfilMenu = {
       WHERE up."UsuarioId" = $1
     `;
     const result = await db.query(query, [usuarioId]);
+    // Con varios perfiles sobre el mismo menú, cada acción queda permitida si
+    // algún perfil la permite (OR), sin depender del orden de las filas.
     const permisos = {};
     result.rows.forEach((row) => {
+      const actual = permisos[row.MenuNombre] || {};
       permisos[row.MenuNombre] = {
-        crear: !!row.puedeCrear,
-        editar: !!row.puedeEditar,
-        eliminar: !!row.puedeEliminar,
-        leer: !!row.puedeLeer,
+        crear: !!actual.crear || !!row.puedeCrear,
+        editar: !!actual.editar || !!row.puedeEditar,
+        eliminar: !!actual.eliminar || !!row.puedeEliminar,
+        leer: !!actual.leer || !!row.puedeLeer,
       };
     });
     return permisos;
