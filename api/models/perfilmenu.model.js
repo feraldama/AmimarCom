@@ -30,9 +30,10 @@ const PerfilMenu = {
     return permisos;
   },
 
-  create: async (data) => {
-    const result = await db.query(
-      'INSERT INTO "perfilmenu" ("PerfilId", "MenuId", "puedeCrear", "puedeEditar", "puedeEliminar", "puedeLeer") VALUES ($1, $2, $3, $4, $5, $6) RETURNING "PerfilMenuId"',
+  // `client` permite ejecutar el insert dentro de una transacción.
+  create: async (data, client = db) => {
+    await client.query(
+      'INSERT INTO "perfilmenu" ("PerfilId", "MenuId", "puedeCrear", "puedeEditar", "puedeEliminar", "puedeLeer") VALUES ($1, $2, $3, $4, $5, $6)',
       [
         data.PerfilId,
         data.MenuId,
@@ -42,7 +43,7 @@ const PerfilMenu = {
         data.puedeLeer,
       ]
     );
-    return { PerfilMenuId: result.rows[0].PerfilMenuId, ...data };
+    return { ...data };
   },
 
   update: async (perfilId, menuId, data) => {

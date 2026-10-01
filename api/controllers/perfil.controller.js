@@ -2,6 +2,37 @@ const Perfil = require("../models/perfil.model");
 const db = require("../config/db");
 const PerfilMenu = require("../models/perfilmenu.model");
 
+// Reemplaza los permisos del perfil en una transacción: si algún insert falla,
+// se revierte el DELETE y el perfil conserva sus permisos anteriores.
+const reemplazarPermisos = async (perfilId, menusAsignados) => {
+  const client = await db.connect();
+  try {
+    await client.query("BEGIN");
+    await client.query('DELETE FROM "perfilmenu" WHERE "PerfilId" = $1', [
+      perfilId,
+    ]);
+    for (const menu of menusAsignados) {
+      await PerfilMenu.create(
+        {
+          PerfilId: perfilId,
+          MenuId: menu.MenuId,
+          puedeCrear: menu.puedeCrear ? 1 : 0,
+          puedeEditar: menu.puedeEditar ? 1 : 0,
+          puedeEliminar: menu.puedeEliminar ? 1 : 0,
+          puedeLeer: menu.puedeLeer ? 1 : 0,
+        },
+        client
+      );
+    }
+    await client.query("COMMIT");
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  } finally {
+    client.release();
+  }
+};
+
 exports.getAll = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -30,22 +61,7 @@ exports.create = async (req, res) => {
     const perfilId = perfil.PerfilId;
     const { menusAsignados } = req.body;
     if (Array.isArray(menusAsignados)) {
-      // Elimina todos los permisos actuales de ese perfil (por si acaso)
-      await db.query(
-        'DELETE FROM "perfilmenu" WHERE "PerfilId" = $1',
-        [perfilId]
-      );
-      // Inserta los nuevos permisos
-      for (const menu of menusAsignados) {
-        await PerfilMenu.create({
-          PerfilId: perfilId,
-          MenuId: menu.MenuId,
-          puedeCrear: menu.puedeCrear ? 1 : 0,
-          puedeEditar: menu.puedeEditar ? 1 : 0,
-          puedeEliminar: menu.puedeEliminar ? 1 : 0,
-          puedeLeer: menu.puedeLeer ? 1 : 0,
-        });
-      }
+      await reemplazarPermisos(perfilId, menusAsignados);
     }
     res.status(201).json(perfil);
   } catch (err) {
@@ -59,22 +75,7 @@ exports.update = async (req, res) => {
     const perfilId = req.params.id;
     const { menusAsignados } = req.body;
     if (Array.isArray(menusAsignados)) {
-      // Elimina todos los permisos actuales de ese perfil
-      await db.query(
-        'DELETE FROM "perfilmenu" WHERE "PerfilId" = $1',
-        [perfilId]
-      );
-      // Inserta los nuevos permisos
-      for (const menu of menusAsignados) {
-        await PerfilMenu.create({
-          PerfilId: perfilId,
-          MenuId: menu.MenuId,
-          puedeCrear: menu.puedeCrear ? 1 : 0,
-          puedeEditar: menu.puedeEditar ? 1 : 0,
-          puedeEliminar: menu.puedeEliminar ? 1 : 0,
-          puedeLeer: menu.puedeLeer ? 1 : 0,
-        });
-      }
+      await reemplazarPermisos(perfilId, menusAsignados);
     }
     res.json(perfil);
   } catch (err) {
