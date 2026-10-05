@@ -184,12 +184,21 @@ export default function MovementsPage() {
     setCurrentPage(1);
   };
 
-  // Grupos de gasto filtrados por el tipo de gasto seleccionado en el filtro
-  const gruposFiltrados = filtros.tipoGastoId
-    ? tiposGastoGrupo.filter(
-        (g) => String(g.TipoGastoId) === String(filtros.tipoGastoId)
-      )
-    : tiposGastoGrupo;
+  // Grupos de gasto filtrados por el tipo de gasto seleccionado en el filtro,
+  // ordenados alfabéticamente
+  const gruposFiltrados = (
+    filtros.tipoGastoId
+      ? tiposGastoGrupo.filter(
+          (g) => String(g.TipoGastoId) === String(filtros.tipoGastoId)
+        )
+      : [...tiposGastoGrupo]
+  ).sort((a, b) =>
+    (a.TipoGastoGrupoDescripcion || "")
+      .trim()
+      .localeCompare((b.TipoGastoGrupoDescripcion || "").trim(), "es", {
+        sensitivity: "base",
+      })
+  );
 
   const handleDelete = async (movimiento: Movimiento) => {
     Swal.fire({
