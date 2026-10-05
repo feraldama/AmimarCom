@@ -107,9 +107,10 @@ exports.createCliente = async (req, res) => {
     });
   } catch (error) {
     console.error("Error al crear cliente:", error);
-    res.status(500).json({
+    // error.status: validación del modelo (p. ej. Código JSI no numérico)
+    res.status(error.status || 500).json({
       success: false,
-      message: "Error al crear cliente",
+      message: error.status ? error.message : "Error al crear cliente",
       error: error.message,
     });
   }
@@ -139,9 +140,10 @@ exports.updateCliente = async (req, res) => {
     });
   } catch (error) {
     console.error("Error al actualizar cliente:", error);
-    res.status(500).json({
+    // error.status: validación del modelo (p. ej. Código JSI no numérico)
+    res.status(error.status || 500).json({
       success: false,
-      message: "Error al actualizar cliente",
+      message: error.status ? error.message : "Error al actualizar cliente",
       error: error.message,
     });
   }

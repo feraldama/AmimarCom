@@ -1,5 +1,19 @@
 const db = require("../config/db");
 
+// ClienteCodJSI es integer NOT NULL (0 = sin código). Vacío -> 0; lo que no
+// sea un entero >= 0 se rechaza.
+const normalizarCodJSI = (valor) => {
+  if (valor === undefined) return undefined;
+  const texto = valor === null ? "" : String(valor).trim();
+  if (texto === "") return 0;
+  if (!/^\d+$/.test(texto) || Number(texto) > 2147483647) {
+    const error = new Error("El Código JSI debe ser un número entero");
+    error.status = 400;
+    throw error;
+  }
+  return Number(texto);
+};
+
 const Cliente = {
   getAll: async () => {
     const result = await db.query('SELECT * FROM "clientes"');
@@ -24,6 +38,7 @@ const Cliente = {
       "ClienteTelefono",
       "ClienteTipo",
       "UsuarioId",
+      "ClienteCodJSI",
     ];
     const allowedSortOrders = ["ASC", "DESC"];
     const sortField = allowedSortFields.includes(sortBy)
@@ -58,6 +73,7 @@ const Cliente = {
       "ClienteTelefono",
       "ClienteTipo",
       "UsuarioId",
+      "ClienteCodJSI",
     ];
     const allowedSortOrders = ["ASC", "DESC"];
     const sortField = allowedSortFields.includes(sortBy)
@@ -103,8 +119,9 @@ const Cliente = {
         "ClienteDireccion",
         "ClienteTelefono",
         "ClienteTipo",
-        "UsuarioId"
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+        "UsuarioId",
+        "ClienteCodJSI"
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
       RETURNING "ClienteId"
     `;
     const values = [
@@ -115,6 +132,7 @@ const Cliente = {
       clienteData.ClienteTelefono || "",
       clienteData.ClienteTipo || "",
       clienteData.UsuarioId ? String(clienteData.UsuarioId).trim() : "",
+      normalizarCodJSI(clienteData.ClienteCodJSI) ?? 0,
     ];
     const result = await db.query(query, values);
     return { ...clienteData, ClienteId: result.rows[0].ClienteId };
@@ -132,6 +150,7 @@ const Cliente = {
       "ClienteTelefono",
       "ClienteTipo",
       "UsuarioId",
+      "ClienteCodJSI",
     ];
     camposActualizables.forEach((campo) => {
       if (clienteData[campo] !== undefined) {
@@ -139,6 +158,8 @@ const Cliente = {
         // Aplicar trim solo al UsuarioId si es string
         if (campo === "UsuarioId" && typeof clienteData[campo] === "string") {
           values.push(clienteData[campo].trim());
+        } else if (campo === "ClienteCodJSI") {
+          values.push(normalizarCodJSI(clienteData[campo]));
         } else {
           values.push(clienteData[campo]);
         }

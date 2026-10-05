@@ -96,6 +96,7 @@ export default function ClienteForm({
           </label>
           <input
             type="text"
+            inputMode="numeric"
             name="ClienteCodJSI"
             id="ClienteCodJSI"
             value={formData.ClienteCodJSI || ""}
