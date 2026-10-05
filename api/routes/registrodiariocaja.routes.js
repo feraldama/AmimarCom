@@ -69,11 +69,24 @@ router.get(
   registroDiarioCajaController.reporteElComercio
 );
 router.get("/:id", authMiddleware, registroDiarioCajaController.getById);
-router.post("/", authMiddleware, registroDiarioCajaController.create);
-router.post("/pase", authMiddleware, registroDiarioCajaController.createPase);
+// Operar la caja (cobros, pases, apertura/cierre) exige OPERARCAJA (perfil de
+// cajeros); la carga manual desde Registro Diario Caja, REGISTRODIARIOCAJA
+router.post(
+  "/",
+  authMiddleware,
+  verificarPermiso(["OPERARCAJA", "REGISTRODIARIOCAJA"], "crear"),
+  registroDiarioCajaController.create
+);
+router.post(
+  "/pase",
+  authMiddleware,
+  verificarPermiso("OPERARCAJA", "crear"),
+  registroDiarioCajaController.createPase
+);
 router.post(
   "/apertura-cierre",
   authMiddleware,
+  verificarPermiso("OPERARCAJA", "crear"),
   registroDiarioCajaController.aperturaCierreCaja
 );
 router.put(

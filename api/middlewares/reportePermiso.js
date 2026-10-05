@@ -5,7 +5,7 @@ const RegistroDiarioCaja = require("../models/registrodiariocaja.model");
 // - Admin o permiso REPORTES (leer): sin restricción, usa las cajas pedidas.
 // - Alguno de los permisos específicos `menus` (leer): el reporte se limita a
 //   la caja del usuario (la abierta o la de su última apertura), sin importar
-//   qué cajas pida.
+//   qué cajas pida. Con REPORTESTODASCAJAS (leer) además, sin ese límite.
 // - Ninguno: 403.
 const reportePermiso = (...menus) => {
   return async (req, res, next) => {
@@ -18,6 +18,7 @@ const reportePermiso = (...menus) => {
           .status(403)
           .json({ message: "No tienes permiso para generar este reporte" });
       }
+      if (permisos.REPORTESTODASCAJAS?.leer) return next();
       const caja = await RegistroDiarioCaja.getCajaDelUsuario(req.user.id);
       if (!caja) {
         return res.status(403).json({

@@ -9,8 +9,10 @@ import {
   BarChart3,
   TrendingUp,
   Clock,
+  GraduationCap,
 } from "lucide-react";
 import { formatMiles } from "../../utils/utils";
+import { puedeAccederRuta } from "../../utils/accesoRutas";
 
 interface QuickActionProps {
   to: string;
@@ -67,7 +69,9 @@ function StatCard({ icon, value, label, color, bgColor }: StatCardProps) {
 }
 
 function Dashboard() {
-  const { user } = useAuth();
+  const { user, permisos } = useAuth();
+  const puede = (href: string) =>
+    puedeAccederRuta(href, permisos, user?.isAdmin === "S");
 
   return (
     <div className="space-y-6 w-full">
@@ -115,48 +119,69 @@ function Dashboard() {
       <div>
         <h2 className="text-lg font-semibold text-gray-800 mb-3">Acciones rapidas</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <QuickAction
-            to="/ventas"
-            icon={<DollarSign className="size-6 text-success-600" />}
-            title="Cobranzas"
-            description="Realizar cobros y pagos"
-            color="bg-success-50"
-          />
-          <QuickAction
-            to="/apertura-cierre-caja"
-            icon={<Lock className="size-6 text-primary" />}
-            title="Apertura / Cierre de Caja"
-            description="Gestionar cajas del día"
-            color="bg-primary-50/60"
-          />
-          <QuickAction
-            to="/customers"
-            icon={<Users className="size-6 text-warning-600" />}
-            title="Clientes"
-            description="Administrar clientes"
-            color="bg-warning-50"
-          />
-          <QuickAction
-            to="/reportes"
-            icon={<FileBarChart className="size-6 text-primary" />}
-            title="Reportes"
-            description="Generar reportes PDF"
-            color="bg-primary-50/60"
-          />
-          <QuickAction
-            to="/users"
-            icon={<UserGroupIcon className="size-6 text-gray-600" />}
-            title="Usuarios"
-            description="Gestión de usuarios"
-            color="bg-gray-100"
-          />
-          <QuickAction
-            to="/movements/summary"
-            icon={<BarChart3 className="size-6 text-success-600" />}
-            title="Registro Diario"
-            description="Ver movimientos de caja"
-            color="bg-success-50"
-          />
+          {puede("/ventas") && (
+            <QuickAction
+              to="/ventas"
+              icon={<DollarSign className="size-6 text-success-600" />}
+              title="Cobranzas"
+              description="Realizar cobros y pagos"
+              color="bg-success-50"
+            />
+          )}
+          {puede("/apertura-cierre-caja") && (
+            <QuickAction
+              to="/apertura-cierre-caja"
+              icon={<Lock className="size-6 text-primary" />}
+              title="Apertura / Cierre de Caja"
+              description="Gestionar cajas del día"
+              color="bg-primary-50/60"
+            />
+          )}
+          {puede("/customers") && (
+            <QuickAction
+              to="/customers"
+              icon={<Users className="size-6 text-warning-600" />}
+              title="Clientes"
+              description="Administrar clientes"
+              color="bg-warning-50"
+            />
+          )}
+          {puede("/reportes") && (
+            <QuickAction
+              to="/reportes"
+              icon={<FileBarChart className="size-6 text-primary" />}
+              title="Reportes"
+              description="Generar reportes PDF"
+              color="bg-primary-50/60"
+            />
+          )}
+          {puede("/users") && (
+            <QuickAction
+              to="/users"
+              icon={<UserGroupIcon className="size-6 text-gray-600" />}
+              title="Usuarios"
+              description="Gestión de usuarios"
+              color="bg-gray-100"
+            />
+          )}
+          {puede("/movements/summary") && (
+            <QuickAction
+              to="/movements/summary"
+              icon={<BarChart3 className="size-6 text-success-600" />}
+              title="Registro Diario"
+              description="Ver movimientos de caja"
+              color="bg-success-50"
+            />
+          )}
+          {puede("/colegiocobranzas") && (
+            <QuickAction
+              to="/colegiocobranzas"
+              icon={<GraduationCap className="size-6 text-warning-600" />}
+              title="Cobranzas de Colegios"
+              description="Ver movimientos de colegios"
+              color="bg-warning-50"
+            />
+          )}
         </div>
       </div>
     </div>

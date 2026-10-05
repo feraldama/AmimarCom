@@ -5,6 +5,7 @@ import {
   Navigate,
 } from "react-router-dom";
 import "./App.css";
+import RequierePermiso from "./components/common/RequierePermiso";
 import { AuthProvider } from "./contexts/AuthContext";
 import Login from "./pages/auth/Login/Login";
 import Dashboard from "./pages/dashboard/Dashboard";
@@ -56,7 +57,9 @@ function App() {
             path="/ventas"
             element={
               <PrivateRoute>
-                <Sales />
+                <RequierePermiso ruta="/ventas">
+                  <Sales />
+                </RequierePermiso>
               </PrivateRoute>
             }
           />
@@ -98,7 +101,11 @@ function App() {
             <Route path="/customers" element={<CustomersPage />} />;
             <Route
               path="/apertura-cierre-caja"
-              element={<AperturaCierreCajaPage />}
+              element={
+                <RequierePermiso ruta="/apertura-cierre-caja">
+                  <AperturaCierreCajaPage />
+                </RequierePermiso>
+              }
             />
             <Route
               path="/cierre-diario-historial"

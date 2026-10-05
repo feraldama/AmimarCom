@@ -22,6 +22,8 @@ import {
 import { Link, useLocation } from "react-router-dom";
 import type { Dispatch, SetStateAction } from "react";
 import Logo from "../common/Logo";
+import { useAuth } from "../../contexts/useAuth";
+import { puedeAccederRuta } from "../../utils/accesoRutas";
 
 interface NavigationChild {
   name: string;
@@ -193,10 +195,27 @@ interface SidebarProps {
   setMobileOpen: Dispatch<SetStateAction<boolean>>;
 }
 
+// Deja solo las pantallas que el usuario puede abrir; un grupo sin hijos
+// visibles desaparece
+function filtrarNavegacion(
+  items: NavigationItem[],
+  puede: (href: string) => boolean
+): NavigationItem[] {
+  return items.flatMap((item) => {
+    if (!item.children) return puede(item.href) ? [item] : [];
+    const children = filtrarNavegacion(item.children, puede);
+    return children.length ? [{ ...item, children }] : [];
+  });
+}
+
 export default function Sidebar({ mobileOpen, setMobileOpen }: SidebarProps) {
+  const { user, permisos } = useAuth();
+  const navegacionVisible = filtrarNavegacion(navigation, (href) =>
+    puedeAccederRuta(href, permisos, user?.isAdmin === "S")
+  );
   const sidebarContent = (
     <nav className="px-3 py-4 space-y-1">
-      {navigation.map((item) => (
+      {navegacionVisible.map((item) => (
         <NavItem
           key={item.name}
           item={item}

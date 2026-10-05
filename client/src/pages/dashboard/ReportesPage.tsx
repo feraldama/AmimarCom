@@ -130,7 +130,8 @@ function SelectorCajas({ cajas, seleccion, onToggle, bloqueado }: SelectorCajasP
 // ── Permisos ──
 // REPORTES (leer) habilita todos los reportes con todas las cajas. Sin él, el
 // permiso específico de cada reporte lo habilita limitado a la caja del
-// usuario (el backend aplica la misma regla en cada endpoint).
+// usuario, salvo que además tenga REPORTESTODASCAJAS (leer), que quita ese
+// límite (el backend aplica la misma regla en cada endpoint).
 
 const PERMISO_REPORTE = {
   resumen: "REPORTEINGRESOSEGRESOS",
@@ -158,7 +159,9 @@ const ReportesPage: React.FC = () => {
   const puedeLeerTodos = usePermiso("REPORTES", "leer");
   const puedeVer = (key: ReporteKey) =>
     puedeLeerTodos || !!permisos?.[PERMISO_REPORTE[key]]?.leer;
-  const soloSuCaja = !puedeLeerTodos;
+  // REPORTESTODASCAJAS: sus reportes específicos con todas las cajas
+  const todasLasCajas = usePermiso("REPORTESTODASCAJAS", "leer");
+  const soloSuCaja = !puedeLeerTodos && !todasLasCajas;
   const puedeLeer = (Object.keys(PERMISO_REPORTE) as ReporteKey[]).some(puedeVer);
   const [loading, setLoading] = useState<string | null>(null);
   const today = fechaHoyLocal();

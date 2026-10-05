@@ -3,6 +3,7 @@ const router = express.Router();
 const colegiocobranzaController = require("../controllers/colegiocobranza.controller");
 const authMiddleware = require("../middlewares/auth");
 const reportePermiso = require("../middlewares/reportePermiso");
+const verificarPermiso = require("../middlewares/permiso");
 
 // Aplicar middleware de autenticación a todas las rutas
 router.use(authMiddleware);
@@ -17,8 +18,24 @@ router.get(
   colegiocobranzaController.reporteCobranzas
 );
 router.get("/:id", authMiddleware, colegiocobranzaController.getById);
-router.post("/", authMiddleware, colegiocobranzaController.create);
-router.put("/:id", authMiddleware, colegiocobranzaController.update);
-router.delete("/:id", authMiddleware, colegiocobranzaController.delete);
+// Crear: los cajeros desde Cobranzas (OPERARCAJA) o la pantalla de cobranzas
+router.post(
+  "/",
+  authMiddleware,
+  verificarPermiso(["OPERARCAJA", "COLEGIOCOBRANZA"], "crear"),
+  colegiocobranzaController.create
+);
+router.put(
+  "/:id",
+  authMiddleware,
+  verificarPermiso("COLEGIOCOBRANZA", "editar"),
+  colegiocobranzaController.update
+);
+router.delete(
+  "/:id",
+  authMiddleware,
+  verificarPermiso("COLEGIOCOBRANZA", "eliminar"),
+  colegiocobranzaController.delete
+);
 
 module.exports = router;
