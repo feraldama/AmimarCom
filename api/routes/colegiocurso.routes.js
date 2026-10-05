@@ -2,6 +2,7 @@ const express = require("express");
 const router = express.Router();
 const colegiocursoController = require("../controllers/colegiocurso.controller");
 const authMiddleware = require("../middlewares/auth");
+const verificarPermiso = require("../middlewares/permiso");
 
 // Aplicar middleware de autenticación a todas las rutas
 router.use(authMiddleware);
@@ -18,15 +19,23 @@ router.get(
   authMiddleware,
   colegiocursoController.getById
 );
-router.post("/", authMiddleware, colegiocursoController.create);
+// Los cursos se cargan al crear o editar el colegio
+router.post(
+  "/",
+  authMiddleware,
+  verificarPermiso("COLEGIO", ["crear", "editar"]),
+  colegiocursoController.create
+);
 router.put(
   "/:colegioId/:cursoId",
   authMiddleware,
+  verificarPermiso("COLEGIO", "editar"),
   colegiocursoController.update
 );
 router.delete(
   "/:colegioId/:cursoId",
   authMiddleware,
+  verificarPermiso("COLEGIO", "editar"),
   colegiocursoController.delete
 );
 
