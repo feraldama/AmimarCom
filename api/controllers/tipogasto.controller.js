@@ -82,11 +82,8 @@ exports.delete = async (req, res) => {
     }
     res.json({ message: "Tipo de gasto eliminado exitosamente" });
   } catch (error) {
-    if (
-      error &&
-      error.message &&
-      error.message.includes("a foreign key constraint fails")
-    ) {
+    // 23503 = foreign_key_violation en PostgreSQL
+    if (error && error.code === "23503") {
       return res.status(400).json({
         message:
           "No se puede eliminar el tipo de gasto porque tiene movimientos asociados.",

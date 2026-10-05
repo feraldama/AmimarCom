@@ -41,7 +41,7 @@ export default function TiposGastoPage() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [currentTipoGasto, setCurrentTipoGasto] = useState<TipoGasto | null>(null);
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [sortKey, setSortKey] = useState<string | undefined>();
+  const [sortKey, setSortKey] = useState<string | undefined>("TipoGastoId");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
   const puedeCrear = usePermiso("TIPOSGASTO", "crear");
   const puedeEditar = usePermiso("TIPOSGASTO", "editar");

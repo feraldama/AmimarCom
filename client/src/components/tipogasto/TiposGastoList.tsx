@@ -86,25 +86,72 @@ export default function TiposGastoList({
     }
   }, [currentTipoGasto]);
 
-  useEffect(() => {
-    if (currentTipoGasto && currentTipoGasto.TipoGastoId) {
-      setLoadingGrupos(true);
-      getTipoGastoGrupoByTipoGastoId(currentTipoGasto.TipoGastoId)
-        .then((data) => {
-          // Convertir descripciones a mayúsculas al cargar
-          const gruposConMayusculas = data.map((g: TipoGastoGrupo) => ({
+  const cargarGrupos = async (tipoGastoId: string | number) => {
+    setLoadingGrupos(true);
+    try {
+      const data = await getTipoGastoGrupoByTipoGastoId(tipoGastoId);
+      setGrupos(
+        data
+          .map((g: TipoGastoGrupo) => ({
             ...g,
-            TipoGastoGrupoDescripcion:
-              g.TipoGastoGrupoDescripcion.toUpperCase(),
-          }));
-          setGrupos(gruposConMayusculas);
-        })
-        .catch(() => setGrupos([]))
-        .finally(() => setLoadingGrupos(false));
+            TipoGastoGrupoDescripcion: g.TipoGastoGrupoDescripcion.toUpperCase(),
+          }))
+          .sort(
+            (a: TipoGastoGrupo, b: TipoGastoGrupo) =>
+              Number(a.TipoGastoGrupoId) - Number(b.TipoGastoGrupoId)
+          )
+      );
+    } catch {
+      setGrupos([]);
+    } finally {
+      setLoadingGrupos(false);
+    }
+  };
+
+  useEffect(() => {
+    setNuevoGrupo("");
+    setEditGrupoId(null);
+    if (currentTipoGasto && currentTipoGasto.TipoGastoId) {
+      cargarGrupos(currentTipoGasto.TipoGastoId);
     } else {
       setGrupos([]);
     }
   }, [currentTipoGasto]);
+
+  const agregarGrupo = async (): Promise<boolean> => {
+    const descripcion = nuevoGrupo.trim().toUpperCase();
+    if (!currentTipoGasto || !descripcion) return false;
+    try {
+      const res = await createTipoGastoGrupo({
+        TipoGastoId: currentTipoGasto.TipoGastoId,
+        TipoGastoGrupoDescripcion: descripcion,
+      });
+      setNuevoGrupo("");
+      await cargarGrupos(currentTipoGasto.TipoGastoId);
+      if (res.TipoGastoCantGastos !== undefined) {
+        setFormData((prev) => ({
+          ...prev,
+          TipoGastoCantGastos: res.TipoGastoCantGastos,
+        }));
+      }
+      Swal.fire({
+        position: "top-end",
+        icon: "success",
+        title: `Grupo ${res.grupo?.TipoGastoGrupoId ?? ""} agregado: ${descripcion}`,
+        showConfirmButton: false,
+        timer: 1500,
+      });
+      return true;
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      Swal.fire({
+        icon: "error",
+        title: "No se pudo agregar el grupo",
+        text: err?.message || "Error desconocido",
+      });
+      return false;
+    }
+  };
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -116,8 +163,10 @@ export default function TiposGastoList({
     }));
   };
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
+    // Si quedó escrito un grupo sin "Agregar", se guarda antes de actualizar
+    if (nuevoGrupo.trim() && !(await agregarGrupo())) return;
     onSubmit(formData);
   };
 
@@ -246,34 +295,20 @@ export default function TiposGastoList({
                                         );
                                         setEditGrupoId(null);
                                         setEditGrupoDesc("");
-                                        setLoadingGrupos(true);
-                                        const data =
-                                          await getTipoGastoGrupoByTipoGastoId(
-                                            currentTipoGasto.TipoGastoId
-                                          );
-                                        // Convertir descripciones a mayúsculas al cargar
-                                        const gruposConMayusculas = data.map(
-                                          (gr: TipoGastoGrupo) => ({
-                                            ...gr,
-                                            TipoGastoGrupoDescripcion:
-                                              gr.TipoGastoGrupoDescripcion.toUpperCase(),
-                                          })
+                                        await cargarGrupos(
+                                          currentTipoGasto.TipoGastoId
                                         );
-                                        setGrupos(gruposConMayusculas);
-                                        setLoadingGrupos(false);
                                       } catch (error: unknown) {
                                         const err = error as {
                                           message?: string;
                                         };
-                                        if (err?.message) {
-                                          Swal.fire({
-                                            icon: "warning",
-                                            title: "No permitido",
-                                            text: err.message,
-                                          });
-                                        } else {
-                                          throw error;
-                                        }
+                                        Swal.fire({
+                                          icon: "warning",
+                                          title: "No permitido",
+                                          text:
+                                            err?.message ||
+                                            "No se pudo actualizar el grupo",
+                                        });
                                       }
                                     }}
                                   >
@@ -332,21 +367,9 @@ export default function TiposGastoList({
                                           currentTipoGasto.TipoGastoId,
                                           g.TipoGastoGrupoId
                                         );
-                                        setLoadingGrupos(true);
-                                        const data =
-                                          await getTipoGastoGrupoByTipoGastoId(
-                                            currentTipoGasto.TipoGastoId
-                                          );
-                                        // Convertir descripciones a mayúsculas al cargar
-                                        const gruposConMayusculas = data.map(
-                                          (gr: TipoGastoGrupo) => ({
-                                            ...gr,
-                                            TipoGastoGrupoDescripcion:
-                                              gr.TipoGastoGrupoDescripcion.toUpperCase(),
-                                          })
+                                        await cargarGrupos(
+                                          currentTipoGasto.TipoGastoId
                                         );
-                                        setGrupos(gruposConMayusculas);
-                                        setLoadingGrupos(false);
                                         if (
                                           res.TipoGastoCantGastos !== undefined
                                         ) {
@@ -375,15 +398,13 @@ export default function TiposGastoList({
                                         const err = error as {
                                           message?: string;
                                         };
-                                        if (err?.message) {
-                                          Swal.fire({
-                                            icon: "warning",
-                                            title: "No permitido",
-                                            text: err.message,
-                                          });
-                                        } else {
-                                          throw error;
-                                        }
+                                        Swal.fire({
+                                          icon: "warning",
+                                          title: "No permitido",
+                                          text:
+                                            err?.message ||
+                                            "No se pudo eliminar el grupo",
+                                        });
                                       }
                                     }}
                                   >
@@ -402,52 +423,18 @@ export default function TiposGastoList({
                             onChange={(e) =>
                               setNuevoGrupo(e.target.value.toUpperCase())
                             }
+                            onKeyDown={(e) => {
+                              // Enter agrega el grupo en vez de enviar el formulario
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                agregarGrupo();
+                              }
+                            }}
                           />
                           <button
                             type="button"
                             className="text-white bg-primary hover:bg-primary-700 rounded px-3 py-1 text-xs"
-                            onClick={async () => {
-                              if (!nuevoGrupo.trim()) return;
-                              const res = await createTipoGastoGrupo({
-                                TipoGastoId: currentTipoGasto.TipoGastoId,
-                                TipoGastoGrupoDescripcion:
-                                  nuevoGrupo.toUpperCase(),
-                              });
-                              setNuevoGrupo("");
-                              setLoadingGrupos(true);
-                              const data = await getTipoGastoGrupoByTipoGastoId(
-                                currentTipoGasto.TipoGastoId
-                              );
-                              // Convertir descripciones a mayúsculas al cargar
-                              const gruposConMayusculas = data.map(
-                                (gr: TipoGastoGrupo) => ({
-                                  ...gr,
-                                  TipoGastoGrupoDescripcion:
-                                    gr.TipoGastoGrupoDescripcion.toUpperCase(),
-                                })
-                              );
-                              setGrupos(gruposConMayusculas);
-                              setLoadingGrupos(false);
-                              if (res.TipoGastoCantGastos !== undefined) {
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  TipoGastoCantGastos: res.TipoGastoCantGastos,
-                                }));
-                              } else {
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  TipoGastoCantGastos:
-                                    prev.TipoGastoCantGastos + 1,
-                                }));
-                              }
-                              Swal.fire({
-                                position: "top-end",
-                                icon: "success",
-                                title: "Grupo agregado exitosamente",
-                                showConfirmButton: false,
-                                timer: 1500,
-                              });
-                            }}
+                            onClick={agregarGrupo}
                           >
                             Agregar
                           </button>

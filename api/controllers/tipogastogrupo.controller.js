@@ -70,11 +70,8 @@ exports.delete = async (req, res) => {
     if (!tipoGastoId) return res.status(404).json({ message: "No encontrado" });
     res.json({ message: "Eliminado correctamente", TipoGastoCantGastos });
   } catch (error) {
-    if (
-      error &&
-      error.message &&
-      error.message.includes("a foreign key constraint fails")
-    ) {
+    // 23503 = foreign_key_violation en PostgreSQL
+    if (error && error.code === "23503") {
       return res.status(400).json({
         message:
           "No se puede eliminar el grupo porque tiene movimientos asociados.",

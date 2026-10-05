@@ -2,7 +2,9 @@ const db = require("../config/db");
 
 const TipoGasto = {
   getAll: async () => {
-    const result = await db.query('SELECT * FROM "tipogasto"');
+    const result = await db.query(
+      'SELECT * FROM "tipogasto" ORDER BY "TipoGastoId"'
+    );
     return result.rows;
   },
 
@@ -23,9 +25,11 @@ const TipoGasto = {
   },
 
   update: async (id, data) => {
+    // "TipoGastoCantGastos" lo mantiene el alta de grupos; no se toma del
+    // formulario, que puede traer un valor viejo.
     const result = await db.query(
-      'UPDATE "tipogasto" SET "TipoGastoDescripcion" = $1, "TipoGastoCantGastos" = $2 WHERE "TipoGastoId" = $3',
-      [data.TipoGastoDescripcion, data.TipoGastoCantGastos, id]
+      'UPDATE "tipogasto" SET "TipoGastoDescripcion" = $1 WHERE "TipoGastoId" = $2',
+      [data.TipoGastoDescripcion, id]
     );
     if (result.rowCount === 0) return null;
     return TipoGasto.getById(id);

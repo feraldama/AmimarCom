@@ -2,7 +2,9 @@ const db = require("../config/db");
 
 const TipoGastoGrupo = {
   getAll: async () => {
-    const result = await db.query('SELECT * FROM "tipogastogrupo"');
+    const result = await db.query(
+      'SELECT * FROM "tipogastogrupo" ORDER BY "TipoGastoId", "TipoGastoGrupoId"'
+    );
     return result.rows;
   },
 
@@ -16,34 +18,62 @@ const TipoGastoGrupo = {
 
   getByTipoGastoId: async (tipoGastoId) => {
     const result = await db.query(
-      'SELECT * FROM "tipogastogrupo" WHERE "TipoGastoId" = $1',
+      'SELECT * FROM "tipogastogrupo" WHERE "TipoGastoId" = $1 ORDER BY "TipoGastoGrupoId"',
       [tipoGastoId]
     );
     return result.rows;
   },
 
   create: async (data) => {
-    // 1. Obtener el contador actual
-    const countResult = await db.query(
-      'SELECT "TipoGastoCantGastos" FROM "tipogasto" WHERE "TipoGastoId" = $1',
-      [data.TipoGastoId]
-    );
-    const nextGrupoId = (countResult.rows[0]?.TipoGastoCantGastos || 0) + 1;
+    const descripcion = String(data.TipoGastoGrupoDescripcion || "")
+      .trim()
+      .toUpperCase();
+    if (!descripcion) {
+      throw new Error("La descripción del grupo es obligatoria");
+    }
 
-    // 2. Insertar con el nuevo ID
-    await db.query(
-      'INSERT INTO "tipogastogrupo" ("TipoGastoId", "TipoGastoGrupoId", "TipoGastoGrupoDescripcion") VALUES ($1, $2, $3)',
-      [data.TipoGastoId, nextGrupoId, data.TipoGastoGrupoDescripcion]
-    );
+    const client = await db.connect();
+    let nextGrupoId;
+    try {
+      await client.query("BEGIN");
 
-    // 3. Actualizar el contador en TipoGasto
-    await db.query(
-      'UPDATE "tipogasto" SET "TipoGastoCantGastos" = $1 WHERE "TipoGastoId" = $2',
-      [nextGrupoId, data.TipoGastoId]
-    );
+      // Bloquea el tipo de gasto para que dos altas simultáneas no tomen el mismo ID
+      const tipoResult = await client.query(
+        'SELECT "TipoGastoId" FROM "tipogasto" WHERE "TipoGastoId" = $1 FOR UPDATE',
+        [data.TipoGastoId]
+      );
+      if (tipoResult.rows.length === 0) {
+        throw new Error("Tipo de gasto no encontrado");
+      }
 
-    const grupo = await TipoGastoGrupo.getById(data.TipoGastoId, nextGrupoId);
-    return grupo;
+      // El próximo ID sale del máximo existente y no del contador
+      // "TipoGastoCantGastos": el contador baja al eliminar y no contempla
+      // grupos insertados por script, así que repetía IDs ya usados.
+      const maxResult = await client.query(
+        'SELECT COALESCE(MAX("TipoGastoGrupoId"), 0) + 1 AS next FROM "tipogastogrupo" WHERE "TipoGastoId" = $1',
+        [data.TipoGastoId]
+      );
+      nextGrupoId = Number(maxResult.rows[0].next);
+
+      await client.query(
+        'INSERT INTO "tipogastogrupo" ("TipoGastoId", "TipoGastoGrupoId", "TipoGastoGrupoDescripcion") VALUES ($1, $2, $3)',
+        [data.TipoGastoId, nextGrupoId, descripcion]
+      );
+
+      await client.query(
+        'UPDATE "tipogasto" SET "TipoGastoCantGastos" = $1 WHERE "TipoGastoId" = $2',
+        [nextGrupoId, data.TipoGastoId]
+      );
+
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    return TipoGastoGrupo.getById(data.TipoGastoId, nextGrupoId);
   },
 
   update: async (id, data) => {
