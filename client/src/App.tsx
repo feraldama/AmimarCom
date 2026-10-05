@@ -6,6 +6,7 @@ import {
 } from "react-router-dom";
 import "./App.css";
 import RequierePermiso from "./components/common/RequierePermiso";
+import AvisoNuevaVersion from "./components/common/AvisoNuevaVersion";
 import { AuthProvider } from "./contexts/AuthContext";
 import Login from "./pages/auth/Login/Login";
 import Dashboard from "./pages/dashboard/Dashboard";
@@ -46,6 +47,7 @@ function App() {
   return (
     <Router>
       <DocumentTitle />
+      <AvisoNuevaVersion />
       <AuthProvider>
         <Routes>
           {/* Redirige la raíz / a /login */}
