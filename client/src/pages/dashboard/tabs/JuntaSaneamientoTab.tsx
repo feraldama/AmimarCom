@@ -256,11 +256,25 @@ export default function JuntaSaneamientoTab() {
       const jsicobroId =
         jsicobroResponse.data?.JSICobroId || jsicobroResponse.JSICobroId;
 
-      // Crear registro diario de caja con ClienteId en el detalle
-      // Usar la caja aperturada del usuario
-      const detalleRegistro = clienteSeleccionado
-        ? `ClienteId:${clienteSeleccionado.ClienteId} | JSICobroId:${jsicobroId}`
-        : `JSICobroId:${jsicobroId}`;
+      // Crear registro diario de caja con ClienteId, nombre del cliente y
+      // código JSI en el detalle. Usar la caja aperturada del usuario
+      const codJSIDetalle = String(
+        clienteSeleccionado?.ClienteCodJSI || codigoJSI || ""
+      ).trim();
+      const nombreClienteDetalle = clienteSeleccionado
+        ? `${clienteSeleccionado.ClienteNombre ?? ""} ${clienteSeleccionado.ClienteApellido ?? ""}`
+            .replace(/\s+/g, " ")
+            .trim()
+            .slice(0, 150) // RegistroDiarioCajaDetalle es varchar(250)
+        : "";
+      const detalleRegistro = [
+        clienteSeleccionado && `ClienteId:${clienteSeleccionado.ClienteId}`,
+        nombreClienteDetalle && `Cliente:${nombreClienteDetalle}`,
+        codJSIDetalle && `CodJSI:${codJSIDetalle}`,
+        `JSICobroId:${jsicobroId}`,
+      ]
+        .filter(Boolean)
+        .join(" | ");
 
       await createRegistroDiarioCaja({
         CajaId: cajaAperturadaId, // Usar la caja aperturada del usuario
