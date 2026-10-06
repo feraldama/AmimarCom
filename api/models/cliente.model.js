@@ -88,6 +88,7 @@ const Cliente = {
       WHERE CONCAT("ClienteNombre", ' ', "ClienteApellido") ILIKE $1
       OR "ClienteRUC" ILIKE $2
       OR CAST("ClienteId" AS TEXT) ILIKE $3
+      OR CAST("ClienteCodJSI" AS TEXT) ILIKE $3
       ORDER BY "${sortField}" ${order}
       LIMIT $4 OFFSET $5
     `;
@@ -100,6 +101,7 @@ const Cliente = {
       WHERE CONCAT("ClienteNombre", ' ', "ClienteApellido") ILIKE $1
       OR "ClienteRUC" ILIKE $2
       OR CAST("ClienteId" AS TEXT) ILIKE $3
+      OR CAST("ClienteCodJSI" AS TEXT) ILIKE $3
     `;
 
     const countResult = await db.query(countQuery, [searchValue, searchValue, searchValue]);
