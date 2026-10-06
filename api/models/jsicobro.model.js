@@ -290,6 +290,7 @@ const JSICobro = {
       `SELECT j.*,
         cl."ClienteNombre",
         cl."ClienteApellido",
+        cl."ClienteCodJSI",
         u."UsuarioNombre"
       FROM "jsicobro" j
       LEFT JOIN "clientes" cl ON j."ClienteId" = cl."ClienteId"

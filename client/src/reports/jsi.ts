@@ -21,6 +21,7 @@ interface JSICobro {
   JSICobroId: number;
   Fecha: string;
   ClienteId: number;
+  ClienteCodJSI: string;
   ClienteNombre: string;
   Monto: number;
   UsuarioId: string;
@@ -81,7 +82,7 @@ export async function generarJSI(
     body: data.map((c, i) => [
       i + 1,
       fmtFechaHora(c.Fecha),
-      c.ClienteId ?? "",
+      c.ClienteCodJSI || "",
       c.ClienteNombre,
       formatMiles(c.Monto),
       c.UsuarioNombre || c.UsuarioId || "",

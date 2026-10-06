@@ -271,6 +271,7 @@ exports.reporteCobros = async (req, res) => {
       JSICobroId: r.JSICobroId,
       Fecha: r.JSICobroFecha,
       ClienteId: r.ClienteId,
+      ClienteCodJSI: r.ClienteCodJSI ? String(r.ClienteCodJSI).trim() : "",
       ClienteNombre: `${(r.ClienteNombre || "").trim()} ${(r.ClienteApellido || "").trim()}`.trim(),
       Monto: Number(r.JSICobroMonto) || 0,
       UsuarioId: r.JSICobroUsuarioId,
