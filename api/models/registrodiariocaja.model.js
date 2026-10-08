@@ -346,7 +346,7 @@ const RegistroDiarioCaja = {
       // Bloquear ambas cajas en orden estable (por CajaId) para evitar
       // deadlocks entre pases concurrentes.
       const cajasResult = await client.query(
-        `SELECT "CajaId", "CajaDescripcion" FROM "caja"
+        `SELECT "CajaId", "CajaDescripcion", "CajaTipoId" FROM "caja"
          WHERE "CajaId" = ANY($1::int[])
          ORDER BY "CajaId"
          FOR UPDATE`,
@@ -360,6 +360,32 @@ const RegistroDiarioCaja = {
       );
       if (!cajaOrigen || !cajaDestino) {
         throw new Error("Caja origen o destino no encontrada");
+      }
+
+      // Las cajas internas (tipo 1) trabajan por turnos de apertura/cierre y
+      // el ticket de cierre sólo suma lo registrado entre ambos. Un pase a una
+      // caja interna cerrada queda fuera de todo turno: la plata se cuenta en
+      // el arqueo del turno siguiente pero el movimiento no, y aparece como
+      // sobrante (o faltante, si la cerrada es la de origen). Una caja interna
+      // que nunca tuvo apertura (ej. CAJA USD) no trabaja por turnos y no se
+      // valida.
+      for (const caja of [cajaOrigen, cajaDestino]) {
+        if (Number(caja.CajaTipoId) !== 1) continue;
+        const estado = await client.query(
+          `SELECT
+             (SELECT MAX("RegistroDiarioCajaId") FROM "registrodiariocaja"
+               WHERE "CajaId" = $1 AND "TipoGastoId" = 2 AND "TipoGastoGrupoId" = 2) AS apertura,
+             (SELECT MAX("RegistroDiarioCajaId") FROM "registrodiariocaja"
+               WHERE "CajaId" = $1 AND "TipoGastoId" = 1 AND "TipoGastoGrupoId" = 2) AS cierre`,
+          [caja.CajaId]
+        );
+        const aperturaId = Number(estado.rows[0].apertura) || 0;
+        const cierreId = Number(estado.rows[0].cierre) || 0;
+        if (aperturaId > 0 && aperturaId <= cierreId) {
+          throw new Error(
+            `${caja.CajaDescripcion.trim()} está cerrada. Debe realizar la apertura antes de registrar el pase.`
+          );
+        }
       }
 
       // Grupo del EGRESO en la caja origen: "PASE <destino>".
