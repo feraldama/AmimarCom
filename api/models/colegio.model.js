@@ -17,6 +17,14 @@ const CTE_CONCEPTOS_RESULTADO = `WITH conceptos AS (
   )
 )`;
 
+// Fecha a la que imputa cada movimiento en el estado de resultados. Los
+// salarios (y anticipos) se pagan a mes vencido: lo pagado en julio es el
+// salario de junio, así que cuentan en el mes anterior a su fecha en caja.
+// (Un pago del 31/03 cae en el 28/02: sigue en el mes correcto.)
+const FECHA_RESULTADO = `(CASE WHEN k."Rubro" = 'SALARIO'
+  THEN (r."RegistroDiarioCajaFecha"::date - interval '1 month')::date
+  ELSE r."RegistroDiarioCajaFecha"::date END)`;
+
 const Colegio = {
   getAll: async () => {
     const result = await db.query('SELECT * FROM "colegio"');
@@ -310,6 +318,7 @@ const Colegio = {
   // colegiogasto. Incluye los conceptos sin movimientos (Total 0).
   // Sin filtro de cajas a propósito: ingresos y salarios de un colegio pasan
   // por cajas distintas, filtrar daría un resultado parcial engañoso.
+  // Los salarios se toman del mes siguiente (ver FECHA_RESULTADO).
   // En el concepto propio separa lo que entró por la pantalla de cobranzas
   // (detalle con "ColegioCobranzaId:") de lo cargado a mano en la caja.
   // colegioId: opcional (vacío = todos)
@@ -339,8 +348,8 @@ const Colegio = {
       LEFT JOIN "registrodiariocaja" r
         ON r."TipoGastoId" = k."TipoGastoId"
         AND r."TipoGastoGrupoId" = k."TipoGastoGrupoId"
-        AND r."RegistroDiarioCajaFecha"::date >= $1::date
-        AND r."RegistroDiarioCajaFecha"::date <= $2::date
+        AND ${FECHA_RESULTADO} >= $1::date
+        AND ${FECHA_RESULTADO} <= $2::date
       WHERE ($3::int IS NULL OR col."ColegioId" = $3::int)
       GROUP BY col."ColegioId", col."ColegioNombre", k."Rubro", k."Propio", k."TipoGastoId",
         k."TipoGastoGrupoId", g."TipoGastoGrupoDescripcion"
@@ -359,7 +368,7 @@ const Colegio = {
       `${CTE_CONCEPTOS_RESULTADO}
       SELECT col."ColegioId",
         col."ColegioNombre",
-        to_char(r."RegistroDiarioCajaFecha", 'YYYY-MM') AS "Mes",
+        to_char(${FECHA_RESULTADO}, 'YYYY-MM') AS "Mes",
         k."Rubro",
         SUM(r."RegistroDiarioCajaMonto") AS "Total",
         COALESCE(SUM(r."RegistroDiarioCajaMonto") FILTER (
@@ -370,8 +379,8 @@ const Colegio = {
       JOIN "registrodiariocaja" r
         ON r."TipoGastoId" = k."TipoGastoId"
         AND r."TipoGastoGrupoId" = k."TipoGastoGrupoId"
-        AND r."RegistroDiarioCajaFecha"::date >= $1::date
-        AND r."RegistroDiarioCajaFecha"::date <= $2::date
+        AND ${FECHA_RESULTADO} >= $1::date
+        AND ${FECHA_RESULTADO} <= $2::date
       WHERE ($3::int IS NULL OR col."ColegioId" = $3::int)
       GROUP BY col."ColegioId", col."ColegioNombre", 3, k."Rubro"
       ORDER BY col."ColegioNombre", 3`,

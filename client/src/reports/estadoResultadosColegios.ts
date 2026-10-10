@@ -189,7 +189,7 @@ export async function generarEstadoResultadosColegios(
   y = pdfNota(
     doc,
     y,
-    "Todas las cajas. Salarios incluye los anticipos de salario de profesores."
+    "Todas las cajas. Salarios incluye los anticipos de salario de profesores y se paga a mes vencido: cuenta lo pagado en el mes siguiente al período."
   );
   y = pdfNota(
     doc,
@@ -314,7 +314,7 @@ export async function generarEstadoResultadosColegiosMensual(
   y = pdfNota(
     doc,
     y,
-    "Todas las cajas. Cada movimiento cuenta en el mes de su fecha en caja. Salarios incluye los anticipos de salario."
+    "Todas las cajas. Cada movimiento cuenta en el mes de su fecha en caja, salvo salarios (incluye anticipos): se pagan a mes vencido y cuentan en el mes anterior al pago."
   );
   pdfNota(
     doc,
