@@ -4,6 +4,7 @@ import SearchButton from "../common/Input/SearchButton";
 import ActionButton from "../common/Button/ActionButton";
 import DataTable from "../common/Table/DataTable";
 import Modal from "../common/Modal";
+import ColegioConceptosResultado from "./ColegioConceptosResultado";
 import { getTiposGasto } from "../../services/tipogasto.service";
 import { getTiposGastoGrupo } from "../../services/tipogastogrupo.service";
 import {
@@ -722,6 +723,12 @@ export default function ColegiosList({
                       </>
                     )}
           </div>
+        )}
+        {currentColegio && (
+          <ColegioConceptosResultado
+            colegioId={currentColegio.ColegioId}
+            grupos={tiposGastoGrupo}
+          />
         )}
         </form>
       </Modal>

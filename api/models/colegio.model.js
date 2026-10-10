@@ -1,5 +1,22 @@
 const db = require("../config/db");
 
+// Conceptos de caja de cada colegio para el estado de resultados, con su
+// rubro (INGRESO / RETIRO / SALARIO). El concepto propio del colegio (el de
+// sus cobranzas, "Propio") es INGRESO; el resto sale de colegiogasto (sin
+// repetir el propio de algún colegio, para no sumarlo dos veces).
+const CTE_CONCEPTOS_RESULTADO = `WITH conceptos AS (
+  SELECT "ColegioId", "TipoGastoId", "TipoGastoGrupoId", 'INGRESO' AS "Rubro", true AS "Propio"
+  FROM "colegio"
+  WHERE "TipoGastoId" IS NOT NULL AND "TipoGastoGrupoId" IS NOT NULL
+  UNION ALL
+  SELECT cg."ColegioId", cg."TipoGastoId", cg."TipoGastoGrupoId", cg."ColegioGastoRubro", false
+  FROM "colegiogasto" cg
+  WHERE NOT EXISTS (
+    SELECT 1 FROM "colegio" c
+    WHERE c."TipoGastoId" = cg."TipoGastoId" AND c."TipoGastoGrupoId" = cg."TipoGastoGrupoId"
+  )
+)`;
+
 const Colegio = {
   getAll: async () => {
     const result = await db.query('SELECT * FROM "colegio"');
@@ -232,6 +249,135 @@ const Colegio = {
       [id]
     );
     return result.rowCount > 0;
+  },
+
+  // Conceptos del estado de resultados de un colegio (tabla colegiogasto),
+  // con la descripción del grupo
+  getConceptosResultado: async (colegioId) => {
+    const result = await db.query(
+      `SELECT cg."ColegioId", cg."TipoGastoId", cg."TipoGastoGrupoId",
+        cg."ColegioGastoRubro",
+        COALESCE(g."TipoGastoGrupoDescripcion", '') AS "TipoGastoGrupoDescripcion"
+      FROM "colegiogasto" cg
+      LEFT JOIN "tipogastogrupo" g
+        ON g."TipoGastoId" = cg."TipoGastoId" AND g."TipoGastoGrupoId" = cg."TipoGastoGrupoId"
+      WHERE cg."ColegioId" = $1
+      ORDER BY cg."ColegioGastoRubro", g."TipoGastoGrupoDescripcion"`,
+      [colegioId]
+    );
+    return result.rows;
+  },
+
+  // Colegio que ya usa un concepto: como concepto propio (el de sus
+  // cobranzas) o en colegiogasto. null si está libre.
+  getColegioDelConcepto: async (tipoGastoId, tipoGastoGrupoId) => {
+    const result = await db.query(
+      `SELECT c."ColegioId", c."ColegioNombre"
+      FROM "colegio" c
+      WHERE c."TipoGastoId" = $1 AND c."TipoGastoGrupoId" = $2
+      UNION
+      SELECT c."ColegioId", c."ColegioNombre"
+      FROM "colegiogasto" cg
+      JOIN "colegio" c ON c."ColegioId" = cg."ColegioId"
+      WHERE cg."TipoGastoId" = $1 AND cg."TipoGastoGrupoId" = $2
+      LIMIT 1`,
+      [tipoGastoId, tipoGastoGrupoId]
+    );
+    return result.rows[0] || null;
+  },
+
+  addConceptoResultado: async (colegioId, tipoGastoId, tipoGastoGrupoId, rubro) => {
+    await db.query(
+      `INSERT INTO "colegiogasto"
+        ("ColegioId", "TipoGastoId", "TipoGastoGrupoId", "ColegioGastoRubro")
+      VALUES ($1, $2, $3, $4)`,
+      [colegioId, tipoGastoId, tipoGastoGrupoId, rubro]
+    );
+  },
+
+  deleteConceptoResultado: async (colegioId, tipoGastoId, tipoGastoGrupoId) => {
+    const result = await db.query(
+      `DELETE FROM "colegiogasto"
+      WHERE "ColegioId" = $1 AND "TipoGastoId" = $2 AND "TipoGastoGrupoId" = $3`,
+      [colegioId, tipoGastoId, tipoGastoGrupoId]
+    );
+    return result.rowCount > 0;
+  },
+
+  // Estado de resultados: total de registrodiariocaja por colegio y concepto,
+  // con el rubro del concepto (INGRESO / RETIRO / SALARIO). El concepto propio
+  // del colegio (el de sus cobranzas, "Propio") es INGRESO; el resto sale de
+  // colegiogasto. Incluye los conceptos sin movimientos (Total 0).
+  // Sin filtro de cajas a propósito: ingresos y salarios de un colegio pasan
+  // por cajas distintas, filtrar daría un resultado parcial engañoso.
+  // En el concepto propio separa lo que entró por la pantalla de cobranzas
+  // (detalle con "ColegioCobranzaId:") de lo cargado a mano en la caja.
+  // colegioId: opcional (vacío = todos)
+  getEstadoResultados: async (fechaDesde, fechaHasta, colegioId) => {
+    const params = [fechaDesde, fechaHasta, colegioId ? Number(colegioId) : null];
+    const result = await db.query(
+      `${CTE_CONCEPTOS_RESULTADO}
+      SELECT col."ColegioId",
+        col."ColegioNombre",
+        k."Rubro",
+        k."Propio",
+        k."TipoGastoId",
+        k."TipoGastoGrupoId",
+        COALESCE(g."TipoGastoGrupoDescripcion", '') AS "GrupoDescripcion",
+        COUNT(r."RegistroDiarioCajaId")::int AS "CantMovimientos",
+        COALESCE(SUM(r."RegistroDiarioCajaMonto"), 0) AS "Total",
+        COUNT(r."RegistroDiarioCajaId") FILTER (
+          WHERE r."RegistroDiarioCajaDetalle" LIKE '%ColegioCobranzaId:%'
+        )::int AS "CantCobranzas",
+        COALESCE(SUM(r."RegistroDiarioCajaMonto") FILTER (
+          WHERE r."RegistroDiarioCajaDetalle" LIKE '%ColegioCobranzaId:%'
+        ), 0) AS "TotalCobranzas"
+      FROM conceptos k
+      JOIN "colegio" col ON col."ColegioId" = k."ColegioId"
+      LEFT JOIN "tipogastogrupo" g
+        ON g."TipoGastoId" = k."TipoGastoId" AND g."TipoGastoGrupoId" = k."TipoGastoGrupoId"
+      LEFT JOIN "registrodiariocaja" r
+        ON r."TipoGastoId" = k."TipoGastoId"
+        AND r."TipoGastoGrupoId" = k."TipoGastoGrupoId"
+        AND r."RegistroDiarioCajaFecha"::date >= $1::date
+        AND r."RegistroDiarioCajaFecha"::date <= $2::date
+      WHERE ($3::int IS NULL OR col."ColegioId" = $3::int)
+      GROUP BY col."ColegioId", col."ColegioNombre", k."Rubro", k."Propio", k."TipoGastoId",
+        k."TipoGastoGrupoId", g."TipoGastoGrupoDescripcion"
+      ORDER BY col."ColegioNombre", k."TipoGastoId", k."TipoGastoGrupoId"`,
+      params
+    );
+    return result.rows;
+  },
+
+  // Estado de resultados mes a mes: total por colegio, mes (YYYY-MM) y
+  // rubro, con lo cargado a mano en el concepto propio (Manual). Solo
+  // devuelve los meses con movimientos. colegioId: opcional (vacío = todos)
+  getEstadoResultadosMensual: async (fechaDesde, fechaHasta, colegioId) => {
+    const params = [fechaDesde, fechaHasta, colegioId ? Number(colegioId) : null];
+    const result = await db.query(
+      `${CTE_CONCEPTOS_RESULTADO}
+      SELECT col."ColegioId",
+        col."ColegioNombre",
+        to_char(r."RegistroDiarioCajaFecha", 'YYYY-MM') AS "Mes",
+        k."Rubro",
+        SUM(r."RegistroDiarioCajaMonto") AS "Total",
+        COALESCE(SUM(r."RegistroDiarioCajaMonto") FILTER (
+          WHERE k."Propio" AND r."RegistroDiarioCajaDetalle" NOT LIKE '%ColegioCobranzaId:%'
+        ), 0) AS "Manual"
+      FROM conceptos k
+      JOIN "colegio" col ON col."ColegioId" = k."ColegioId"
+      JOIN "registrodiariocaja" r
+        ON r."TipoGastoId" = k."TipoGastoId"
+        AND r."TipoGastoGrupoId" = k."TipoGastoGrupoId"
+        AND r."RegistroDiarioCajaFecha"::date >= $1::date
+        AND r."RegistroDiarioCajaFecha"::date <= $2::date
+      WHERE ($3::int IS NULL OR col."ColegioId" = $3::int)
+      GROUP BY col."ColegioId", col."ColegioNombre", 3, k."Rubro"
+      ORDER BY col."ColegioNombre", 3`,
+      params
+    );
+    return result.rows;
   },
 };
 

@@ -19,6 +19,10 @@ import { generarMovimientosCajas } from "../../reports/movimientosCajas";
 import { generarCierreDiario } from "../../reports/cierreDiario";
 import { generarDivisas } from "../../reports/divisas";
 import { generarCobranzaColegios } from "../../reports/cobranzaColegios";
+import {
+  generarEstadoResultadosColegios,
+  generarEstadoResultadosColegiosMensual,
+} from "../../reports/estadoResultadosColegios";
 import { generarJSI } from "../../reports/jsi";
 import { generarElComercio } from "../../reports/elComercio";
 import { generarEmpresaTransporte } from "../../reports/empresaTransporte";
@@ -138,6 +142,7 @@ const PERMISO_REPORTE = {
   registro: "REPORTEREGISTRODIARIO",
   porcaja: "REPORTEPORCAJA",
   colegios: "REPORTECOLEGIOS",
+  resultados: "REPORTEESTADORESULTADOS",
   jsi: "REPORTEJSI",
   comercio: "REPORTEELCOMERCIO",
   transporte: "REPORTETRANSPORTE",
@@ -172,6 +177,7 @@ const ReportesPage: React.FC = () => {
     registro: [today, today],
     porcaja: [today, today],
     colegios: [today, today],
+    resultados: [today, today],
     jsi: [today, today],
     comercio: [today, today],
     transporte: [today, today],
@@ -195,6 +201,9 @@ const ReportesPage: React.FC = () => {
   // Colegios para el selector de Cobranza Colegios
   const [colegios, setColegios] = useState<{ id: number; desc: string }[]>([]);
   const [colegioReporte, setColegioReporte] = useState("");
+  // Estado de resultados: "" = todos los colegios
+  const [colegioResultados, setColegioResultados] = useState("");
+  const [resultadosPorMes, setResultadosPorMes] = useState(false);
 
   // Empresas de transporte para el selector de Empresa de Transporte
   const [transportes, setTransportes] = useState<{ id: number; desc: string }[]>([]);
@@ -345,6 +354,8 @@ const ReportesPage: React.FC = () => {
     extra?: React.ReactNode;
     /** Oculta el filtro de cajas común (para reportes con selector propio). */
     sinFiltroCajas?: boolean;
+    /** Siempre todas las cajas: no aplica el límite "solo su caja". */
+    todasLasCajas?: boolean;
   }
 
   const todosLosReportes: ReporteDef[] = [
@@ -413,6 +424,46 @@ const ReportesPage: React.FC = () => {
               <option key={c.id} value={c.id}>{c.desc}</option>
             ))}
           </select>
+        </div>
+      ),
+    },
+    {
+      key: "resultados",
+      title: "Estado de Resultados Colegios",
+      description: "Por colegio: ingresos menos retiros y salarios de profesores",
+      icon: <BarChart3 className="size-5 text-primary" />,
+      run: (desde, hasta) =>
+        (resultadosPorMes
+          ? generarEstadoResultadosColegiosMensual
+          : generarEstadoResultadosColegios)(desde, hasta, colegioResultados),
+      sinFiltroCajas: true,
+      todasLasCajas: true,
+      extra: (
+        <div className="grid grid-cols-2 gap-3 mb-4">
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Colegio</label>
+            <select
+              value={colegioResultados}
+              onChange={(e) => setColegioResultados(e.target.value)}
+              className={inputClassName}
+            >
+              <option value="">Todos los colegios</option>
+              {colegios.map((c) => (
+                <option key={c.id} value={c.id}>{c.desc}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-muted-foreground mb-1">Vista</label>
+            <select
+              value={resultadosPorMes ? "mes" : "periodo"}
+              onChange={(e) => setResultadosPorMes(e.target.value === "mes")}
+              className={inputClassName}
+            >
+              <option value="periodo">Total del período</option>
+              <option value="mes">Mes por mes (hasta 12)</option>
+            </select>
+          </div>
         </div>
       ),
     },
@@ -551,7 +602,7 @@ const ReportesPage: React.FC = () => {
   const reportes = todosLosReportes
     .filter((r) => puedeVer(r.key))
     .map((r) =>
-      soloSuCaja && cajas.length === 0 ? { ...r, disabled: true } : r
+      soloSuCaja && cajas.length === 0 && !r.todasLasCajas ? { ...r, disabled: true } : r
     );
 
   return (
