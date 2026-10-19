@@ -22,6 +22,7 @@ const routeTitles: Record<string, string> = {
   "/colegiocobranzas": "Cobranzas de Colegios",
   "/customers": "Clientes",
   "/apertura-cierre-caja": "Apertura/Cierre de Caja",
+  "/cierre-diferencias": "Diferencias de Cierre",
   "/locales": "Locales",
   "/almacenes": "Almacenes",
   "/combos": "Combos",

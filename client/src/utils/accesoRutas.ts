@@ -34,6 +34,7 @@ const MENUS_POR_RUTA: Record<string, string[]> = {
   "/ventas": [PERMISO_OPERAR_CAJA],
   "/apertura-cierre-caja": [PERMISO_OPERAR_CAJA],
   "/cierre-diario-historial": ["CIERREDIARIO"],
+  "/cierre-diferencias": ["CIERREDIFERENCIAS"],
   "/customers": ["CLIENTES"],
   "/reportes": ["REPORTES", ...PERMISOS_REPORTES],
   "/movements/jsicobro": ["JSICOBRO"],

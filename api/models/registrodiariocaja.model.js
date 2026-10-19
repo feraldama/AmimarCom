@@ -1,4 +1,5 @@
 const db = require("../config/db");
+const CierreDiferencia = require("./cierrediferencia.model");
 
 /**
  * Normaliza RegistroDiarioCajaFecha para que siempre incluya fecha y hora.
@@ -691,12 +692,17 @@ const RegistroDiarioCaja = {
         if (!(cierreId < aperturaId)) {
           throw errorNegocio("CAJA CERRADA - DEBE REALIZAR LA APERTURA");
         }
-        await client.query(INSERT_REGISTRO_QUERY, [
+        const cierreResult = await client.query(INSERT_REGISTRO_QUERY, [
           CajaId, fecha, EGRESO, GRUPO_TURNO, 0,
           "CIERRE " + CajaDescripcion, 0, 0, Monto,
           pendientes[0] || 0, pendientes[1] || 0, pendientes[2] || 0, pendientes[3] || 0,
           UsuarioId,
         ]);
+        // Se guarda el sobrante/faltante del turno para revisarlo después
+        await CierreDiferencia.registrarParaCierre(
+          client,
+          cierreResult.rows[0].RegistroDiarioCajaId
+        );
         // Durante el turno cada movimiento va ajustando CajaMonto (saldo
         // teórico). Al cerrar, la caja queda con lo que se contó en el arqueo
         // (efectivo + pendientes, el mismo "Cierre" del ticket), así Gestión de

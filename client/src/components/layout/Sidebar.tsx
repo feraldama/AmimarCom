@@ -18,6 +18,7 @@ import {
   Truck,
   GraduationCap,
   CalendarCheck,
+  Scale,
 } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import type { Dispatch, SetStateAction } from "react";
@@ -50,6 +51,11 @@ const navigation: NavigationItem[] = [
     name: "Historial Cierres Diarios",
     href: "/cierre-diario-historial",
     icon: <CalendarCheck className="size-5" />,
+  },
+  {
+    name: "Diferencias de Cierre",
+    href: "/cierre-diferencias",
+    icon: <Scale className="size-5" />,
   },
   {
     name: "Cobranzas",

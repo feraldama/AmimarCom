@@ -22,6 +22,7 @@ import TiposGastoPage from "./pages/tipogasto/TiposGastoPage";
 import CustomersPage from "./pages/customers/CustomersPage";
 import AperturaCierreCajaPage from "./pages/cajas/AperturaCierreCajaPage";
 import CierreDiarioHistorialPage from "./pages/cajas/CierreDiarioHistorialPage";
+import DiferenciasCierrePage from "./pages/cajas/DiferenciasCierrePage";
 import Sales from "./pages/dashboard/Sales";
 import LocalesPage from "./pages/locales/LocalesPage";
 import AlmacenesPage from "./pages/almacenes/AlmacenesPage";
@@ -112,6 +113,14 @@ function App() {
             <Route
               path="/cierre-diario-historial"
               element={<CierreDiarioHistorialPage />}
+            />
+            <Route
+              path="/cierre-diferencias"
+              element={
+                <RequierePermiso ruta="/cierre-diferencias">
+                  <DiferenciasCierrePage />
+                </RequierePermiso>
+              }
             />
             <Route path="/locales" element={<LocalesPage />} />
             <Route path="/almacenes" element={<AlmacenesPage />} />
