@@ -40,6 +40,7 @@ const horarioUsoRoutes = require("./routes/horariouso.routes");
 const pagoAdminRoutes = require("./routes/pagoadmin.routes");
 const westernEnvioRoutes = require("./routes/westernenvio.routes");
 const cierreDiarioRoutes = require("./routes/cierrediario.routes");
+const { iniciarCierreDiarioAutomatico } = require("./jobs/cierreDiarioAutomatico");
 // const productoRoutes = require("./routes/producto.routes"); // Ejemplo adicional
 
 const app = express();
@@ -114,4 +115,5 @@ const PORT = process.env.PORT || 3013;
 const HOST = process.env.HOST || undefined;
 app.listen(PORT, HOST, () => {
   console.log(`Servidor backend corriendo en puerto ${PORT}`);
+  iniciarCierreDiarioAutomatico();
 });

@@ -2,16 +2,26 @@ const CierreDiario = require("../models/cierrediario.model");
 
 exports.createSnapshot = async (req, res) => {
   try {
-    const fecha = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
-    const existing = await CierreDiario.countByFecha(fecha);
-    if (existing > 0) {
+    const forzar = req.body?.forzar === true;
+    const result = await CierreDiario.registrarSnapshot({ forzar });
+    const { estado, fecha, existing, abiertas, inserted } = result;
+    if (estado === "existe") {
       return res.status(409).json({
+        code: "YA_EXISTE",
         message: `Ya existe un cierre diario para ${fecha} (${existing} cajas registradas).`,
         fecha,
         existing,
       });
     }
-    const inserted = await CierreDiario.createSnapshot(fecha);
+    // El frontend muestra la lista y puede reintentar con forzar: true
+    if (estado === "abiertas") {
+      return res.status(409).json({
+        code: "CAJAS_ABIERTAS",
+        message: `Hay ${abiertas.length} caja(s) abierta(s): su saldo es el teórico del turno en curso, no lo contado en el arqueo.`,
+        fecha,
+        abiertas,
+      });
+    }
     res.status(201).json({
       message: `Cierre diario registrado para ${inserted} cajas.`,
       fecha,

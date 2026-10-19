@@ -579,6 +579,9 @@ exports.ultimoCierrePorCaja = async (req, res) => {
   }
 };
 
+// Monto válido para el arqueo: número finito y no negativo
+const montoValido = (v) => Number.isFinite(Number(v)) && Number(v) >= 0;
+
 exports.aperturaCierreCaja = async (req, res) => {
   try {
     const {
@@ -601,109 +604,38 @@ exports.aperturaCierreCaja = async (req, res) => {
         .status(400)
         .json({ success: false, message: "Faltan datos requeridos" });
     }
-    let Sigue = "N";
-    let error = "";
-    // Buscar última apertura y cierre
-    const aperturaReg = await RegistroDiarioCaja.getUltimaApertura(CajaId);
-    const cierreReg = await RegistroDiarioCaja.getUltimoCierre(CajaId);
-    const RegistroDiarioCajaIdApertura = aperturaReg
-      ? aperturaReg.RegistroDiarioCajaId
-      : 0;
-    const RegistroDiarioCajaIdCierre = cierreReg
-      ? cierreReg.RegistroDiarioCajaId
-      : 0;
-    if (apertura == 0) {
-      if (RegistroDiarioCajaIdApertura === 0) {
-        Sigue = "S";
-      } else if (RegistroDiarioCajaIdCierre > RegistroDiarioCajaIdApertura) {
-        Sigue = "S";
-      } else {
-        Sigue = "N";
-        error = "CAJA ABIERTA - DEBE REALIZAR EL CIERRE";
-      }
-      // El usuario no puede aperturar si ya tiene OTRA caja abierta
-      if (Sigue === "S") {
-        const estadoUsuario =
-          await RegistroDiarioCaja.getEstadoAperturaPorUsuario(UsuarioId);
-        if (
-          estadoUsuario.cajaId &&
-          estadoUsuario.aperturaId > estadoUsuario.cierreId
-        ) {
-          Sigue = "N";
-          error = `USTED YA TIENE ABIERTA LA CAJA ${estadoUsuario.cajaId} - DEBE REALIZAR EL CIERRE`;
-        }
-      }
-    } else {
-      if (RegistroDiarioCajaIdCierre < RegistroDiarioCajaIdApertura) {
-        Sigue = "S";
-      } else {
-        Sigue = "N";
-        error = "CAJA CERRADA - DEBE REALIZAR LA APERTURA";
-      }
-    }
-    if (Sigue === "N") {
-      return res.status(400).json({ success: false, message: error });
-    }
-    // Obtener descripción de caja
-    const cajaResult = await db.query(
-      'SELECT * FROM "caja" WHERE "CajaId" = $1',
-      [CajaId]
-    );
-    const caja = cajaResult.rows[0];
-    const CajaDescripcion = caja ? caja.CajaDescripcion : "";
-    // APERTURA: se abre con el monto del último cierre de la caja — lo que
-    // realmente quedó en el cajón según el arqueo, incluido el sobrante o
-    // faltante con el que se cerró. Si la caja nunca se cerró, se usa el
-    // CajaMonto como valor inicial.
-    if (apertura == 0) {
-      const montoApertura = cierreReg
-        ? Number(cierreReg.RegistroDiarioCajaMonto) || 0
-        : Number(caja?.CajaMonto) || 0;
-      // Crear registro de apertura
-      await RegistroDiarioCaja.create({
-        CajaId,
-        RegistroDiarioCajaFecha: new Date(),
-        TipoGastoId: 2,
-        TipoGastoGrupoId: 2,
-        RegistroDiarioCajaDetalle: "APERTURA " + CajaDescripcion,
-        RegistroDiarioCajaMonto: montoApertura,
-        UsuarioId,
-      });
-      // CajaMonto en la tabla Caja no se modifica (queda fijo)
-      return res.json({
-        success: true,
-        message: "Apertura realizada correctamente",
-      });
-    } else {
-      // CIERRE: crear registro de cierre (con pendientes 1-4)
-      await RegistroDiarioCaja.create({
-        CajaId,
-        RegistroDiarioCajaFecha: new Date(),
-        TipoGastoId: 1,
-        TipoGastoGrupoId: 2,
-        RegistroDiarioCajaDetalle: "CIERRE " + CajaDescripcion,
-        RegistroDiarioCajaMonto: Monto,
-        UsuarioId,
-        RegistroDiarioCajaPendiente1: Number(RegistroDiarioCajaPendiente1) || 0,
-        RegistroDiarioCajaPendiente2: Number(RegistroDiarioCajaPendiente2) || 0,
-        RegistroDiarioCajaPendiente3: Number(RegistroDiarioCajaPendiente3) || 0,
-        RegistroDiarioCajaPendiente4: Number(RegistroDiarioCajaPendiente4) || 0,
-      });
-      // Durante el turno cada movimiento va ajustando CajaMonto (saldo
-      // teórico). Al cerrar, la caja queda con lo que se contó en el arqueo
-      // (efectivo + pendientes, el mismo "Cierre" del ticket), así Gestión de
-      // Cajas, el Cierre Diario y la próxima apertura muestran el mismo monto
-      // y el sobrante/faltante no se sigue arrastrando de un turno al otro.
-      await db.query('UPDATE "caja" SET "CajaMonto" = $1 WHERE "CajaId" = $2', [
-        Number(Monto) || 0,
-        CajaId,
-      ]);
-      return res.json({
-        success: true,
-        message: "Cierre realizado correctamente",
+    // En la apertura el monto lo define el backend (último cierre), así que
+    // sólo se valida lo que manda el cliente en el cierre.
+    const pendientes = [
+      RegistroDiarioCajaPendiente1,
+      RegistroDiarioCajaPendiente2,
+      RegistroDiarioCajaPendiente3,
+      RegistroDiarioCajaPendiente4,
+    ].map((p) => (p == null || p === "" ? 0 : p));
+    if (apertura != 0 && ![Monto, ...pendientes].every(montoValido)) {
+      return res.status(400).json({
+        success: false,
+        message: "El monto del cierre y los pendientes deben ser números mayores o iguales a 0",
       });
     }
+    await RegistroDiarioCaja.aperturaCierre({
+      apertura,
+      CajaId,
+      Monto: Number(Monto),
+      pendientes: pendientes.map(Number),
+      UsuarioId,
+    });
+    return res.json({
+      success: true,
+      message:
+        apertura == 0
+          ? "Apertura realizada correctamente"
+          : "Cierre realizado correctamente",
+    });
   } catch (error) {
+    if (error.status === 400) {
+      return res.status(400).json({ success: false, message: error.message });
+    }
     console.error("Error en apertura/cierre de caja:", error);
     res.status(500).json({
       success: false,

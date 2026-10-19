@@ -1,11 +1,20 @@
 import api from "./api";
 import type { AxiosError } from "axios";
 
-interface SnapshotResponse {
+export interface CajaAbierta {
+  CajaId: number;
+  CajaDescripcion: string;
+  UsuarioId: string;
+}
+
+export interface SnapshotResponse {
   message: string;
   fecha: string;
   inserted?: number;
   existing?: number;
+  // En el error 409: "YA_EXISTE" o "CAJAS_ABIERTAS" (con la lista)
+  code?: "YA_EXISTE" | "CAJAS_ABIERTAS";
+  abiertas?: CajaAbierta[];
 }
 
 export interface CierreDiarioDateRow {
@@ -38,9 +47,15 @@ interface DetailResponse {
   data: CierreDiarioDetailRow[];
 }
 
-export const createCierreDiarioSnapshot = async (): Promise<SnapshotResponse> => {
+// forzar: registrar aunque haya cajas abiertas (tras confirmarlo el usuario)
+export const createCierreDiarioSnapshot = async (
+  forzar = false
+): Promise<SnapshotResponse> => {
   try {
-    const response = await api.post<SnapshotResponse>("/cierrediario/snapshot");
+    const response = await api.post<SnapshotResponse>(
+      "/cierrediario/snapshot",
+      { forzar }
+    );
     return response.data;
   } catch (error) {
     const axiosError = error as AxiosError<SnapshotResponse>;

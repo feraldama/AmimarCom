@@ -58,6 +58,12 @@ function filtroCajasSql(params, cajaIds, columna) {
   return `AND ${columna} = ANY($${params.length}::int[])`;
 }
 
+// TipoGastoId: 1 = egreso, 2 = ingreso. El grupo 2 marca las filas de turno:
+// la apertura es un ingreso de ese grupo y el cierre un egreso.
+const EGRESO = 1;
+const INGRESO = 2;
+const GRUPO_TURNO = 2;
+
 const INSERT_REGISTRO_QUERY = `
   INSERT INTO "registrodiariocaja" (
     "CajaId",
@@ -609,20 +615,105 @@ const RegistroDiarioCaja = {
     return result.rows.length > 0 ? result.rows[0] : null;
   },
 
-  getUltimaApertura: async (cajaId) => {
-    const result = await db.query(
-      `SELECT * FROM "registrodiariocaja" WHERE "CajaId" = $1 AND "TipoGastoId" = 2 AND "TipoGastoGrupoId" = 2 ORDER BY "RegistroDiarioCajaId" DESC LIMIT 1`,
+  // `q` permite correr la consulta dentro de una transacción (client de pg)
+  getUltimaApertura: async (cajaId, q = db) => {
+    const result = await q.query(
+      `SELECT * FROM "registrodiariocaja" WHERE "CajaId" = $1 AND "TipoGastoId" = ${INGRESO} AND "TipoGastoGrupoId" = ${GRUPO_TURNO} ORDER BY "RegistroDiarioCajaId" DESC LIMIT 1`,
       [cajaId]
     );
     return result.rows.length > 0 ? result.rows[0] : null;
   },
 
-  getUltimoCierre: async (cajaId) => {
-    const result = await db.query(
-      `SELECT * FROM "registrodiariocaja" WHERE "CajaId" = $1 AND "TipoGastoId" = 1 AND "TipoGastoGrupoId" = 2 ORDER BY "RegistroDiarioCajaId" DESC LIMIT 1`,
+  getUltimoCierre: async (cajaId, q = db) => {
+    const result = await q.query(
+      `SELECT * FROM "registrodiariocaja" WHERE "CajaId" = $1 AND "TipoGastoId" = ${EGRESO} AND "TipoGastoGrupoId" = ${GRUPO_TURNO} ORDER BY "RegistroDiarioCajaId" DESC LIMIT 1`,
       [cajaId]
     );
     return result.rows.length > 0 ? result.rows[0] : null;
+  },
+
+  // Apertura (apertura = 0) o cierre (apertura = 1) de turno, atómico: valida
+  // el estado, inserta la fila del turno y (en el cierre) fija CajaMonto en
+  // una sola transacción. Bloquea primero al usuario (lock advisory) y después
+  // la fila de la caja, siempre en ese orden, para que dos pedidos simultáneos
+  // no puedan abrir/cerrar dos veces ni dejar al usuario con dos cajas
+  // abiertas. Errores de negocio: lanza un Error con `status = 400`.
+  aperturaCierre: async ({ apertura, CajaId, Monto, pendientes = [], UsuarioId }) => {
+    const errorNegocio = (message) =>
+      Object.assign(new Error(message), { status: 400 });
+    const client = await db.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext($1))`, [
+        `turno-usuario:${UsuarioId}`,
+      ]);
+      const cajaResult = await client.query(
+        'SELECT * FROM "caja" WHERE "CajaId" = $1 FOR UPDATE',
+        [CajaId]
+      );
+      const caja = cajaResult.rows[0];
+      if (!caja) throw errorNegocio("Caja no encontrada");
+      const CajaDescripcion = caja.CajaDescripcion || "";
+
+      const aperturaReg = await RegistroDiarioCaja.getUltimaApertura(CajaId, client);
+      const cierreReg = await RegistroDiarioCaja.getUltimoCierre(CajaId, client);
+      const aperturaId = aperturaReg ? aperturaReg.RegistroDiarioCajaId : 0;
+      const cierreId = cierreReg ? cierreReg.RegistroDiarioCajaId : 0;
+      const fecha = new Date();
+
+      if (apertura == 0) {
+        if (aperturaId !== 0 && cierreId < aperturaId) {
+          throw errorNegocio("CAJA ABIERTA - DEBE REALIZAR EL CIERRE");
+        }
+        // El usuario no puede aperturar si ya tiene OTRA caja abierta
+        const estadoUsuario = await RegistroDiarioCaja.getEstadoAperturaPorUsuario(
+          UsuarioId,
+          client
+        );
+        if (estadoUsuario.cajaId && estadoUsuario.aperturaId > estadoUsuario.cierreId) {
+          throw errorNegocio(
+            `USTED YA TIENE ABIERTA LA CAJA ${estadoUsuario.cajaId} - DEBE REALIZAR EL CIERRE`
+          );
+        }
+        // Se abre con el monto del último cierre de la caja — lo que realmente
+        // quedó en el cajón según el arqueo, incluido el sobrante o faltante
+        // con el que se cerró. Si nunca se cerró, se usa el CajaMonto inicial.
+        const montoApertura = cierreReg
+          ? Number(cierreReg.RegistroDiarioCajaMonto) || 0
+          : Number(caja.CajaMonto) || 0;
+        await client.query(INSERT_REGISTRO_QUERY, [
+          CajaId, fecha, INGRESO, GRUPO_TURNO, 0,
+          "APERTURA " + CajaDescripcion, 0, 0, montoApertura,
+          0, 0, 0, 0, UsuarioId,
+        ]);
+        // CajaMonto en la tabla Caja no se modifica (queda fijo)
+      } else {
+        if (!(cierreId < aperturaId)) {
+          throw errorNegocio("CAJA CERRADA - DEBE REALIZAR LA APERTURA");
+        }
+        await client.query(INSERT_REGISTRO_QUERY, [
+          CajaId, fecha, EGRESO, GRUPO_TURNO, 0,
+          "CIERRE " + CajaDescripcion, 0, 0, Monto,
+          pendientes[0] || 0, pendientes[1] || 0, pendientes[2] || 0, pendientes[3] || 0,
+          UsuarioId,
+        ]);
+        // Durante el turno cada movimiento va ajustando CajaMonto (saldo
+        // teórico). Al cerrar, la caja queda con lo que se contó en el arqueo
+        // (efectivo + pendientes, el mismo "Cierre" del ticket), así Gestión de
+        // Cajas, el Cierre Diario y la próxima apertura muestran el mismo monto
+        // y el sobrante/faltante no se sigue arrastrando de un turno al otro.
+        await client.query('UPDATE "caja" SET "CajaMonto" = $1 WHERE "CajaId" = $2', [
+          Monto,
+          CajaId,
+        ]);
+      }
+      await client.query("COMMIT");
+    } catch (error) {
+      await client.query("ROLLBACK");
+      throw error;
+    } finally {
+      client.release();
+    }
   },
 
   getByDateRange: async (fechaDesdeStr, fechaHastaStr, limit = 10000) => {
@@ -643,22 +734,22 @@ const RegistroDiarioCaja = {
     return result.rows;
   },
 
-  getEstadoAperturaPorUsuario: async (usuarioId) => {
+  getEstadoAperturaPorUsuario: async (usuarioId, q = db) => {
     // Busca, por caja, la ultima apertura del usuario que NO tenga un cierre
     // posterior sobre esa misma caja. Se evalua por caja (y no solo la
     // ultima apertura vs. el ultimo cierre del usuario) para que una caja
     // que quedo abierta no se "tape" con la apertura/cierre de otra caja.
-    const abiertaResult = await db.query(
+    const abiertaResult = await q.query(
       `SELECT a."RegistroDiarioCajaId", a."CajaId"
        FROM "registrodiariocaja" a
        WHERE a."UsuarioId" = $1
-         AND a."TipoGastoId" = 2
-         AND a."TipoGastoGrupoId" = 2
+         AND a."TipoGastoId" = ${INGRESO}
+         AND a."TipoGastoGrupoId" = ${GRUPO_TURNO}
          AND NOT EXISTS (
            SELECT 1 FROM "registrodiariocaja" c
            WHERE c."CajaId" = a."CajaId"
-             AND c."TipoGastoId" = 1
-             AND c."TipoGastoGrupoId" = 2
+             AND c."TipoGastoId" = ${EGRESO}
+             AND c."TipoGastoGrupoId" = ${GRUPO_TURNO}
              AND c."RegistroDiarioCajaId" > a."RegistroDiarioCajaId"
          )
        ORDER BY a."RegistroDiarioCajaId" ASC
@@ -669,8 +760,8 @@ const RegistroDiarioCaja = {
 
     if (abierta) {
       // Ultimo cierre de esa caja (siempre menor a la apertura, por definicion)
-      const cierreResult = await db.query(
-        `SELECT "RegistroDiarioCajaId" FROM "registrodiariocaja" WHERE "CajaId" = $1 AND "TipoGastoId" = 1 AND "TipoGastoGrupoId" = 2 AND "RegistroDiarioCajaId" < $2 ORDER BY "RegistroDiarioCajaId" DESC LIMIT 1`,
+      const cierreResult = await q.query(
+        `SELECT "RegistroDiarioCajaId" FROM "registrodiariocaja" WHERE "CajaId" = $1 AND "TipoGastoId" = ${EGRESO} AND "TipoGastoGrupoId" = ${GRUPO_TURNO} AND "RegistroDiarioCajaId" < $2 ORDER BY "RegistroDiarioCajaId" DESC LIMIT 1`,
         [abierta.CajaId, abierta.RegistroDiarioCajaId]
       );
       return {
@@ -682,12 +773,12 @@ const RegistroDiarioCaja = {
 
     // Sin caja abierta: devolver la ultima apertura/cierre del usuario
     // (cierreId >= aperturaId) para mantener el contrato del endpoint.
-    const aperturasResult = await db.query(
-      `SELECT "RegistroDiarioCajaId" FROM "registrodiariocaja" WHERE "UsuarioId" = $1 AND "TipoGastoId" = 2 AND "TipoGastoGrupoId" = 2 ORDER BY "RegistroDiarioCajaId" DESC LIMIT 1`,
+    const aperturasResult = await q.query(
+      `SELECT "RegistroDiarioCajaId" FROM "registrodiariocaja" WHERE "UsuarioId" = $1 AND "TipoGastoId" = ${INGRESO} AND "TipoGastoGrupoId" = ${GRUPO_TURNO} ORDER BY "RegistroDiarioCajaId" DESC LIMIT 1`,
       [usuarioId]
     );
-    const cierresResult = await db.query(
-      `SELECT "RegistroDiarioCajaId" FROM "registrodiariocaja" WHERE "UsuarioId" = $1 AND "TipoGastoId" = 1 AND "TipoGastoGrupoId" = 2 ORDER BY "RegistroDiarioCajaId" DESC LIMIT 1`,
+    const cierresResult = await q.query(
+      `SELECT "RegistroDiarioCajaId" FROM "registrodiariocaja" WHERE "UsuarioId" = $1 AND "TipoGastoId" = ${EGRESO} AND "TipoGastoGrupoId" = ${GRUPO_TURNO} ORDER BY "RegistroDiarioCajaId" DESC LIMIT 1`,
       [usuarioId]
     );
     const aperturaId = aperturasResult.rows[0]?.RegistroDiarioCajaId || 0;
@@ -706,7 +797,7 @@ const RegistroDiarioCaja = {
     const cierre = await db.query(
       `SELECT "RegistroDiarioCajaId" FROM "registrodiariocaja"
        WHERE "UsuarioId" = $1 AND "CajaId" = $2
-         AND "TipoGastoId" = 1 AND "TipoGastoGrupoId" = 2
+         AND "TipoGastoId" = ${EGRESO} AND "TipoGastoGrupoId" = ${GRUPO_TURNO}
        ORDER BY "RegistroDiarioCajaId" DESC LIMIT 1`,
       [usuarioId, cajaId]
     );
@@ -715,7 +806,7 @@ const RegistroDiarioCaja = {
     const apertura = await db.query(
       `SELECT "RegistroDiarioCajaId" FROM "registrodiariocaja"
        WHERE "UsuarioId" = $1 AND "CajaId" = $2
-         AND "TipoGastoId" = 2 AND "TipoGastoGrupoId" = 2
+         AND "TipoGastoId" = ${INGRESO} AND "TipoGastoGrupoId" = ${GRUPO_TURNO}
          AND "RegistroDiarioCajaId" < $3
        ORDER BY "RegistroDiarioCajaId" DESC LIMIT 1`,
       [usuarioId, cajaId, cierreId]
@@ -746,12 +837,12 @@ const RegistroDiarioCaja = {
       `SELECT
          (SELECT "RegistroDiarioCajaMonto" FROM "registrodiariocaja"
            WHERE "RegistroDiarioCajaId" = $1) AS apertura,
-         COALESCE(SUM(CASE WHEN "TipoGastoId" = 2 THEN "RegistroDiarioCajaMonto" END), 0) AS ingresos,
-         COALESCE(SUM(CASE WHEN "TipoGastoId" = 1 THEN "RegistroDiarioCajaMonto" END), 0) AS egresos
+         COALESCE(SUM(CASE WHEN "TipoGastoId" = ${INGRESO} THEN "RegistroDiarioCajaMonto" END), 0) AS ingresos,
+         COALESCE(SUM(CASE WHEN "TipoGastoId" = ${EGRESO} THEN "RegistroDiarioCajaMonto" END), 0) AS egresos
        FROM "registrodiariocaja"
        WHERE "CajaId" = $2
          AND "RegistroDiarioCajaId" > $1
-         AND "TipoGastoGrupoId" <> 2`,
+         AND "TipoGastoGrupoId" <> ${GRUPO_TURNO}`,
       [aperturaId, cajaId]
     );
     const row = result.rows[0];
@@ -865,6 +956,10 @@ const RegistroDiarioCaja = {
     return result.rows;
   },
 
+  // Ingresos/egresos por caja en el rango. Excluye las filas de apertura y
+  // cierre de turno (grupo 2): antes la apertura sumaba como ingreso y el
+  // cierre como egreso, y el "Saldo" terminaba siendo el faltante del arqueo.
+  // Ahora Saldo = neto de los movimientos reales, misma regla que el ticket.
   getCierreDiario: async (fechaDesde, fechaHasta, cajaIds) => {
     const params = [fechaDesde, fechaHasta];
     const filtroCajas = filtroCajasSql(params, cajaIds, 'r."CajaId"');
@@ -872,15 +967,16 @@ const RegistroDiarioCaja = {
       `SELECT
         c."CajaId",
         c."CajaDescripcion",
-        COALESCE(SUM(CASE WHEN r."TipoGastoId" = 2 THEN r."RegistroDiarioCajaMonto" ELSE 0 END), 0) AS "TotalIngresos",
-        COALESCE(SUM(CASE WHEN r."TipoGastoId" = 1 THEN r."RegistroDiarioCajaMonto" ELSE 0 END), 0) AS "TotalEgresos",
-        COALESCE(SUM(CASE WHEN r."TipoGastoId" = 2 THEN r."RegistroDiarioCajaMonto" ELSE 0 END), 0) -
-        COALESCE(SUM(CASE WHEN r."TipoGastoId" = 1 THEN r."RegistroDiarioCajaMonto" ELSE 0 END), 0) AS "Saldo",
+        COALESCE(SUM(CASE WHEN r."TipoGastoId" = ${INGRESO} THEN r."RegistroDiarioCajaMonto" ELSE 0 END), 0) AS "TotalIngresos",
+        COALESCE(SUM(CASE WHEN r."TipoGastoId" = ${EGRESO} THEN r."RegistroDiarioCajaMonto" ELSE 0 END), 0) AS "TotalEgresos",
+        COALESCE(SUM(CASE WHEN r."TipoGastoId" = ${INGRESO} THEN r."RegistroDiarioCajaMonto" ELSE 0 END), 0) -
+        COALESCE(SUM(CASE WHEN r."TipoGastoId" = ${EGRESO} THEN r."RegistroDiarioCajaMonto" ELSE 0 END), 0) AS "Saldo",
         COUNT(*) AS "CantMovimientos"
       FROM "registrodiariocaja" r
       JOIN "caja" c ON r."CajaId" = c."CajaId"
       WHERE r."RegistroDiarioCajaFecha"::date >= $1::date
         AND r."RegistroDiarioCajaFecha"::date <= $2::date
+        AND r."TipoGastoGrupoId" <> ${GRUPO_TURNO}
         ${filtroCajas}
       GROUP BY c."CajaId", c."CajaDescripcion"
       ORDER BY c."CajaDescripcion"`,

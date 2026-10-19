@@ -44,7 +44,7 @@ export async function generarCierreDiario(
   y = pdfFiltroCajas(doc, y, cajasFiltro.map((c) => c.desc));
 
   pdfSeccion(doc, y, "", {
-    head: ["Caja", "Ingresos Gs.", "Egresos Gs.", "Saldo Gs.", "Mov."],
+    head: ["Caja", "Ingresos Gs.", "Egresos Gs.", "Neto Gs.", "Mov."],
     body: data.map((r) => [
       (r.CajaDescripcion || "").trim(),
       formatMiles(Number(r.TotalIngresos)),

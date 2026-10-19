@@ -10,7 +10,10 @@ import {
   getTurnoCierre,
   type SaldoCajaAbierta,
 } from "../../services/registrodiariocaja.service";
-import { createCierreDiarioSnapshot } from "../../services/cierrediario.service";
+import {
+  createCierreDiarioSnapshot,
+  type SnapshotResponse,
+} from "../../services/cierrediario.service";
 import { useAuth } from "../../contexts/useAuth";
 import Swal from "sweetalert2";
 import { formatMiles } from "../../utils/utils";
@@ -664,7 +667,8 @@ export default function AperturaCierreCajaPage() {
       html:
         "Esto va a guardar el saldo actual de <b>todas las cajas</b> en el historial " +
         `del día de hoy (${new Date().toLocaleDateString()}).<br><br>` +
-        "Solo se puede hacer una vez por día.",
+        "Solo se puede hacer una vez por día. Si no se registra a mano, se hace " +
+        "automáticamente a las 23:00.",
       icon: "question",
       showCancelButton: true,
       confirmButtonColor: "#0d9488",
@@ -675,16 +679,53 @@ export default function AperturaCierreCajaPage() {
     if (!confirm.isConfirmed) return;
 
     setSnapshotting(true);
-    try {
-      const result = await createCierreDiarioSnapshot();
+    const exito = (result: SnapshotResponse) =>
       Swal.fire({
         icon: "success",
         title: "Cierre diario registrado",
         text: result.message,
         confirmButtonColor: "#0d9488",
       });
+    try {
+      exito(await createCierreDiarioSnapshot());
     } catch (err) {
-      const e = err as { message?: string };
+      const e = err as SnapshotResponse;
+      // Con cajas abiertas su saldo es el teórico del turno, no lo contado:
+      // se avisa cuáles son y se deja registrar igual si el usuario confirma.
+      if (e?.code === "CAJAS_ABIERTAS" && e.abiertas?.length) {
+        const lista = e.abiertas
+          .map(
+            (c) =>
+              `<li>${c.CajaDescripcion.trim()} <span style="color:#6b7280">(${c.UsuarioId})</span></li>`,
+          )
+          .join("");
+        const forzar = await Swal.fire({
+          icon: "warning",
+          title: "Hay cajas abiertas",
+          html:
+            `<ul style="text-align:left;margin:0 auto;display:inline-block">${lista}</ul>` +
+            "<br><br>Para estas cajas se va a guardar el saldo teórico del turno " +
+            "en curso, no lo contado en el arqueo. Lo ideal es cerrarlas antes.",
+          showCancelButton: true,
+          confirmButtonColor: "#0d9488",
+          cancelButtonColor: "#6b7280",
+          confirmButtonText: "Registrar igual",
+          cancelButtonText: "Cancelar",
+        });
+        if (forzar.isConfirmed) {
+          try {
+            exito(await createCierreDiarioSnapshot(true));
+          } catch (err2) {
+            Swal.fire({
+              icon: "warning",
+              title: "No se pudo registrar",
+              text: (err2 as SnapshotResponse)?.message || "Error desconocido",
+              confirmButtonColor: "#0d9488",
+            });
+          }
+        }
+        return;
+      }
       Swal.fire({
         icon: "warning",
         title: "No se pudo registrar",
@@ -739,7 +780,8 @@ export default function AperturaCierreCajaPage() {
             </p>
             <p className="text-xs text-gray-600 mt-0.5">
               Registra un snapshot del saldo actual de todas las cajas en el
-              historial. Hacer una vez al final del día.
+              historial. Hacer una vez al final del día; si no se hizo, se
+              registra automáticamente a las 23:00.
             </p>
           </div>
           <ActionButton
