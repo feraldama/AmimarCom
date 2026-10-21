@@ -8,7 +8,7 @@ import Modal from "../common/Modal";
 import { getCajas } from "../../services/cajas.service";
 import { getTiposGasto } from "../../services/tipogasto.service";
 import { getTiposGastoGrupo } from "../../services/tipogastogrupo.service";
-import { formatMiles, formatMilesWithDecimals } from "../../utils/utils";
+import { formatMiles, formatMilesSmart, formatMilesWithDecimals } from "../../utils/utils";
 
 export interface WesternEnvio {
   id: string | number;
@@ -32,6 +32,10 @@ export interface WesternEnvio {
   UsuarioNombre?: string;
   [key: string]: unknown;
 }
+
+// Grupos Western USD sin cotización: el monto está en dólares
+const esGrupoUSD = (tipoGastoId: number, grupoId: number) =>
+  (tipoGastoId === 1 && grupoId === 20) || (tipoGastoId === 2 && grupoId === 28);
 
 interface Caja {
   CajaId: number;
@@ -112,10 +116,17 @@ export default function WesternEnvioList({
 
   // Texto en edición de los campos decimales: mientras el campo tiene foco se
   // muestra lo que el usuario escribe; al salir se vuelve al valor formateado.
-  type CampoDecimal = "WesternEnvioCargoEnvio" | "WesternEnvioCambio";
+  type CampoDecimal = "WesternEnvioCargoEnvio" | "WesternEnvioCambio" | "WesternEnvioMonto";
   const [textoDecimal, setTextoDecimal] = useState<
     Partial<Record<CampoDecimal, string>>
   >({});
+
+  // Grupos USD sin cotización ("3 WESTERN - USD."): el monto va en dólares y
+  // admite decimales. PAGOS -> grupo 20, ENVIOS -> grupo 28
+  const montoEnDolares = esGrupoUSD(
+    Number(formData.TipoGastoId),
+    Number(formData.TipoGastoGrupoId)
+  );
 
   const handleDecimalFocus = (campo: CampoDecimal) => {
     const valor = Number(formData[campo]) || 0;
@@ -313,7 +324,9 @@ export default function WesternEnvioList({
       key: "WesternEnvioMonto",
       label: "Monto",
       render: (item: WesternEnvio) =>
-        `Gs. ${formatMiles(item.WesternEnvioMonto || 0)}`,
+        esGrupoUSD(Number(item.TipoGastoId), Number(item.TipoGastoGrupoId))
+          ? `US$ ${formatMilesSmart(item.WesternEnvioMonto || 0)}`
+          : `Gs. ${formatMiles(item.WesternEnvioMonto || 0)}`,
     },
     {
       key: "WesternEnvioUsuarioId",
@@ -488,35 +501,57 @@ export default function WesternEnvioList({
                       htmlFor="WesternEnvioMonto"
                       className="block mb-2 text-sm font-medium text-gray-900"
                     >
-                      Monto <span className="text-destructive">*</span>
+                      {montoEnDolares ? "Monto en Dólares" : "Monto"}{" "}
+                      <span className="text-destructive">*</span>
                     </label>
-                    <input
-                      type="text"
-                      name="WesternEnvioMonto"
-                      id="WesternEnvioMonto"
-                      value={
-                        formData.WesternEnvioMonto !== undefined &&
-                        formData.WesternEnvioMonto !== null
-                          ? formatMiles(formData.WesternEnvioMonto)
-                          : "0"
-                      }
-                      onChange={(e) => {
-                        const raw = e.target.value
-                          .replace(/\s/g, "")
-                          .replace(/\./g, "");
-                        const num = parseFloat(raw);
-                        if (!isNaN(num)) {
-                          setFormData((prev) => ({
-                            ...prev,
-                            WesternEnvioMonto: num,
-                          }));
-                        } else if (raw === "") {
-                          setFormData((prev) => ({ ...prev, WesternEnvioMonto: 0 }));
+                    {montoEnDolares ? (
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        name="WesternEnvioMonto"
+                        id="WesternEnvioMonto"
+                        value={
+                          textoDecimal.WesternEnvioMonto !== undefined
+                            ? textoDecimal.WesternEnvioMonto
+                            : formatMilesSmart(formData.WesternEnvioMonto || 0)
                         }
-                      }}
-                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
-                      required
-                    />
+                        onFocus={() => handleDecimalFocus("WesternEnvioMonto")}
+                        onChange={(e) =>
+                          handleDecimalChange("WesternEnvioMonto", e.target.value)
+                        }
+                        onBlur={() => handleDecimalBlur("WesternEnvioMonto")}
+                        className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
+                        required
+                      />
+                    ) : (
+                      <input
+                        type="text"
+                        name="WesternEnvioMonto"
+                        id="WesternEnvioMonto"
+                        value={
+                          formData.WesternEnvioMonto !== undefined &&
+                          formData.WesternEnvioMonto !== null
+                            ? formatMiles(formData.WesternEnvioMonto)
+                            : "0"
+                        }
+                        onChange={(e) => {
+                          const raw = e.target.value
+                            .replace(/\s/g, "")
+                            .replace(/\./g, "");
+                          const num = parseFloat(raw);
+                          if (!isNaN(num)) {
+                            setFormData((prev) => ({
+                              ...prev,
+                              WesternEnvioMonto: num,
+                            }));
+                          } else if (raw === "") {
+                            setFormData((prev) => ({ ...prev, WesternEnvioMonto: 0 }));
+                          }
+                        }}
+                        className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
+                        required
+                      />
+                    )}
                   </div>
                   <div className="col-span-6 sm:col-span-3">
                     <label

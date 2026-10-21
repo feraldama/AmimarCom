@@ -78,6 +78,9 @@ export default function WesternPagosTab() {
   const [mtcnPagos, setMtcnPagos] = useState<number | "">("");
   const [cargoEnvioPagos, setCargoEnvioPagos] = useState<number | "">("");
   const [montoPagos, setMontoPagos] = useState<number | "">("");
+  // Texto del "Monto" mientras se edita en un grupo USD (admite decimales);
+  // null cuando no se está editando y se muestra el monto formateado
+  const [montoPagosStr, setMontoPagosStr] = useState<string | null>(null);
   const [valorEspecialPagos, setValorEspecialPagos] = useState<number | "">("");
   // Texto crudo del "Monto en Dólares" para permitir escribir la coma decimal
   const [valorEspecialPagosStr, setValorEspecialPagosStr] = useState("");
@@ -96,6 +99,7 @@ export default function WesternPagosTab() {
   // Texto crudo del "Cargo Envio" para permitir escribir la coma decimal
   const [cargoEnvioEnviosStr, setCargoEnvioEnviosStr] = useState("");
   const [montoEnvios, setMontoEnvios] = useState<number | "">("");
+  const [montoEnviosStr, setMontoEnviosStr] = useState<string | null>(null);
   const [valorEspecialEnvios, setValorEspecialEnvios] = useState<number | "">("");
   // Texto crudo del "Monto en Dólares" para permitir escribir la coma decimal
   const [valorEspecialEnviosStr, setValorEspecialEnviosStr] = useState("");
@@ -698,7 +702,9 @@ export default function WesternPagosTab() {
     valorEspecialStr: string = "",
     setValorEspecialStr: (value: string) => void = () => {},
     cargoEnvioStr: string = "",
-    setCargoEnvioStr: (value: string) => void = () => {}
+    setCargoEnvioStr: (value: string) => void = () => {},
+    montoStr: string | null = null,
+    setMontoStr: (value: string | null) => void = () => {}
   ) => {
     // Determinar si debe mostrar el input especial (Monto en Dólares)
     // PAGOS  (TipoGastoId=1) -> grupo 8  ("USD CON COTIZACION")
@@ -713,6 +719,12 @@ export default function WesternPagosTab() {
     const mostrarCambioDolar =
       (tipoGastoId === 1 && tipoGastoGrupoId === 8) ||
       (tipoGastoId === 2 && tipoGastoGrupoId === 15);
+
+    // Grupos USD sin cotización ("3 WESTERN - USD."): el monto va en dólares
+    // y admite decimales. PAGOS -> grupo 20, ENVIOS -> grupo 28
+    const montoEnDolares =
+      (tipoGastoId === 1 && tipoGastoGrupoId === 20) ||
+      (tipoGastoId === 2 && tipoGastoGrupoId === 28);
 
     return (
     <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-6">
@@ -908,25 +920,67 @@ export default function WesternPagosTab() {
           {/* Monto */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Monto
+              {montoEnDolares ? "Monto en Dólares" : "Monto"}
             </label>
-            <input
-              type="text"
-              value={monto !== "" ? formatMiles(monto) : ""}
-              onChange={(e) => {
-                const raw = e.target.value
-                  .replace(/\./g, "")
-                  .replace(/,/g, ".");
-                const num = Number(raw);
-                setMonto(isNaN(num) ? "" : num);
-              }}
-              required
-              disabled={mostrarInputEspecial}
-              className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
-                mostrarInputEspecial ? "bg-gray-100 text-gray-600 cursor-not-allowed" : ""
-              }`}
-              inputMode="numeric"
-            />
+            {montoEnDolares ? (
+              <input
+                type="text"
+                value={
+                  montoStr !== null
+                    ? montoStr
+                    : monto !== ""
+                      ? formatMilesSmart(monto)
+                      : ""
+                }
+                onFocus={() => {
+                  // Pasar a texto editable sin separadores de miles
+                  setMontoStr(monto !== "" ? String(monto).replace(".", ",") : "");
+                }}
+                onChange={(e) => {
+                  // Igual que Cargo Envío / Monto en Dólares: el punto también
+                  // ingresa la coma decimal; dígitos, una coma y hasta 2
+                  // decimales (lo que guarda la base)
+                  let input = e.target.value
+                    .replace(/\./g, ",")
+                    .replace(/[^\d,]/g, "");
+                  const primeraComa = input.indexOf(",");
+                  if (primeraComa !== -1) {
+                    input =
+                      input.slice(0, primeraComa + 1) +
+                      input
+                        .slice(primeraComa + 1)
+                        .replace(/,/g, "")
+                        .slice(0, 2);
+                  }
+                  setMontoStr(input);
+                  const num = Number(input.replace(",", "."));
+                  setMonto(input === "" || isNaN(num) ? "" : num);
+                }}
+                // Al salir se vuelve a mostrar formateado (hasta 2 decimales)
+                onBlur={() => setMontoStr(null)}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                inputMode="decimal"
+              />
+            ) : (
+              <input
+                type="text"
+                value={monto !== "" ? formatMiles(monto) : ""}
+                onChange={(e) => {
+                  const raw = e.target.value
+                    .replace(/\./g, "")
+                    .replace(/,/g, ".");
+                  const num = Number(raw);
+                  setMonto(isNaN(num) ? "" : num);
+                }}
+                required
+                disabled={mostrarInputEspecial}
+                className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent ${
+                  mostrarInputEspecial ? "bg-gray-100 text-gray-600 cursor-not-allowed" : ""
+                }`}
+                inputMode="numeric"
+              />
+            )}
           </div>
 
           {/* Cliente */}
@@ -1106,7 +1160,11 @@ export default function WesternPagosTab() {
             true, // autoFocus en Grupo al montar el tab
             isSubmittingPagos,
             valorEspecialPagosStr,
-            setValorEspecialPagosStr
+            setValorEspecialPagosStr,
+            "", // Pagos no tiene Cargo Envío
+            () => {},
+            montoPagosStr,
+            setMontoPagosStr
           )}
         </div>
 
@@ -1150,7 +1208,9 @@ export default function WesternPagosTab() {
             valorEspecialEnviosStr,
             setValorEspecialEnviosStr,
             cargoEnvioEnviosStr,
-            setCargoEnvioEnviosStr
+            setCargoEnvioEnviosStr,
+            montoEnviosStr,
+            setMontoEnviosStr
           )}
         </div>
       </div>

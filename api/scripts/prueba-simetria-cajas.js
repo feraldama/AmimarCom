@@ -108,6 +108,8 @@ conTransaccionDePrueba(async ({ realQuery, uno, llamar, ok, user, usuario }) => 
     ["Western envío Gs.", 2, "1 WESTERN - ENVIOS GS.", 500000, 0],
     ["Western envío USD con cotización", 2, "2 WESTERN - USD CON COTIZACION", 365000, 7300],
     ["Western envío USD", 2, "3 WESTERN - USD.", 50, 0],
+    ["Western pago USD con decimales", 1, "3 WESTERN - USD.", 100.55, 0],
+    ["Western envío USD con decimales", 2, "3 WESTERN - USD.", 50.75, 0],
   ];
   for (const [titulo, tipo, descripcion, monto, cambioDolar] of casosWestern) {
     const g = await grupo(tipo, descripcion);
@@ -150,6 +152,7 @@ conTransaccionDePrueba(async ({ realQuery, uno, llamar, ok, user, usuario }) => 
     ["Reclasificar pago Western USD -> Gs.", 1, "3 WESTERN - USD.", "1 WESTERN - GS.", 700000, 0],
     ["Reclasificar pago Western Gs. -> USD con cotización", 1, "1 WESTERN - GS.", "2 WESTERN - UDS CON COTIZACION", 730000, 7300],
     ["Reclasificar envío Western USD -> Gs.", 2, "3 WESTERN - USD.", "1 WESTERN - ENVIOS GS.", 500000, 0],
+    ["Reclasificar envío Western Gs. -> USD (monto con decimales)", 2, "1 WESTERN - ENVIOS GS.", "3 WESTERN - USD.", 120.4, 0],
   ]) {
     const gDe = await grupo(tipo, de);
     const gA = await grupo(tipo, a);
