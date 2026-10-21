@@ -129,15 +129,25 @@ export const getDiferenciaDetalle = async (
 
 // Agrega a un cierre un movimiento que faltó cargar: queda en ese turno (no en
 // el turno en curso) y se recalcula la diferencia. Devuelve el detalle nuevo.
+// Origen "JSI": crea también el cobro de JSI del cliente (no lleva tipo,
+// grupo ni descripción).
 export const agregarMovimientoACierre = async (
   id: number,
-  datos: {
-    TipoGastoId: number;
-    TipoGastoGrupoId: number;
-    RegistroDiarioCajaMonto: number;
-    RegistroDiarioCajaDetalle: string;
-    Motivo: string;
-  }
+  datos:
+    | {
+        Origen?: "MOVIMIENTO";
+        TipoGastoId: number;
+        TipoGastoGrupoId: number;
+        RegistroDiarioCajaMonto: number;
+        RegistroDiarioCajaDetalle: string;
+        Motivo: string;
+      }
+    | {
+        Origen: "JSI";
+        ClienteId: number;
+        RegistroDiarioCajaMonto: number;
+        Motivo: string;
+      }
 ): Promise<{ message: string; data: { detalle: CierreDiferenciaDetalle } }> => {
   try {
     const response = await api.post(`/cierrediferencias/${id}/movimientos`, datos);

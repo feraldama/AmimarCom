@@ -4,8 +4,6 @@ const RegistroDiarioCaja = require("../models/registrodiariocaja.model");
 const { revertirAperturadaYDemas } = require("../utils/ajusteCajas");
 const { crearHandlersCobroVinculado } = require("../utils/cobroVinculado");
 
-const CAJA_JSI_ID = 14;
-
 // Lee los parámetros de filtro de la query (compartidos por getAll y search)
 const parseFiltros = (query) => ({
   fechaDesde: query.fechaDesde || undefined,
@@ -120,31 +118,11 @@ const handlersJSI = crearHandlersCobroVinculado({
   revertir: revertirAperturadaYDemas,
   nombre: "Cobro de JSI",
   // Si cambió el cliente, el detalle del registro de caja se rehace con el
-  // mismo formato que JuntaSaneamientoTab:
-  //   ClienteId:<id> | Cliente:<nombre> | CodJSI:<código> | JSICobroId:<id>
+  // mismo formato que JuntaSaneamientoTab (JSICobro.detalleRegistro)
   detalleRegistro: async (anterior, actualizado, registro, q) => {
     if (Number(actualizado.ClienteId) === Number(anterior.ClienteId)) return null;
-    const cliente = (
-      await q.query(
-        `SELECT "ClienteId", "ClienteNombre", "ClienteApellido", "ClienteCodJSI"
-         FROM "clientes" WHERE "ClienteId" = $1`,
-        [actualizado.ClienteId]
-      )
-    ).rows[0];
-    if (!cliente) return null;
-    const nombre = `${cliente.ClienteNombre ?? ""} ${cliente.ClienteApellido ?? ""}`
-      .replace(/\s+/g, " ")
-      .trim()
-      .slice(0, 150); // RegistroDiarioCajaDetalle es varchar(250)
-    const codigo = Number(cliente.ClienteCodJSI) ? String(cliente.ClienteCodJSI) : "";
-    return [
-      `ClienteId:${cliente.ClienteId}`,
-      nombre && `Cliente:${nombre}`,
-      codigo && `CodJSI:${codigo}`,
-      `JSICobroId:${actualizado.JSICobroId}`,
-    ]
-      .filter(Boolean)
-      .join(" | ");
+    const cliente = await JSICobro.getClienteParaDetalle(actualizado.ClienteId, q);
+    return cliente ? JSICobro.detalleRegistro(cliente, actualizado.JSICobroId) : null;
   },
 });
 

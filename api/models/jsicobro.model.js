@@ -1,6 +1,9 @@
 const db = require("../config/db");
 
 const JSICobro = {
+  // Caja J.S.I.: su gasto de ingreso define el grupo de los cobros
+  CAJA_JSI_ID: 14,
+
   getAll: async () => {
     const result = await db.query('SELECT * FROM "jsicobro"');
     return result.rows;
@@ -199,7 +202,8 @@ const JSICobro = {
     };
   },
 
-  create: async (jsicobroData) => {
+  // `q` permite correr la consulta dentro de una transacción (client de pg)
+  create: async (jsicobroData, q = db) => {
     const query = `
       INSERT INTO "jsicobro" (
         "CajaId",
@@ -219,10 +223,51 @@ const JSICobro = {
       jsicobroData.JSICobroUsuarioId || null,
     ];
 
-    const result = await db.query(query, values);
+    const result = await q.query(query, values);
 
     // Obtener el registro recién creado
-    return JSICobro.getById(result.rows[0].JSICobroId);
+    return JSICobro.getById(result.rows[0].JSICobroId, q);
+  },
+
+  // Cliente con los datos que van en el detalle del registro de caja
+  getClienteParaDetalle: async (clienteId, q = db) => {
+    const result = await q.query(
+      `SELECT "ClienteId", "ClienteNombre", "ClienteApellido", "ClienteCodJSI"
+       FROM "clientes" WHERE "ClienteId" = $1`,
+      [clienteId]
+    );
+    return result.rows[0];
+  },
+
+  // Detalle del registro de caja de un cobro, con el mismo formato que
+  // JuntaSaneamientoTab:
+  //   ClienteId:<id> | Cliente:<nombre> | CodJSI:<código> | JSICobroId:<id>
+  detalleRegistro: (cliente, jsicobroId) => {
+    const nombre = `${cliente.ClienteNombre ?? ""} ${cliente.ClienteApellido ?? ""}`
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 150); // RegistroDiarioCajaDetalle es varchar(250)
+    const codigo = Number(cliente.ClienteCodJSI) ? String(cliente.ClienteCodJSI) : "";
+    return [
+      `ClienteId:${cliente.ClienteId}`,
+      nombre && `Cliente:${nombre}`,
+      codigo && `CodJSI:${codigo}`,
+      `JSICobroId:${jsicobroId}`,
+    ]
+      .filter(Boolean)
+      .join(" | ");
+  },
+
+  // Grupo de gasto de los cobros: el primer gasto de ingreso de la caja J.S.I.
+  // (mismo criterio que JuntaSaneamientoTab). null si no está configurado.
+  getGrupoIngreso: async (q = db) => {
+    const result = await q.query(
+      `SELECT "TipoGastoGrupoId" FROM "cajagasto"
+       WHERE "CajaId" = $1 AND "TipoGastoId" = 2
+       ORDER BY "CajaGastoId" LIMIT 1`,
+      [JSICobro.CAJA_JSI_ID]
+    );
+    return result.rows[0] ? Number(result.rows[0].TipoGastoGrupoId) : null;
   },
 
   update: async (id, jsicobroData, q = db) => {

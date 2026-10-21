@@ -267,6 +267,40 @@ conTransaccionDePrueba(async ({ realQuery, uno, transaccion, llamar, ok, user, u
   ok(r.status === 200 && (await dif()) === d - 45000 && cajasIguales(s1, await saldos()),
     `eliminarlo deja todo como antes: diferencia ${d} -> ${await dif()}`);
 
+  console.log("Agregar a un cierre anterior un cobro de JSI que faltó");
+  r = await agregar({ TipoGastoId: 2, TipoGastoGrupoId: grupoJSI.TipoGastoGrupoId, RegistroDiarioCajaMonto: 60000, Motivo: "x" });
+  ok(r.status === 400 && /Cobro de JSI/.test(r.body.message), "como movimiento suelto con el grupo J.S.I.: 400 (indica la opción Cobro de JSI)");
+  r = await agregar({ Origen: "JSI", RegistroDiarioCajaMonto: 60000, Motivo: "x" });
+  ok(r.status === 400 && /cliente/i.test(r.body.message), "sin cliente: 400");
+  const s2 = await saldos();
+  const esperadoJSI = new Map(s2);
+  await realQuery("SAVEPOINT efecto");
+  const antesJSI = await saldos();
+  await tabs.jsi({ cajaId: caja.CajaId, fecha: AYER, grupo: grupoJSI.TipoGastoGrupoId, monto: 60000 });
+  const despuesJSI = await saldos();
+  await realQuery("ROLLBACK TO SAVEPOINT efecto");
+  for (const [cajaId, v] of despuesJSI) esperadoJSI.set(cajaId, esperadoJSI.get(cajaId) + v - antesJSI.get(cajaId));
+  esperadoJSI.set(caja.CajaId, s2.get(caja.CajaId)); // la caja del cajero no se toca
+  d = await dif();
+  r = await agregar({ Origen: "JSI", ClienteId: cliente.ClienteId, RegistroDiarioCajaMonto: 60000, Motivo: "faltó cargar el cobro" });
+  const regJSI = r.body?.data?.registro;
+  const idCobro = Number(/JSICobroId:(\d+)/.exec(regJSI?.RegistroDiarioCajaDetalle || "")?.[1]);
+  const cobroJSI = idCobro ? await uno(`SELECT * FROM jsicobro WHERE "JSICobroId" = $1`, [idCobro]) : null;
+  ok(r.status === 201 && regJSI.RegistroDiarioCajaCierreId === c1.RegistroDiarioCajaId && (await dif()) === d + 60000,
+    `agregado al cierre de ayer: diferencia ${d} -> ${await dif()}`);
+  ok(cobroJSI && Number(cobroJSI.ClienteId) === Number(cliente.ClienteId) && Number(cobroJSI.JSICobroMonto) === 60000 &&
+    cobroJSI.JSICobroFecha.getTime() === c1.RegistroDiarioCajaFecha.getTime(),
+    "se creó el cobro de JSI (cliente, monto y fecha del cierre)");
+  ok(regJSI.RegistroDiarioCajaDetalle.startsWith(`ClienteId:${cliente.ClienteId} |`) && regJSI.RegistroDiarioCajaDetalle.endsWith(`JSICobroId:${idCobro}`),
+    "detalle del registro con el formato de la pestaña JSI: " + regJSI.RegistroDiarioCajaDetalle);
+  ok(cajasIguales(esperadoJSI, await saldos()) && (await teoricoHoy()) === teoricoAntes,
+    "caja J.S.I. ajustada como al cobrar desde la pestaña; caja del cajero y turno de hoy sin cambios");
+  d = await dif();
+  r = await llamar(jsic.delete, { params: { id: idCobro }, body: { Motivo: "prueba" }, user });
+  const quedaCobro = (await realQuery(`SELECT 1 FROM jsicobro WHERE "JSICobroId" = $1`, [idCobro])).rows.length;
+  ok(r.status === 200 && !quedaCobro && !(await existe2(regJSI.RegistroDiarioCajaId)) && (await dif()) === d - 60000 && cajasIguales(s2, await saldos()),
+    `eliminarlo desde Cobros JSI deja todo como antes: diferencia ${d} -> ${await dif()}`);
+
   ok((await saldoCaja()) === saldoHoy, "la caja del turno de hoy no cambió en ningún paso");
 
   console.log("Atomicidad: una eliminación que falla en el último paso no deja nada a medias");
@@ -277,7 +311,7 @@ conTransaccionDePrueba(async ({ realQuery, uno, transaccion, llamar, ok, user, u
   console.log("Diferencias de Cierre: auditoría");
   const det = await llamar(cdc.getDetalle, { params: { id: c1.RegistroDiarioCajaId }, user });
   const tipos = det.body.correcciones.map((c) => c.Tipo);
-  ok(tipos.length === 15, `15 correcciones auditadas (${tipos.join(", ")})`);
+  ok(tipos.length === 17, `17 correcciones auditadas (${tipos.join(", ")})`);
   ok(det.body.correcciones.some((c) => c.Motivo === "se cargó dos veces"), "el motivo de la eliminación quedó auditado");
   ok(det.body.correcciones.every((c) => c.DiferenciaAnterior !== null && c.DiferenciaNueva !== null), "cada una guarda la diferencia antes/después");
 });

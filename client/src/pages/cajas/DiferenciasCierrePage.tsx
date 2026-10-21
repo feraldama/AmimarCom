@@ -19,6 +19,9 @@ import {
 } from "../../services/cierrediferencia.service";
 import { getCajas } from "../../services/cajas.service";
 import { getAllTipoGastoGrupo } from "../../services/tipogastogrupo.service";
+import { getAllClientesSinPaginacion } from "../../services/clientes.service";
+import ClienteModal from "../../components/common/ClienteModal";
+import type { Cliente } from "../../types/cliente.types";
 import { usePermiso } from "../../hooks/usePermiso";
 import { formatMiles } from "../../utils/utils";
 
@@ -28,8 +31,17 @@ interface GrupoGasto {
   TipoGastoGrupoDescripcion: string;
 }
 
-// Formulario vacío de "Agregar movimiento faltante"
-const ALTA_VACIA = { tipo: 2, grupo: "", monto: "", detalle: "", motivo: "" };
+// Formulario vacío de "Agregar movimiento faltante". origen: un movimiento de
+// Cobranza / Pago / carga manual, o un cobro de JSI (crea también el cobro)
+const ALTA_VACIA = {
+  origen: "MOVIMIENTO" as "MOVIMIENTO" | "JSI",
+  tipo: 2,
+  grupo: "",
+  monto: "",
+  detalle: "",
+  motivo: "",
+  cliente: null as Cliente | null,
+};
 
 interface CajaOpcion {
   CajaId: number;
@@ -119,6 +131,8 @@ export default function DiferenciasCierrePage() {
   const [altaAbierta, setAltaAbierta] = useState(false);
   const [alta, setAlta] = useState(ALTA_VACIA);
   const [agregando, setAgregando] = useState(false);
+  const [clientes, setClientes] = useState<Cliente[]>([]);
+  const [showClienteModal, setShowClienteModal] = useState(false);
 
   const cargar = useCallback(async () => {
     if (!puedeLeer) return;
@@ -164,7 +178,13 @@ export default function DiferenciasCierrePage() {
           (data || [])
             .filter((g) => {
               const d = (g.TipoGastoGrupoDescripcion || "").trim().toUpperCase();
-              return g.TipoGastoGrupoId !== 2 && !d.startsWith("PASE ") && !d.includes("WESTERN");
+              return (
+                g.TipoGastoGrupoId !== 2 &&
+                !d.startsWith("PASE ") &&
+                !d.includes("WESTERN") &&
+                // Los cobros de JSI van por la opción "Cobro de JSI"
+                !(g.TipoGastoId === 2 && d.startsWith("J.S.I."))
+              );
             })
             .sort((a, b) =>
               a.TipoGastoGrupoDescripcion.trim().localeCompare(b.TipoGastoGrupoDescripcion.trim())
@@ -173,6 +193,14 @@ export default function DiferenciasCierrePage() {
       )
       .catch((err) => console.error("Error al cargar grupos de gasto:", err));
   }, [puedeEditar]);
+
+  // Clientes para "Cobro de JSI": se cargan la primera vez que se elige
+  useEffect(() => {
+    if (alta.origen !== "JSI" || clientes.length > 0) return;
+    getAllClientesSinPaginacion()
+      .then((data: { data?: Cliente[] }) => setClientes(data.data || []))
+      .catch((err) => console.error("Error al cargar clientes:", err));
+  }, [alta.origen, clientes.length]);
 
   const setFiltro = <K extends keyof FiltrosDiferencias>(k: K, v: FiltrosDiferencias[K]) =>
     setFiltros((prev) => ({ ...prev, [k]: v }));
@@ -238,13 +266,27 @@ export default function DiferenciasCierrePage() {
     if (!detalle) return;
     setAgregando(true);
     try {
-      const respuesta = await agregarMovimientoACierre(detalle.Id, {
-        TipoGastoId: alta.tipo,
-        TipoGastoGrupoId: Number(alta.grupo),
-        RegistroDiarioCajaMonto: Number(alta.monto),
-        RegistroDiarioCajaDetalle: alta.detalle,
-        Motivo: alta.motivo,
-      });
+      if (alta.origen === "JSI" && !alta.cliente) {
+        Swal.fire({ icon: "warning", title: "Elegí el cliente del cobro de JSI" });
+        return;
+      }
+      const respuesta = await agregarMovimientoACierre(
+        detalle.Id,
+        alta.origen === "JSI"
+          ? {
+              Origen: "JSI",
+              ClienteId: Number(alta.cliente!.ClienteId),
+              RegistroDiarioCajaMonto: Number(alta.monto),
+              Motivo: alta.motivo,
+            }
+          : {
+              TipoGastoId: alta.tipo,
+              TipoGastoGrupoId: Number(alta.grupo),
+              RegistroDiarioCajaMonto: Number(alta.monto),
+              RegistroDiarioCajaDetalle: alta.detalle,
+              Motivo: alta.motivo,
+            }
+      );
       setDetalle(respuesta.data.detalle);
       setObservacion(respuesta.data.detalle.Observacion || "");
       setRevisado(respuesta.data.detalle.Revisado);
@@ -701,12 +743,60 @@ export default function DiferenciasCierrePage() {
                 ) : (
                   <form onSubmit={agregarMovimiento} className="space-y-3">
                     <p className="text-sm text-gray-600">
-                      Para un movimiento que faltó cargar en este turno (por ejemplo, una
-                      cobranza que se eliminó). Queda en este cierre, no en el turno en
-                      curso: se recalcula esta diferencia, la caja del cajero no se toca y
-                      las demás cajas del gasto se ajustan. Los cobros de JSI, colegios,
-                      transporte, Western y divisas se cargan desde su pantalla.
+                      Para algo que faltó cargar en este turno (por ejemplo, una cobranza
+                      que se eliminó). Queda en este cierre, no en el turno en curso: se
+                      recalcula esta diferencia, la caja del cajero no se toca y las demás
+                      cajas del gasto se ajustan. Los cobros de colegios, transporte,
+                      Western y divisas todavía no se agregan desde acá.
                     </p>
+                    <div>
+                      <label htmlFor="altaOrigen" className="block text-xs font-medium text-gray-700 mb-1">
+                        Qué falta
+                      </label>
+                      <select
+                        id="altaOrigen"
+                        value={alta.origen}
+                        onChange={(e) =>
+                          setAlta({ ...ALTA_VACIA, origen: e.target.value as "MOVIMIENTO" | "JSI" })
+                        }
+                        className="w-full sm:w-auto border border-gray-300 rounded-lg p-2 text-sm bg-white"
+                      >
+                        <option value="MOVIMIENTO">Movimiento de caja (Cobranza / Pago / manual)</option>
+                        <option value="JSI">Cobro de JSI</option>
+                      </select>
+                    </div>
+                    {alta.origen === "JSI" ? (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div className="sm:col-span-2">
+                          <span className="block text-xs font-medium text-gray-700 mb-1">Cliente</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowClienteModal(true)}
+                            className="w-full text-left border border-gray-300 rounded-lg p-2 text-sm bg-white hover:bg-gray-50 cursor-pointer"
+                          >
+                            {alta.cliente
+                              ? `${alta.cliente.ClienteNombre} ${alta.cliente.ClienteApellido ?? ""}`.trim()
+                              : "Elegir cliente..."}
+                          </button>
+                        </div>
+                        <div>
+                          <label htmlFor="altaMontoJSI" className="block text-xs font-medium text-gray-700 mb-1">
+                            Monto Gs.
+                          </label>
+                          <input
+                            id="altaMontoJSI"
+                            type="number"
+                            min="1"
+                            step="any"
+                            value={alta.monto}
+                            onChange={(e) => setAlta({ ...alta, monto: e.target.value })}
+                            required
+                            className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+                          />
+                        </div>
+                      </div>
+                    ) : (
+                    <>
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
                         <label htmlFor="altaTipo" className="block text-xs font-medium text-gray-700 mb-1">
@@ -772,6 +862,8 @@ export default function DiferenciasCierrePage() {
                         className="w-full border border-gray-300 rounded-lg p-2 text-sm"
                       />
                     </div>
+                    </>
+                    )}
                     <div>
                       <label htmlFor="altaMotivo" className="block text-xs font-medium text-gray-700 mb-1">
                         Motivo
@@ -856,6 +948,16 @@ export default function DiferenciasCierrePage() {
           </div>
         )}
       </Modal>
+
+      <ClienteModal
+        show={showClienteModal}
+        onClose={() => setShowClienteModal(false)}
+        clientes={clientes}
+        onSelect={(cliente) => {
+          setAlta((prev) => ({ ...prev, cliente }));
+          setShowClienteModal(false);
+        }}
+      />
     </div>
   );
 }
