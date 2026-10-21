@@ -319,7 +319,17 @@ exports.delete = async (req, res) => {
   const client = await db.connect();
   try {
     // Obtener el registro antes de eliminarlo para tener los datos necesarios
-    const registro = await RegistroDiarioCaja.getById(req.params.id);
+    // (con la descripción del grupo, para saber si es Western)
+    const registro = (
+      await db.query(
+        `SELECT r.*, tg."TipoGastoGrupoDescripcion"
+         FROM "registrodiariocaja" r
+         LEFT JOIN "tipogastogrupo" tg
+           ON tg."TipoGastoId" = r."TipoGastoId" AND tg."TipoGastoGrupoId" = r."TipoGastoGrupoId"
+         WHERE r."RegistroDiarioCajaId" = $1`,
+        [req.params.id]
+      )
+    ).rows[0];
     if (!registro) {
       return res.status(404).json({ message: "Registro no encontrado" });
     }

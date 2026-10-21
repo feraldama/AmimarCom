@@ -16,6 +16,10 @@ import FilterPanel, { FilterSelect } from "../../components/common/FilterPanel";
 import { getCajas } from "../../services/cajas.service";
 import { getAllTipoGastoGrupo } from "../../services/tipogastogrupo.service";
 import Swal from "sweetalert2";
+import {
+  confirmarEliminacionConMotivo,
+  pedirMotivo,
+} from "../../utils/confirmarEliminacion";
 import { usePermiso } from "../../hooks/usePermiso";
 import { useAuth } from "../../contexts/useAuth";
 
@@ -180,35 +184,24 @@ export default function WesternEnvioPage() {
   );
 
   const handleDelete = async (envio: WesternEnvio) => {
-    Swal.fire({
-      title: "¿Estás seguro?",
-      text: "¡No podrás revertir esto!",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#0d9488",
-      cancelButtonColor: "#d33",
-      confirmButtonText: "Sí, eliminar!",
-      cancelButtonText: "Cancelar",
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        try {
-          await deleteWesternEnvio(envio.WesternEnvioId);
-          Swal.fire({
-            icon: "success",
-            title: "Envío western eliminado exitosamente",
-          });
-          fetchEnvios();
-        } catch (error: unknown) {
-          const err = error as { message?: string };
-          const msg = err?.message || "No se pudo eliminar el envío western";
-          Swal.fire({
-            icon: "warning",
-            title: "No permitido",
-            text: msg,
-          });
-        }
-      }
-    });
+    const motivo = await confirmarEliminacionConMotivo();
+    if (motivo === null) return;
+    try {
+      const response = await deleteWesternEnvio(envio.WesternEnvioId, motivo);
+      Swal.fire({
+        icon: "success",
+        title: response?.message || "Envío western eliminado exitosamente",
+      });
+      fetchEnvios();
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      const msg = err?.message || "No se pudo eliminar el envío western";
+      Swal.fire({
+        icon: "warning",
+        title: "No permitido",
+        text: msg,
+      });
+    }
   };
 
   const handleCreate = () => {
@@ -225,8 +218,31 @@ export default function WesternEnvioPage() {
     let mensaje = "";
     try {
       if (currentEnvio) {
-        await updateWesternEnvio(currentEnvio.WesternEnvioId, envioData);
-        mensaje = "Envío western actualizado exitosamente";
+        // Cambiar grupo, monto o cotización reclasifica el movimiento y
+        // corrige las cajas: el backend exige el motivo
+        const reclasifica =
+          Number(envioData.TipoGastoGrupoId) !== Number(currentEnvio.TipoGastoGrupoId) ||
+          Number(envioData.WesternEnvioMonto) !== Number(currentEnvio.WesternEnvioMonto) ||
+          Number(envioData.WesternEnvioCambio || 0) !== Number(currentEnvio.WesternEnvioCambio || 0);
+        let motivo: string | null = null;
+        if (reclasifica) {
+          motivo = await pedirMotivo({
+            titulo: "Reclasificar movimiento Western",
+            texto:
+              "Se van a corregir las cajas con el grupo, monto o cotización nuevos.",
+            label: "Motivo",
+            placeholder: "Ej.: era Western Gs. y se cargó como USD",
+            confirmar: "Sí, reclasificar",
+          });
+          if (motivo === null) return;
+        }
+        // La caja y la fecha de un movimiento ya registrado no cambian
+        const datos: Partial<WesternEnvio> & { Motivo?: string } = { ...envioData };
+        delete datos.WesternEnvioFecha;
+        delete datos.CajaId;
+        if (motivo) datos.Motivo = motivo;
+        const response = await updateWesternEnvio(currentEnvio.WesternEnvioId, datos);
+        mensaje = response?.message || "Envío western actualizado exitosamente";
       } else {
         const response = await createWesternEnvio({
           ...envioData,
@@ -245,11 +261,9 @@ export default function WesternEnvioPage() {
       });
       fetchEnvios();
     } catch (error) {
-      if (error instanceof Error) {
-        setError(error.message);
-      } else {
-        setError("Error desconocido");
-      }
+      // El service rechaza con el cuerpo de la respuesta ({ message }), no con un Error
+      const msg = (error as { message?: string })?.message || "Error desconocido";
+      Swal.fire({ icon: "warning", title: "No se pudo guardar", text: msg });
     }
   };
 

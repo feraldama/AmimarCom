@@ -1,25 +1,48 @@
 import Swal from "sweetalert2";
 
-// Confirmación de borrado de un movimiento de caja (o de un cobro que lo
-// generó) que pide el motivo. Si el movimiento es de un turno ya cerrado, el
-// backend recalcula la diferencia de ese cierre y guarda el motivo en la
-// auditoría. Devuelve el motivo, o null si el usuario canceló.
-export const confirmarEliminacionConMotivo = async (): Promise<string | null> => {
+// Pide un motivo obligatorio en un diálogo. Devuelve el motivo, o null si el
+// usuario canceló.
+export const pedirMotivo = async ({
+  titulo,
+  texto,
+  label,
+  placeholder,
+  confirmar,
+}: {
+  titulo: string;
+  texto: string;
+  label: string;
+  placeholder: string;
+  confirmar: string;
+}): Promise<string | null> => {
   const result = await Swal.fire({
-    title: "¿Estás seguro?",
-    text: "¡No podrás revertir esto!",
+    title: titulo,
+    text: texto,
     icon: "warning",
     input: "text",
-    inputLabel: "Motivo de la eliminación",
-    inputPlaceholder: "Ej.: se cargó dos veces",
+    inputLabel: label,
+    inputPlaceholder: placeholder,
     inputAttributes: { maxlength: "500" },
     inputValidator: (valor) =>
       valor && valor.trim() ? undefined : "Indicá el motivo",
     showCancelButton: true,
     confirmButtonColor: "#0d9488",
     cancelButtonColor: "#d33",
-    confirmButtonText: "Sí, eliminar!",
+    confirmButtonText: confirmar,
     cancelButtonText: "Cancelar",
   });
   return result.isConfirmed ? String(result.value).trim() : null;
 };
+
+// Confirmación de borrado de un movimiento de caja (o de un cobro que lo
+// generó) que pide el motivo. Si el movimiento es de un turno ya cerrado, el
+// backend recalcula la diferencia de ese cierre y guarda el motivo en la
+// auditoría. Devuelve el motivo, o null si el usuario canceló.
+export const confirmarEliminacionConMotivo = (): Promise<string | null> =>
+  pedirMotivo({
+    titulo: "¿Estás seguro?",
+    texto: "¡No podrás revertir esto!",
+    label: "Motivo de la eliminación",
+    placeholder: "Ej.: se cargó dos veces",
+    confirmar: "Sí, eliminar!",
+  });

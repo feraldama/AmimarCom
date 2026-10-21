@@ -33,6 +33,7 @@ export interface MovimientoTurno {
   Monto: string | number;
   UsuarioId: string;
   EsTurno: boolean; // fila de apertura/cierre
+  AgregadoDespues: boolean; // agregado a este cierre después de cerrar
   // MISMO_MONTO: igual a la diferencia; MITAD: la diferencia es el doble
   Coincidencia: "MISMO_MONTO" | "MITAD" | null;
 }
@@ -53,7 +54,7 @@ export interface CorreccionTurno {
   Id: number;
   Fecha: string; // YYYY-MM-DD HH24:MI
   MovimientoId: number;
-  Tipo: "CORRECCION" | "ELIMINACION";
+  Tipo: "CORRECCION" | "ELIMINACION" | "ALTA";
   MontoAnterior: string | number;
   MontoNuevo: string | number | null; // null en una eliminación
   DetalleAnterior: string | null;
@@ -123,6 +124,26 @@ export const getDiferenciaDetalle = async (
     return response.data;
   } catch (error) {
     throw errorDe(error, "Error al cargar el detalle");
+  }
+};
+
+// Agrega a un cierre un movimiento que faltó cargar: queda en ese turno (no en
+// el turno en curso) y se recalcula la diferencia. Devuelve el detalle nuevo.
+export const agregarMovimientoACierre = async (
+  id: number,
+  datos: {
+    TipoGastoId: number;
+    TipoGastoGrupoId: number;
+    RegistroDiarioCajaMonto: number;
+    RegistroDiarioCajaDetalle: string;
+    Motivo: string;
+  }
+): Promise<{ message: string; data: { detalle: CierreDiferenciaDetalle } }> => {
+  try {
+    const response = await api.post(`/cierrediferencias/${id}/movimientos`, datos);
+    return response.data;
+  } catch (error) {
+    throw errorDe(error, "Error al agregar el movimiento");
   }
 };
 

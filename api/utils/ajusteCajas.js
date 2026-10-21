@@ -268,16 +268,9 @@ const revertirEnCajas = async (
 // efecto de `monto` (negativo: lo aplican) y, con `omitirCajaRegistro`, no
 // tocan la caja del registro (turno ya cerrado).
 
-// Movimientos comunes (Registro Diario, Western): la lógica completa de
-// revertirEnCajas. Los de PAGO ADMIN no tocan saldos acá.
-const revertirMovimiento = (q, registro, monto, omitirCajaRegistro) =>
-  esRegistroPagoAdmin(registro)
-    ? Promise.resolve()
-    : revertirEnCajas(q, registro, monto, { omitirCajaRegistro });
-
-// Cobranzas de colegio y cobros de JSI: al crearse, la caja aperturada y las
-// demás cajas con el gasto se movieron en direcciones OPUESTAS (ver
-// CobranzaColegiosTab / JuntaSaneamientoTab.handleSubmit):
+// Cobranzas de colegio, cobros de JSI, pagos de transporte, y CobranzaTab /
+// PagoTab: al crearse, la caja aperturada y las demás cajas con el gasto se
+// movieron en direcciones OPUESTAS (ver el handleSubmit de cada tab):
 //   INGRESO -> aperturada +monto, demás -monto
 //   EGRESO  -> aperturada -monto, demás +monto
 const revertirAperturadaYDemas = async (q, registro, monto, omitirCajaRegistro) => {
@@ -303,41 +296,60 @@ const revertirAperturadaYDemas = async (q, registro, monto, omitirCajaRegistro) 
   }
 };
 
-// Pagos de transporte: el signo depende del tipo de caja (misma regla que
-// tenía el borrado de pagotrans). Para la caja del registro y las demás con el
-// gasto: las internas (CajaTipoId 1) recibieron el movimiento tal cual y las
-// otras el opuesto, así que al revertir:
-//   internas: INGRESO -> -monto, EGRESO -> +monto
-//   otras:    INGRESO -> +monto, EGRESO -> -monto
-const revertirPorTipoDeCaja = async (q, registro, monto, omitirCajaRegistro) => {
-  const esIngreso = registro.TipoGastoId === 2;
-  const cajaRegistro = registro.CajaId ? Number(registro.CajaId) : null;
-  const cajas = new Set(cajaRegistro ? [cajaRegistro] : []);
-  if (registro.TipoGastoId && registro.TipoGastoGrupoId) {
-    const cajasConGasto = await CajaGasto.getByTipoGastoAndGrupo(
-      registro.TipoGastoId,
-      registro.TipoGastoGrupoId
-    );
-    cajasConGasto.forEach((cajaGasto) => {
-      if (cajaGasto.CajaId) cajas.add(Number(cajaGasto.CajaId));
-    });
+// Movimientos Western (WesternPagosTab): las reglas de revertirEnCajas, que
+// replican las del tab (grupos USD puro que no tocan la caja abierta,
+// conversión por cotización, signo opuesto en cajas de divisa). Además, un
+// pago con el grupo 13 (EXTRACCIONES) no tocó la caja abierta al crearse
+// desde Western, así que tampoco se le revierte.
+const revertirWestern = (q, registro, monto, omitirCajaRegistro) =>
+  revertirEnCajas(q, registro, monto, {
+    omitirCajaRegistro:
+      omitirCajaRegistro ||
+      (registro.TipoGastoId === 1 && registro.TipoGastoGrupoId === 13),
+  });
+
+// Descripción del grupo de gasto del registro (la trae si no vino en la fila)
+const grupoDescripcion = async (q, registro) => {
+  if (registro.TipoGastoGrupoDescripcion !== undefined) {
+    return String(registro.TipoGastoGrupoDescripcion || "");
   }
-  for (const cajaId of cajas) {
-    if (omitirCajaRegistro && cajaId === cajaRegistro) continue;
-    const tipo = await q.query('SELECT "CajaTipoId" FROM "caja" WHERE "CajaId" = $1', [
-      cajaId,
-    ]);
-    if (tipo.rows.length === 0) continue;
-    const interna = Number(tipo.rows[0].CajaTipoId) === 1;
-    const signo = esIngreso === interna ? -1 : 1;
-    await sumarACaja(q, cajaId, signo * monto);
+  const result = await q.query(
+    `SELECT "TipoGastoGrupoDescripcion" FROM "tipogastogrupo"
+     WHERE "TipoGastoId" = $1 AND "TipoGastoGrupoId" = $2`,
+    [registro.TipoGastoId, registro.TipoGastoGrupoId]
+  );
+  return String(result.rows[0]?.TipoGastoGrupoDescripcion || "");
+};
+
+const esGrupoWestern = (descripcion) => descripcion.toUpperCase().includes("WESTERN");
+
+// Movimientos de Registro Diario: cada uno se revierte con la regla de la
+// pantalla que lo creó, según su origen (no por número de grupo: los mismos
+// números son Western en unos tipos de gasto y colegios en otros).
+//   PAGO ADMIN   -> no toca saldos acá (lo hace pagoadmin.controller.js)
+//   divisas      -> revertirEnCajas (convención de DivisasTab: monto/cambio
+//                   en la caja de divisa, sin invertir el signo)
+//   Western      -> revertirWestern
+//   el resto     -> revertirAperturadaYDemas (CobranzaTab, PagoTab y carga
+//                   manual: caja abierta y demás cajas en sentido opuesto,
+//                   sin conversión por tipo de caja)
+const revertirMovimiento = async (q, registro, monto, omitirCajaRegistro) => {
+  if (esRegistroPagoAdmin(registro)) return;
+  const detalle = registro.RegistroDiarioCajaDetalle || "";
+  if (detalle.includes("DivisaMovimientoId:")) {
+    await revertirEnCajas(q, registro, monto, { omitirCajaRegistro });
+  } else if (esGrupoWestern(await grupoDescripcion(q, registro))) {
+    await revertirWestern(q, registro, monto, omitirCajaRegistro);
+  } else {
+    await revertirAperturadaYDemas(q, registro, monto, omitirCajaRegistro);
   }
 };
 
 module.exports = {
   esRegistroPagoAdmin,
+  esGrupoWestern,
   revertirEnCajas,
   revertirMovimiento,
   revertirAperturadaYDemas,
-  revertirPorTipoDeCaja,
+  revertirWestern,
 };

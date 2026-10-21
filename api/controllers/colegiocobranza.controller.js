@@ -326,14 +326,18 @@ exports.reporteCobranzas = async (req, res) => {
       : 0;
     const data = registros.map((r) => {
       const importe = Number(r.ColegioCursoImporte) || 0;
-      const meses = Number(r.ColegioCobranzaMes) || 1;
+      // 0 meses = cobro sin cuota (ej. sólo el examen): la pantalla de cobro
+      // no suma ninguna cuota, así que el reporte tampoco (antes contaba 1 y
+      // el total no coincidía con lo cobrado en caja)
+      const meses = Number(r.ColegioCobranzaMes) || 0;
       const subtotal = importe * meses;
       const dias = Number(r.ColegioCobranzaDiasMora) || 0;
       const multa = dias * MULTA_POR_DIA;
       const examen = Number(r.ColegioCobranzaExamen) || 0;
       const descuento = Number(r.ColegioCobranzaDescuento) || 0;
-      // Comisión: % del colegio sobre (importe de la cuota - descuento)
-      const comision = ((importe - descuento) * comisionPct) / 100;
+      // Comisión: % del colegio sobre (importe de la cuota - descuento); sin
+      // cuota cobrada no hay comisión
+      const comision = meses > 0 ? ((importe - descuento) * comisionPct) / 100 : 0;
       return {
         ColegioCobranzaId: r.ColegioCobranzaId,
         CursoNombre: (r.ColegioCursoNombre || "Sin curso").trim(),
@@ -348,7 +352,8 @@ exports.reporteCobranzas = async (req, res) => {
         Multa: multa,
         Examen: examen,
         Descuento: descuento,
-        Total: subtotal + multa + examen - descuento,
+        // Igual que la pantalla de cobro (nunca negativo)
+        Total: Math.max(0, subtotal + multa + examen - descuento),
         Comision: comision,
         UsuarioNombre: (r.UsuarioNombre || "").trim(),
       };

@@ -11,14 +11,25 @@ import {
   getDiferencias,
   getDiferenciaDetalle,
   updateDiferenciaRevision,
+  agregarMovimientoACierre,
   type CierreDiferencia,
   type CierreDiferenciaDetalle,
   type FiltrosDiferencias,
   type TotalesDiferencias,
 } from "../../services/cierrediferencia.service";
 import { getCajas } from "../../services/cajas.service";
+import { getAllTipoGastoGrupo } from "../../services/tipogastogrupo.service";
 import { usePermiso } from "../../hooks/usePermiso";
 import { formatMiles } from "../../utils/utils";
+
+interface GrupoGasto {
+  TipoGastoId: number;
+  TipoGastoGrupoId: number;
+  TipoGastoGrupoDescripcion: string;
+}
+
+// Formulario vacío de "Agregar movimiento faltante"
+const ALTA_VACIA = { tipo: 2, grupo: "", monto: "", detalle: "", motivo: "" };
 
 interface CajaOpcion {
   CajaId: number;
@@ -104,6 +115,10 @@ export default function DiferenciasCierrePage() {
   const [observacion, setObservacion] = useState("");
   const [revisado, setRevisado] = useState(false);
   const [guardando, setGuardando] = useState(false);
+  const [grupos, setGrupos] = useState<GrupoGasto[]>([]);
+  const [altaAbierta, setAltaAbierta] = useState(false);
+  const [alta, setAlta] = useState(ALTA_VACIA);
+  const [agregando, setAgregando] = useState(false);
 
   const cargar = useCallback(async () => {
     if (!puedeLeer) return;
@@ -139,6 +154,26 @@ export default function DiferenciasCierrePage() {
       .catch((err) => console.error("Error al cargar cajas:", err));
   }, [puedeLeer]);
 
+  // Grupos para "Agregar movimiento faltante": sin apertura/cierre (grupo 2),
+  // pases ni Western (esos se cargan desde su pantalla)
+  useEffect(() => {
+    if (!puedeEditar) return;
+    getAllTipoGastoGrupo()
+      .then((data: GrupoGasto[]) =>
+        setGrupos(
+          (data || [])
+            .filter((g) => {
+              const d = (g.TipoGastoGrupoDescripcion || "").trim().toUpperCase();
+              return g.TipoGastoGrupoId !== 2 && !d.startsWith("PASE ") && !d.includes("WESTERN");
+            })
+            .sort((a, b) =>
+              a.TipoGastoGrupoDescripcion.trim().localeCompare(b.TipoGastoGrupoDescripcion.trim())
+            )
+        )
+      )
+      .catch((err) => console.error("Error al cargar grupos de gasto:", err));
+  }, [puedeEditar]);
+
   const setFiltro = <K extends keyof FiltrosDiferencias>(k: K, v: FiltrosDiferencias[K]) =>
     setFiltros((prev) => ({ ...prev, [k]: v }));
 
@@ -154,6 +189,8 @@ export default function DiferenciasCierrePage() {
   };
 
   const abrirDetalle = async (id: number) => {
+    setAltaAbierta(false);
+    setAlta(ALTA_VACIA);
     setDetalleAbierto(true);
     setDetalleLoading(true);
     setDetalle(null);
@@ -193,6 +230,37 @@ export default function DiferenciasCierrePage() {
       });
     } finally {
       setGuardando(false);
+    }
+  };
+
+  const agregarMovimiento = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!detalle) return;
+    setAgregando(true);
+    try {
+      const respuesta = await agregarMovimientoACierre(detalle.Id, {
+        TipoGastoId: alta.tipo,
+        TipoGastoGrupoId: Number(alta.grupo),
+        RegistroDiarioCajaMonto: Number(alta.monto),
+        RegistroDiarioCajaDetalle: alta.detalle,
+        Motivo: alta.motivo,
+      });
+      setDetalle(respuesta.data.detalle);
+      setObservacion(respuesta.data.detalle.Observacion || "");
+      setRevisado(respuesta.data.detalle.Revisado);
+      setAltaAbierta(false);
+      setAlta(ALTA_VACIA);
+      Swal.fire({ icon: "success", title: "Movimiento agregado", text: respuesta.message });
+      cargar();
+    } catch (err) {
+      Swal.fire({
+        icon: "warning",
+        title: "No se pudo agregar",
+        text: (err as { message?: string })?.message || "Error desconocido",
+        confirmButtonColor: "#0d9488",
+      });
+    } finally {
+      setAgregando(false);
     }
   };
 
@@ -551,7 +619,12 @@ export default function DiferenciasCierrePage() {
                         <td className="px-3 py-1.5">{m.Grupo}</td>
                         <td className="px-3 py-1.5">
                           {m.Detalle}
-                          {corregidos.has(m.Id) && (
+                          {m.AgregadoDespues && (
+                            <span className="ml-1.5 text-xs font-medium text-primary">
+                              (agregado después del cierre)
+                            </span>
+                          )}
+                          {corregidos.has(m.Id) && !m.AgregadoDespues && (
                             <span className="ml-1.5 text-xs font-medium text-primary">
                               (corregido)
                             </span>
@@ -598,7 +671,9 @@ export default function DiferenciasCierrePage() {
                           <td className="px-3 py-1.5 whitespace-nowrap">
                             {c.Tipo === "ELIMINACION"
                               ? `Eliminado (${formatMiles(Number(c.MontoAnterior))})`
-                              : `${formatMiles(Number(c.MontoAnterior))} → ${formatDif(c.MontoNuevo)}`}
+                              : c.Tipo === "ALTA"
+                                ? `Agregado (${formatDif(c.MontoNuevo)})`
+                                : `${formatMiles(Number(c.MontoAnterior))} → ${formatDif(c.MontoNuevo)}`}
                           </td>
                           <td className="px-3 py-1.5 text-right whitespace-nowrap">
                             {formatDif(c.DiferenciaAnterior)} → {formatDif(c.DiferenciaNueva)}
@@ -610,6 +685,125 @@ export default function DiferenciasCierrePage() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+            )}
+
+            {puedeEditar && (
+              <div className="border border-gray-200 rounded-lg p-3">
+                {!altaAbierta ? (
+                  <button
+                    type="button"
+                    className="text-primary hover:underline text-sm cursor-pointer"
+                    onClick={() => setAltaAbierta(true)}
+                  >
+                    + Agregar movimiento faltante a este cierre
+                  </button>
+                ) : (
+                  <form onSubmit={agregarMovimiento} className="space-y-3">
+                    <p className="text-sm text-gray-600">
+                      Para un movimiento que faltó cargar en este turno (por ejemplo, una
+                      cobranza que se eliminó). Queda en este cierre, no en el turno en
+                      curso: se recalcula esta diferencia, la caja del cajero no se toca y
+                      las demás cajas del gasto se ajustan. Los cobros de JSI, colegios,
+                      transporte, Western y divisas se cargan desde su pantalla.
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label htmlFor="altaTipo" className="block text-xs font-medium text-gray-700 mb-1">
+                          Tipo
+                        </label>
+                        <select
+                          id="altaTipo"
+                          value={alta.tipo}
+                          onChange={(e) => setAlta({ ...alta, tipo: Number(e.target.value), grupo: "" })}
+                          className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white"
+                        >
+                          <option value={2}>Ingreso</option>
+                          <option value={1}>Egreso</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="altaGrupo" className="block text-xs font-medium text-gray-700 mb-1">
+                          Grupo de gasto
+                        </label>
+                        <select
+                          id="altaGrupo"
+                          value={alta.grupo}
+                          onChange={(e) => setAlta({ ...alta, grupo: e.target.value })}
+                          required
+                          className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white"
+                        >
+                          <option value="">Seleccione...</option>
+                          {grupos
+                            .filter((g) => g.TipoGastoId === alta.tipo)
+                            .map((g) => (
+                              <option key={g.TipoGastoGrupoId} value={g.TipoGastoGrupoId}>
+                                {g.TipoGastoGrupoDescripcion.trim()}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="altaMonto" className="block text-xs font-medium text-gray-700 mb-1">
+                          Monto Gs.
+                        </label>
+                        <input
+                          id="altaMonto"
+                          type="number"
+                          min="1"
+                          step="any"
+                          value={alta.monto}
+                          onChange={(e) => setAlta({ ...alta, monto: e.target.value })}
+                          required
+                          className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label htmlFor="altaDetalle" className="block text-xs font-medium text-gray-700 mb-1">
+                        Descripción
+                      </label>
+                      <input
+                        id="altaDetalle"
+                        type="text"
+                        maxLength={250}
+                        value={alta.detalle}
+                        onChange={(e) => setAlta({ ...alta, detalle: e.target.value })}
+                        className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="altaMotivo" className="block text-xs font-medium text-gray-700 mb-1">
+                        Motivo
+                      </label>
+                      <input
+                        id="altaMotivo"
+                        type="text"
+                        maxLength={500}
+                        value={alta.motivo}
+                        onChange={(e) => setAlta({ ...alta, motivo: e.target.value })}
+                        required
+                        placeholder="Ej.: la cobranza se eliminó y faltaba volver a cargarla"
+                        className="w-full border border-gray-300 rounded-lg p-2 text-sm"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <ActionButton
+                        label={agregando ? "Agregando..." : "Agregar al cierre"}
+                        type="submit"
+                        disabled={agregando}
+                      />
+                      <ActionButton
+                        label="Cancelar"
+                        variant="secondary"
+                        onClick={() => {
+                          setAltaAbierta(false);
+                          setAlta(ALTA_VACIA);
+                        }}
+                      />
+                    </div>
+                  </form>
+                )}
               </div>
             )}
 

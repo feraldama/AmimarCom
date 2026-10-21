@@ -16,6 +16,12 @@ router.get(
   verificarPermiso("CIERREDIFERENCIAS", "leer"),
   cierreDiferenciaController.getDetalle
 );
+// Agregar a ese cierre un movimiento que faltó cargar (recalcula la diferencia)
+router.post(
+  "/:id/movimientos",
+  verificarPermiso("CIERREDIFERENCIAS", "editar"),
+  cierreDiferenciaController.agregarMovimiento
+);
 router.put(
   "/:id",
   verificarPermiso("CIERREDIFERENCIAS", "editar"),

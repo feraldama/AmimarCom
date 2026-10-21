@@ -117,9 +117,12 @@ export const updateWesternEnvio = async (
   }
 };
 
-export const deleteWesternEnvio = async (id: string | number) => {
+// `motivo` queda en la auditoría si el movimiento es de un turno ya cerrado
+export const deleteWesternEnvio = async (id: string | number, motivo?: string) => {
   try {
-    const response = await api.delete(`/westernenvio/${id}`);
+    const response = await api.delete(`/westernenvio/${id}`, {
+      data: motivo ? { Motivo: motivo } : undefined,
+    });
     return response.data;
   } catch (error) {
     const axiosError = error as AxiosError<{ message?: string }>;

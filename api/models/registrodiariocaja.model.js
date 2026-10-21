@@ -95,8 +95,8 @@ const ORIGENES_VINCULADOS = [
 // desde Registro Diario dejaría el cobro huérfano.
 const ORIGENES_CON_PANTALLA = [
   ["ColegioCobranzaId:", "una cobranza de colegio", "Admin. Colegios > Cobranzas"],
-  ["JSICobroId:", "un cobro de JSI", "Cobros JSI"],
-  ["PagoTransId:", "un pago de transporte", "Pagos Transporte"],
+  ["JSICobroId:", "un cobro de JSI", "Registro Diario > Cobros JSI"],
+  ["PagoTransId:", "un pago de transporte", "Transporte > Pagos Transporte"],
 ];
 
 const INSERT_REGISTRO_QUERY = `
@@ -586,8 +586,9 @@ const RegistroDiarioCaja = {
   // (Fecha is the same string passed to both inserts) and are stored even
   // in legacy rows where MTCN/Cambio were never persisted. Returns the most
   // recent match.
-  findByWesternEnvio: async (cajaId, tipoGastoId, tipoGastoGrupoId, fecha, monto) => {
-    const result = await db.query(
+  // `q` permite correr la consulta dentro de una transacción (client de pg)
+  findByWesternEnvio: async (cajaId, tipoGastoId, tipoGastoGrupoId, fecha, monto, q = db) => {
+    const result = await q.query(
       `SELECT * FROM "registrodiariocaja"
        WHERE "CajaId" = $1
          AND "TipoGastoId" = $2
@@ -643,14 +644,20 @@ const RegistroDiarioCaja = {
 
   // Por qué un movimiento no se puede eliminar desde Registro Diario de Caja
   // (null si se puede): los de un cobro con pantalla propia se eliminan desde
-  // ahí. Los de divisas y Western sí pasan por acá (sus pantallas usan este
-  // mismo borrado).
+  // ahí. Los Western, desde Registro Diario > Western, que borra también el
+  // registro de westernenvio (si no, queda huérfano). `registro` tiene que
+  // traer TipoGastoGrupoDescripcion. Los de divisas sí pasan por acá: su
+  // pantalla usa este mismo borrado.
   motivoNoEliminable: (registro) => {
     const detalle = registro.RegistroDiarioCajaDetalle || "";
     const origen = ORIGENES_CON_PANTALLA.find(([marca]) => detalle.includes(marca));
-    return origen
-      ? `El movimiento es de ${origen[1]}: eliminalo desde ${origen[2]}, que borra el cobro y su registro de caja juntos.`
-      : null;
+    if (origen) {
+      return `El movimiento es de ${origen[1]}: eliminalo desde ${origen[2]}, que borra el cobro y su registro de caja juntos.`;
+    }
+    if (String(registro.TipoGastoGrupoDescripcion || "").toUpperCase().includes("WESTERN")) {
+      return "El movimiento es Western: eliminalo (o reclasificalo) desde Registro Diario > Western, que actualiza también el registro del envío/pago.";
+    }
+    return null;
   },
 
   // Cierre del turno ya cerrado al que pertenece un movimiento: la primera
@@ -660,6 +667,10 @@ const RegistroDiarioCaja = {
   // si la caja no trabaja por turnos o si el registro es una fila de turno.
   getCierreDeTurnoCerrado: async (registro, q = db) => {
     if (Number(registro.TipoGastoGrupoId) === GRUPO_TURNO) return null;
+    // Agregado después a un cierre anterior: pertenece a ese turno
+    if (registro.RegistroDiarioCajaCierreId) {
+      return Number(registro.RegistroDiarioCajaCierreId);
+    }
     const result = await q.query(
       `SELECT "RegistroDiarioCajaId", "TipoGastoId" FROM "registrodiariocaja"
        WHERE "CajaId" = $1 AND "TipoGastoGrupoId" = ${GRUPO_TURNO}
@@ -671,6 +682,35 @@ const RegistroDiarioCaja = {
     return siguiente && Number(siguiente.TipoGastoId) === EGRESO
       ? Number(siguiente.RegistroDiarioCajaId)
       : null;
+  },
+
+  // Inserta un movimiento olvidado en un turno ya cerrado: queda asignado a
+  // ese cierre (RegistroDiarioCajaCierreId), con la caja y la fecha del cierre,
+  // y cuenta en su ticket y su diferencia, no en el turno en curso. `cierre`
+  // es la fila CIERRE. No toca saldos ni recalcula la diferencia (lo hace quien
+  // llama, dentro de su transacción `q`).
+  crearEnCierreAnterior: async (q, { cierre, TipoGastoId, TipoGastoGrupoId, Monto, Detalle, UsuarioId }) => {
+    const result = await q.query(
+      `INSERT INTO "registrodiariocaja" (
+         "CajaId", "RegistroDiarioCajaFecha", "TipoGastoId", "TipoGastoGrupoId",
+         "RegistroDiarioCajaCambio", "RegistroDiarioCajaDetalle", "RegistroDiarioCajaMTCN",
+         "RegistroDiarioCajaCargoEnvio", "RegistroDiarioCajaMonto", "RegistroDiarioCajaPendiente1",
+         "RegistroDiarioCajaPendiente2", "RegistroDiarioCajaPendiente3", "RegistroDiarioCajaPendiente4",
+         "UsuarioId", "RegistroDiarioCajaCierreId"
+       ) VALUES ($1, $2, $3, $4, 0, $5, 0, 0, $6, 0, 0, 0, 0, $7, $8)
+       RETURNING *`,
+      [
+        cierre.CajaId,
+        cierre.RegistroDiarioCajaFecha,
+        TipoGastoId,
+        TipoGastoGrupoId,
+        Detalle,
+        Monto,
+        UsuarioId,
+        cierre.RegistroDiarioCajaId,
+      ]
+    );
+    return result.rows[0];
   },
 
   // Rechaza (Error con status 400) un movimiento fechado antes del día en que
@@ -694,7 +734,7 @@ const RegistroDiarioCaja = {
       throw Object.assign(
         new Error(
           `La fecha ${formato(diaMovimiento)} es anterior a la apertura del turno en curso de la caja (${formato(diaApertura)}). ` +
-            "Un movimiento de un cierre anterior no se vuelve a cargar con fecha atrasada: corregilo o eliminalo desde Registro Diario de Caja."
+            "No se carga con fecha atrasada porque caería en el turno de hoy. Si es un movimiento que faltó en un cierre anterior, un supervisor lo agrega desde Diferencias de Cierre (Agregar movimiento faltante); si está mal cargado, se corrige o elimina desde su pantalla."
         ),
         { status: 400 }
       );
@@ -865,7 +905,9 @@ const RegistroDiarioCaja = {
   },
   // Último turno cerrado del usuario en una caja, para el ticket de cierre:
   // su último cierre, la apertura previa a ese cierre y TODOS los registros de
-  // la caja entre ambos (sin filtrar usuario, para incluir los PASE recibidos).
+  // la caja entre ambos (sin filtrar usuario, para incluir los PASE recibidos),
+  // más los agregados después a ese cierre (RegistroDiarioCajaCierreId) y sin
+  // los que, aunque caigan en el rango, se asignaron a otro cierre.
   // Devuelve undefined si no hay cierre o no hay apertura antes del cierre.
   getTurnoCierre: async (usuarioId, cajaId) => {
     const cierre = await db.query(
@@ -895,7 +937,8 @@ const RegistroDiarioCaja = {
        LEFT JOIN "tipogasto" t ON r."TipoGastoId" = t."TipoGastoId"
        LEFT JOIN "tipogastogrupo" tg ON r."TipoGastoId" = tg."TipoGastoId" AND r."TipoGastoGrupoId" = tg."TipoGastoGrupoId"
        WHERE r."CajaId" = $1
-         AND r."RegistroDiarioCajaId" BETWEEN $2 AND $3
+         AND ((r."RegistroDiarioCajaId" BETWEEN $2 AND $3 AND r."RegistroDiarioCajaCierreId" IS NULL)
+              OR r."RegistroDiarioCajaCierreId" = $3)
        ORDER BY r."RegistroDiarioCajaId"`,
       [cajaId, aperturaId, cierreId]
     );
@@ -905,7 +948,8 @@ const RegistroDiarioCaja = {
   // Saldo teórico de una caja desde su apertura hasta ahora: misma fórmula que
   // el ticket de cierre y el reporte de Registro Diario (apertura + ingresos -
   // egresos, sin contar los registros de apertura/cierre, grupo 2). Se toma
-  // por CajaId, sin filtrar usuario, para incluir los PASE de otras cajas.
+  // por CajaId, sin filtrar usuario, para incluir los PASE de otras cajas. No
+  // cuenta los movimientos agregados a un cierre anterior.
   getSaldoTeorico: async (aperturaId, cajaId) => {
     const result = await db.query(
       `SELECT
@@ -916,7 +960,8 @@ const RegistroDiarioCaja = {
        FROM "registrodiariocaja"
        WHERE "CajaId" = $2
          AND "RegistroDiarioCajaId" > $1
-         AND "TipoGastoGrupoId" <> ${GRUPO_TURNO}`,
+         AND "TipoGastoGrupoId" <> ${GRUPO_TURNO}
+         AND "RegistroDiarioCajaCierreId" IS NULL`,
       [aperturaId, cajaId]
     );
     const row = result.rows[0];

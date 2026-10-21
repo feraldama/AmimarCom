@@ -189,10 +189,14 @@ export default function DivisasTab() {
       const divisaGastos = await getDivisaGastosByDivisaId(divisaIdCompra);
       const divisaGastosData = divisaGastos.data || divisaGastos || [];
 
-      // Para compra: TipoGastoId = 1 (Egreso) porque estás gastando dinero
-      // Obtener el TipoGastoGrupoId del primer gasto de la divisa, o usar 2 por defecto
+      // Para compra: TipoGastoId = 1 (Egreso) porque estás gastando dinero.
+      // El grupo es el del gasto de egreso de la divisa (antes se tomaba el
+      // primero que devolvía la API, sin orden garantizado: con el de ingreso
+      // el registro quedaba en un grupo sin cajas y al eliminarlo no se
+      // revertía la caja de divisa). Si no hay, el primero; si no, 2.
       const primerGasto =
-        divisaGastosData.length > 0 ? divisaGastosData[0] : null;
+        divisaGastosData.find((g: { TipoGastoId: number }) => g.TipoGastoId === 1) ??
+        (divisaGastosData.length > 0 ? divisaGastosData[0] : null);
       const tipoGastoIdRegistro = 1; // Siempre Egreso para compra
       const tipoGastoGrupoIdRegistro = primerGasto?.TipoGastoGrupoId || 2;
 

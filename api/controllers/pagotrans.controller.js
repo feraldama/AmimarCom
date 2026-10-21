@@ -1,7 +1,7 @@
 const PagoTrans = require("../models/pagotrans.model");
 const { parseCajaIds } = require("../utils/reportes");
 const RegistroDiarioCaja = require("../models/registrodiariocaja.model");
-const { revertirPorTipoDeCaja } = require("../utils/ajusteCajas");
+const { revertirAperturadaYDemas } = require("../utils/ajusteCajas");
 const { crearHandlersCobroVinculado } = require("../utils/cobroVinculado");
 
 // Obtener todos los pagos con paginación
@@ -120,7 +120,9 @@ const handlersPagoTrans = crearHandlersCobroVinculado({
         [`%PagoTransId:${pago.PagoTransId}%`, `%TransporteId:${pago.TransporteId}%`]
       )
     ).rows,
-  revertir: revertirPorTipoDeCaja,
+  // EmpresasTransporteTab sumó el monto a la caja abierta y lo restó a las
+  // demás cajas del gasto (la de la empresa): se revierte igual
+  revertir: revertirAperturadaYDemas,
   nombre: "Pago de transporte",
 });
 

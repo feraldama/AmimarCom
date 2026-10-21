@@ -1,7 +1,9 @@
 const db = require("../config/db");
 
 // Diferencias de cierre de caja: una fila por cada CIERRE de turno con el
-// sobrante/faltante, con la misma fórmula que el ticket de cierre:
+// sobrante/faltante, con la misma fórmula que el ticket de cierre (los
+// movimientos del turno son los del rango de IDs entre apertura y cierre más
+// los agregados después a ese cierre, RegistroDiarioCajaCierreId):
 //   teórico    = apertura + ingresos - egresos (sin las filas de turno, grupo 2)
 //   diferencia = teórico - contado   (> 0 faltante, < 0 sobrante)
 // Se toman los movimientos de la caja entre la apertura y el cierre, de
@@ -87,8 +89,10 @@ const CierreDiferencia = {
            COALESCE(SUM(CASE WHEN r."TipoGastoId" = 1 THEN r."RegistroDiarioCajaMonto" END), 0) AS egresos
          FROM "registrodiariocaja" r
          WHERE r."CajaId" = c."CajaId" AND r."TipoGastoGrupoId" <> 2
-           AND r."RegistroDiarioCajaId" > ap."RegistroDiarioCajaId"
-           AND r."RegistroDiarioCajaId" < c."RegistroDiarioCajaId"
+           AND ((r."RegistroDiarioCajaId" > ap."RegistroDiarioCajaId"
+                 AND r."RegistroDiarioCajaId" < c."RegistroDiarioCajaId"
+                 AND r."RegistroDiarioCajaCierreId" IS NULL)
+                OR r."RegistroDiarioCajaCierreId" = c."RegistroDiarioCajaId")
        ) m ON TRUE
        WHERE c."RegistroDiarioCajaId" = $1
        ON CONFLICT ("RegistroDiarioCajaId") DO UPDATE SET
@@ -229,6 +233,7 @@ const CierreDiferencia = {
            r."RegistroDiarioCajaMonto"::numeric AS "Monto",
            r."UsuarioId",
            r."TipoGastoGrupoId" = 2 AS "EsTurno",
+           r."RegistroDiarioCajaCierreId" IS NOT NULL AS "AgregadoDespues",
            CASE
              WHEN $4::numeric = 0 OR r."TipoGastoGrupoId" = 2 THEN NULL
              WHEN r."RegistroDiarioCajaMonto" = $4 THEN 'MISMO_MONTO'
@@ -238,7 +243,8 @@ const CierreDiferencia = {
          LEFT JOIN "tipogastogrupo" tg
            ON tg."TipoGastoId" = r."TipoGastoId" AND tg."TipoGastoGrupoId" = r."TipoGastoGrupoId"
          WHERE r."CajaId" = $1
-           AND r."RegistroDiarioCajaId" BETWEEN $2 AND $3
+           AND ((r."RegistroDiarioCajaId" BETWEEN $2 AND $3 AND r."RegistroDiarioCajaCierreId" IS NULL)
+                OR r."RegistroDiarioCajaCierreId" = $3)
          ORDER BY r."RegistroDiarioCajaId"`,
         [cabecera.CajaId, aperturaId, id, abs]
       )

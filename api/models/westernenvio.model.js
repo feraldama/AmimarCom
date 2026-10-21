@@ -6,8 +6,9 @@ const WesternEnvio = {
     return result.rows;
   },
 
-  getById: async (id) => {
-    const result = await db.query(
+  // `q` permite correr las consultas dentro de una transacción (client de pg)
+  getById: async (id, q = db) => {
+    const result = await q.query(
       `SELECT we.*,
         c."CajaDescripcion",
         t."TipoGastoDescripcion",
@@ -244,7 +245,7 @@ const WesternEnvio = {
     return WesternEnvio.getById(result.rows[0].WesternEnvioId);
   },
 
-  update: async (id, envioData) => {
+  update: async (id, envioData, q = db) => {
     const camposActualizables = [
       "CajaId",
       "WesternEnvioFecha",
@@ -280,7 +281,7 @@ const WesternEnvio = {
 
     values.push(id);
 
-    const result = await db.query(
+    const result = await q.query(
       `UPDATE "westernenvio"
       SET ${updateFields.join(", ")}
       WHERE "WesternEnvioId" = $${paramIndex}`,
@@ -289,11 +290,11 @@ const WesternEnvio = {
 
     if (result.rowCount === 0) return null;
 
-    return WesternEnvio.getById(id);
+    return WesternEnvio.getById(id, q);
   },
 
-  delete: async (id) => {
-    const result = await db.query(
+  delete: async (id, q = db) => {
+    const result = await q.query(
       'DELETE FROM "westernenvio" WHERE "WesternEnvioId" = $1',
       [id]
     );

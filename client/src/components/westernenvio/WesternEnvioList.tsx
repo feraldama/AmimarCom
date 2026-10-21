@@ -384,6 +384,14 @@ export default function WesternEnvioList({
         }
       >
         <form id={formId} onSubmit={handleSubmit} className="space-y-6">
+          {currentEnvio && (
+            <p className="text-sm text-gray-600">
+              Cambiar el grupo (ej. de USD a Gs.), el monto o la cotización
+              reclasifica el movimiento: se corrigen las cajas y se pide un
+              motivo. Si es de un turno ya cerrado, se recalcula la diferencia
+              de ese cierre sin tocar la caja del turno en curso.
+            </p>
+          )}
           <div className="grid grid-cols-6 gap-6">
                   <div className="col-span-6 sm:col-span-3">
                     <label
@@ -398,7 +406,9 @@ export default function WesternEnvioList({
                       value={formData.CajaId}
                       onChange={handleInputChange}
                       required
-                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
+                      // Un movimiento ya registrado en caja no cambia de caja
+                      disabled={Boolean(currentEnvio)}
+                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5 disabled:bg-gray-100 disabled:text-gray-600"
                     >
                       <option value="">Seleccione...</option>
                       {cajas
@@ -425,7 +435,9 @@ export default function WesternEnvioList({
                       id="WesternEnvioFecha"
                       value={formData.WesternEnvioFecha}
                       onChange={handleInputChange}
-                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
+                      // Ni de fecha (lo ataría a otro turno)
+                      disabled={Boolean(currentEnvio)}
+                      className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5 disabled:bg-gray-100 disabled:text-gray-600"
                       required
                     />
                   </div>
