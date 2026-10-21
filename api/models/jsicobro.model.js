@@ -242,12 +242,16 @@ const JSICobro = {
   // Detalle del registro de caja de un cobro, con el mismo formato que
   // JuntaSaneamientoTab:
   //   ClienteId:<id> | Cliente:<nombre> | CodJSI:<código> | JSICobroId:<id>
-  detalleRegistro: (cliente, jsicobroId) => {
+  // El código es el del cliente o, si no tiene, `codigoAlternativo` (el que
+  // se escribió en la pestaña).
+  detalleRegistro: (cliente, jsicobroId, codigoAlternativo) => {
     const nombre = `${cliente.ClienteNombre ?? ""} ${cliente.ClienteApellido ?? ""}`
       .replace(/\s+/g, " ")
       .trim()
       .slice(0, 150); // RegistroDiarioCajaDetalle es varchar(250)
-    const codigo = Number(cliente.ClienteCodJSI) ? String(cliente.ClienteCodJSI) : "";
+    const codigo = Number(cliente.ClienteCodJSI)
+      ? String(cliente.ClienteCodJSI)
+      : String(codigoAlternativo || "").trim();
     return [
       `ClienteId:${cliente.ClienteId}`,
       nombre && `Cliente:${nombre}`,

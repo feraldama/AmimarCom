@@ -93,7 +93,8 @@ exports.create = async (req, res) => {
       data: jsicobro,
     });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    // codigo TURNO_CERRADO: la pestaña ofrece cargarlo en ese cierre
+    res.status(400).json({ message: error.message, codigo: error.codigo });
   }
 };
 

@@ -65,9 +65,14 @@ conTransaccionDePrueba(async ({ realQuery, uno, transaccion, llamar, ok, user, u
     (await realQuery(INS, [caja.CajaId, fecha, tipo, grupoId, det, monto, usuario])).rows[0];
 
   // ── Turno de "ayer" (cerrado) con un movimiento de cada origen ──
-  const AYER = "2026-10-20T10:00";
+  // Días de "ayer" y "hoy" en Paraguay, relativos a hoy (el cajero sólo puede
+  // cargar en cierres de los últimos días)
+  const diaPY = (d) => d.toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
+  const diaHoy = diaPY(new Date());
+  const diaAyer = diaPY(new Date(Date.now() - 24 * 3600 * 1000));
+  const AYER = `${diaAyer}T10:00`;
   const importe = Number(alumno.ColegioCursoImporte);
-  await ins(new Date("2026-10-20T11:00:00Z"), 2, 2, "APERTURA prueba", 1000000);
+  await ins(new Date(`${diaAyer}T11:00:00Z`), 2, 2, "APERTURA prueba", 1000000);
   const x = await ins(AYER, 2, grupo.TipoGastoGrupoId, "cargado de menos", 100000);
   const y = await ins(AYER, 2, grupo.TipoGastoGrupoId, "duplicado", 30000);
   const cob = await uno(
@@ -95,11 +100,11 @@ conTransaccionDePrueba(async ({ realQuery, uno, transaccion, llamar, ok, user, u
   // efectivo salió igual, así que el arqueo de ese turno lo cuenta
   const w = await tabs.western({ cajaId: caja.CajaId, fecha: AYER, tipo: 1, grupo: westernUSD, monto: 700000 });
   const contado = 1000000 + 150000 + importe + 50000 + 70000 - 700000;
-  const c1 = await ins(new Date("2026-10-20T22:00:00Z"), 1, 2, "CIERRE prueba", contado);
+  const c1 = await ins(new Date(`${diaAyer}T22:00:00Z`), 1, 2, "CIERRE prueba", contado);
   await CierreDiferencia.registrarParaCierre(transaccion, c1.RegistroDiarioCajaId);
   await realQuery(`UPDATE caja SET "CajaMonto" = $2 WHERE "CajaId" = $1`, [caja.CajaId, contado]);
   // ── Turno de "hoy" (abierto) ──
-  const aperturaHoy = await ins(new Date("2026-10-21T11:00:00Z"), 2, 2, "APERTURA prueba", contado);
+  const aperturaHoy = await ins(new Date(`${diaHoy}T11:00:00Z`), 2, 2, "APERTURA prueba", contado);
 
   const saldoCaja = async () =>
     Number((await uno(`SELECT "CajaMonto" FROM caja WHERE "CajaId" = $1`, [caja.CajaId])).CajaMonto);
@@ -301,6 +306,45 @@ conTransaccionDePrueba(async ({ realQuery, uno, transaccion, llamar, ok, user, u
   ok(r.status === 200 && !quedaCobro && !(await existe2(regJSI.RegistroDiarioCajaId)) && (await dif()) === d - 60000 && cajasIguales(s2, await saldos()),
     `eliminarlo desde Cobros JSI deja todo como antes: diferencia ${d} -> ${await dif()}`);
 
+  console.log("El cajero carga desde Cobranza / JSI con la fecha de ayer (pedido del cliente)");
+  r = await llamar(rdc.create, {
+    body: { CajaId: caja.CajaId, RegistroDiarioCajaFecha: AYER, TipoGastoId: 2, TipoGastoGrupoId: grupo.TipoGastoGrupoId, RegistroDiarioCajaMonto: 25000 },
+    user,
+  });
+  ok(r.status === 400 && r.body.codigo === "TURNO_CERRADO", "Cobranza con fecha de ayer: el alta normal avisa TURNO_CERRADO");
+  r = await llamar(jsic.create, { body: { CajaId: caja.CajaId, JSICobroFecha: AYER, ClienteId: cliente.ClienteId, JSICobroMonto: 33000 }, user });
+  ok(r.status === 400 && r.body.codigo === "TURNO_CERRADO", "JSI con fecha de ayer: el alta normal avisa TURNO_CERRADO");
+  const cargar = (body) => llamar(rdc.cargarEnCierreAnterior, { body: { CajaId: caja.CajaId, Fecha: AYER, ...body }, user });
+  r = await cargar({ TipoGastoId: 2, TipoGastoGrupoId: grupo.TipoGastoGrupoId, RegistroDiarioCajaMonto: 25000 });
+  ok(r.status === 400 && /motivo/i.test(r.body.message), "sin motivo: 400");
+  r = await cargar({ Fecha: `${diaHoy}T12:00`, TipoGastoId: 2, TipoGastoGrupoId: grupo.TipoGastoGrupoId, RegistroDiarioCajaMonto: 25000, Motivo: "x" });
+  ok(r.status === 400 && /turno en curso/.test(r.body.message), "con fecha de hoy: 400 (va por el alta normal)");
+  const haceDiezDias = new Date(Date.now() - 10 * 24 * 3600 * 1000).toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
+  r = await cargar({ Fecha: `${haceDiezDias}T10:00`, TipoGastoId: 2, TipoGastoGrupoId: grupo.TipoGastoGrupoId, RegistroDiarioCajaMonto: 25000, Motivo: "x" });
+  ok(r.status === 400 && /supervisor/.test(r.body.message), "hace 10 días: 400 (lo agrega un supervisor)");
+  const otraCaja = await uno(`SELECT "CajaId" FROM caja WHERE "CajaTipoId" = 1 AND "CajaId" <> $1 LIMIT 1`, [caja.CajaId]);
+  r = await llamar(rdc.cargarEnCierreAnterior, { body: { CajaId: otraCaja.CajaId, Fecha: AYER, TipoGastoId: 2, TipoGastoGrupoId: grupo.TipoGastoGrupoId, RegistroDiarioCajaMonto: 25000, Motivo: "x" }, user });
+  ok(r.status === 400 && /abierta esa caja/.test(r.body.message), "en una caja que el usuario no tiene abierta: 400");
+
+  const s3 = await saldos();
+  d = await dif();
+  r = await cargar({ TipoGastoId: 2, TipoGastoGrupoId: grupo.TipoGastoGrupoId, RegistroDiarioCajaMonto: 25000,
+    RegistroDiarioCajaDetalle: "cobranza de ayer", RegistroDiarioCajaMTCN: 123, Motivo: "se olvidó cargar ayer" });
+  const cobranzaAyer = r.body?.data?.registro;
+  ok(r.status === 201 && cobranzaAyer.RegistroDiarioCajaCierreId === c1.RegistroDiarioCajaId && Number(cobranzaAyer.RegistroDiarioCajaMTCN) === 123 &&
+    (await dif()) === d + 25000, `Cobranza cargada en el cierre de ayer: diferencia ${d} -> ${await dif()} — ${r.body.message}`);
+  ok((await saldos()).get(caja.CajaId) === s3.get(caja.CajaId) && (await teoricoHoy()) === teoricoAntes,
+    "la caja del cajero y el turno de hoy no cambian");
+  d = await dif();
+  r = await cargar({ Origen: "JSI", ClienteId: cliente.ClienteId, CodigoJSI: "999", RegistroDiarioCajaMonto: 33000, Motivo: "faltó el cobro de ayer" });
+  const jsiAyer = r.body?.data?.registro;
+  const idCobroAyer = Number(/JSICobroId:(\d+)/.exec(jsiAyer?.RegistroDiarioCajaDetalle || "")?.[1]);
+  ok(r.status === 201 && jsiAyer.RegistroDiarioCajaCierreId === c1.RegistroDiarioCajaId && idCobroAyer > 0 && (await dif()) === d + 33000,
+    `Cobro de JSI cargado en el cierre de ayer (crea el cobro): diferencia ${d} -> ${await dif()}`);
+  const auditoriaCajero = await uno(
+    `SELECT COUNT(*)::int AS n FROM registrocorreccion WHERE "RegistroCorreccionMotivo" LIKE 'Cargado por el cajero:%'`);
+  ok(auditoriaCajero.n === 2, "queda auditado como cargado por el cajero");
+
   ok((await saldoCaja()) === saldoHoy, "la caja del turno de hoy no cambió en ningún paso");
 
   console.log("Atomicidad: una eliminación que falla en el último paso no deja nada a medias");
@@ -311,7 +355,7 @@ conTransaccionDePrueba(async ({ realQuery, uno, transaccion, llamar, ok, user, u
   console.log("Diferencias de Cierre: auditoría");
   const det = await llamar(cdc.getDetalle, { params: { id: c1.RegistroDiarioCajaId }, user });
   const tipos = det.body.correcciones.map((c) => c.Tipo);
-  ok(tipos.length === 17, `17 correcciones auditadas (${tipos.join(", ")})`);
+  ok(tipos.length === 19, `19 correcciones auditadas (${tipos.join(", ")})`);
   ok(det.body.correcciones.some((c) => c.Motivo === "se cargó dos veces"), "el motivo de la eliminación quedó auditado");
   ok(det.body.correcciones.every((c) => c.DiferenciaAnterior !== null && c.DiferenciaNueva !== null), "cada una guarda la diferencia antes/después");
 });

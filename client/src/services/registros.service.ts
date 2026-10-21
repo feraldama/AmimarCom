@@ -128,6 +128,21 @@ export const createPaseCaja = async (paseData: {
   }
 };
 
+// Carga desde una pestaña de caja un movimiento de un día cuyo turno ya se
+// cerró: queda en el cierre de ese día y el backend mueve las cajas (ver
+// utils/cierreAnterior.ts). Rechaza con { message }.
+export const cargarEnCierreAnterior = async (datos: Record<string, unknown>) => {
+  try {
+    const response = await api.post("/registrodiariocaja/en-cierre-anterior", datos);
+    return response.data;
+  } catch (error) {
+    const axiosError = error as AxiosError<{ message?: string }>;
+    throw (
+      axiosError.response?.data || { message: "Error al cargar en el cierre anterior" }
+    );
+  }
+};
+
 // Corrige el monto/detalle de un movimiento conservando su turno. Si es de un
 // turno ya cerrado, el backend recalcula la diferencia de ese cierre y no toca
 // la caja del turno en curso. El motivo es obligatorio y queda auditado.

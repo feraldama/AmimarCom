@@ -19,6 +19,7 @@ import {
 import ClienteModal from "../../../components/common/ClienteModal";
 import Swal from "sweetalert2";
 import { formatMiles } from "../../../utils/utils";
+import { esTurnoCerrado, ofrecerCargaEnCierreAnterior } from "../../../utils/cierreAnterior";
 
 interface Caja {
   id: string | number;
@@ -250,7 +251,24 @@ export default function JuntaSaneamientoTab() {
       };
 
       // Crear el cobro de JSI primero para obtener su ID
-      const jsicobroResponse = await createJSICobro(jsicobroData);
+      let jsicobroResponse;
+      try {
+        jsicobroResponse = await createJSICobro(jsicobroData);
+      } catch (err) {
+        // Fecha de un turno ya cerrado: se ofrece cargarlo en el cierre de ese
+        // día (el backend crea el cobro y su registro y mueve las cajas)
+        if (!esTurnoCerrado(err)) throw err;
+        const cargado = await ofrecerCargaEnCierreAnterior({
+          Origen: "JSI",
+          CajaId: cajaAperturadaId,
+          Fecha: jsicobroFecha,
+          ClienteId: clienteSeleccionado ? Number(clienteSeleccionado.ClienteId) : undefined,
+          CodigoJSI: codigoJSI,
+          RegistroDiarioCajaMonto: Number(monto),
+        });
+        if (cargado) resetForm();
+        return;
+      }
 
       // Obtener el ID del cobro creado
       const jsicobroId =

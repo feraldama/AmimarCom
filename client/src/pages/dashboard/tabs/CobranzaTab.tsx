@@ -9,6 +9,7 @@ import { getTiposGastoGrupo } from "../../../services/tipogastogrupo.service";
 import { getCajaGastosByTipoGastoAndGrupo, getCajaGastosByCajaId } from "../../../services/cajagasto.service";
 import Swal from "sweetalert2";
 import { formatMiles } from "../../../utils/utils";
+import { esTurnoCerrado, ofrecerCargaEnCierreAnterior } from "../../../utils/cierreAnterior";
 
 interface Caja {
   id: string | number;
@@ -193,7 +194,7 @@ export default function CobranzaTab() {
       );
 
       // Crear el registro diario de caja
-      await createRegistroDiarioCaja({
+      const datosRegistro = {
         CajaId: cajaId,
         RegistroDiarioCajaFecha: fecha,
         TipoGastoId: tipoGastoId,
@@ -204,7 +205,21 @@ export default function CobranzaTab() {
         RegistroDiarioCajaCambio: cambioDolar || 0,
         RegistroDiarioCajaMTCN: mtcn || 0,
         RegistroDiarioCajaCargoEnvio: cargoEnvio || 0,
-      });
+      };
+      try {
+        await createRegistroDiarioCaja(datosRegistro);
+      } catch (err) {
+        // Fecha de un turno ya cerrado: se ofrece cargarlo en el cierre de ese
+        // día (el backend mueve las cajas, acá no se toca ningún saldo)
+        if (!esTurnoCerrado(err)) throw err;
+        const cargado = await ofrecerCargaEnCierreAnterior({
+          ...datosRegistro,
+          Origen: "MOVIMIENTO",
+          Fecha: fecha,
+        });
+        if (cargado) handleCancel();
+        return;
+      }
 
       // Obtener IDs únicos de todas las cajas que tienen el gasto asignado
       const cajasIdsConGasto = new Set<number>();

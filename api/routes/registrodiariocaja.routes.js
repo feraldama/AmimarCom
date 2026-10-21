@@ -77,6 +77,13 @@ router.post(
   verificarPermiso(["OPERARCAJA", "REGISTRODIARIOCAJA"], "crear"),
   registroDiarioCajaController.create
 );
+// Cargar desde Cobranza / JSI un movimiento de un día cuyo turno ya se cerró
+router.post(
+  "/en-cierre-anterior",
+  authMiddleware,
+  verificarPermiso("OPERARCAJA", "crear"),
+  registroDiarioCajaController.cargarEnCierreAnterior
+);
 router.post(
   "/pase",
   authMiddleware,

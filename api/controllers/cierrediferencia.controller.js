@@ -1,8 +1,5 @@
 const CierreDiferencia = require("../models/cierrediferencia.model");
-const RegistroDiarioCaja = require("../models/registrodiariocaja.model");
-const RegistroCorreccion = require("../models/registrocorreccion.model");
-const JSICobro = require("../models/jsicobro.model");
-const { esGrupoWestern, revertirAperturadaYDemas } = require("../utils/ajusteCajas");
+const { validarAlta, agregarEnCierre, errorConStatus } = require("../utils/altaEnCierre");
 const db = require("../config/db");
 
 const TIPOS = ["con", "faltante", "sobrante"];
@@ -72,12 +69,9 @@ exports.updateRevision = async (req, res) => {
 };
 
 // Agregar a un cierre anterior un movimiento que faltó cargar (ej. una
-// cobranza que se eliminó y había que volver a cargar). Queda asignado a ese
-// cierre: cuenta en su ticket y su diferencia, que se recalcula, y no en el
-// turno en curso (por eso no se puede cargar con fecha atrasada desde las
-// pestañas de caja). La caja del cajero no se toca, porque esa plata ya se
-// contó en el arqueo; las demás cajas del gasto se mueven como al crearlo
-// desde su pestaña. Exige motivo y queda auditado. Todo en una transacción.
+// cobranza que se eliminó y había que volver a cargar), desde Diferencias de
+// Cierre (supervisor). Ver utils/altaEnCierre.js: queda en ese turno, se
+// recalcula su diferencia, la caja del cajero no se toca y queda auditado.
 // Body:
 //   Origen: "MOVIMIENTO" (por defecto: Cobranza / Pago / carga manual) o
 //           "JSI" (cobro de la Junta de Saneamiento: crea también el cobro)
@@ -86,65 +80,19 @@ exports.updateRevision = async (req, res) => {
 //   JSI: ClienteId
 //   Ambos: RegistroDiarioCajaMonto, Motivo
 exports.agregarMovimiento = async (req, res) => {
-  const errorConStatus = (status, message) =>
-    Object.assign(new Error(message), { status });
   const client = await db.connect();
   try {
     const id = parseInt(req.params.id, 10);
     if (!Number.isInteger(id)) throw errorConStatus(400, "Id inválido");
-    const esJSI = req.body.Origen === "JSI";
-    const monto = Number(req.body.RegistroDiarioCajaMonto);
-    if (!Number.isFinite(monto) || monto <= 0) {
-      throw errorConStatus(400, "El monto debe ser un número mayor a cero");
-    }
-    const motivo = typeof req.body.Motivo === "string" ? req.body.Motivo.trim() : "";
-    if (!motivo) throw errorConStatus(400, "Indicá el motivo");
-
-    const grupoJSI = await JSICobro.getGrupoIngreso(client);
-    let tipo;
-    let grupoId;
-    let detalle;
-    let cliente = null;
-    if (esJSI) {
-      if (!grupoJSI) {
-        throw errorConStatus(400, "La caja J.S.I. no tiene un gasto de ingreso configurado.");
-      }
-      const clienteId = Number(req.body.ClienteId);
-      cliente = Number.isInteger(clienteId)
-        ? await JSICobro.getClienteParaDetalle(clienteId, client)
-        : null;
-      if (!cliente) throw errorConStatus(400, "Elegí el cliente del cobro de JSI");
-      tipo = 2;
-      grupoId = grupoJSI;
-    } else {
-      tipo = Number(req.body.TipoGastoId);
-      if (tipo !== 1 && tipo !== 2) throw errorConStatus(400, "Elegí ingreso o egreso");
-      grupoId = Number(req.body.TipoGastoGrupoId);
-      detalle =
-        (typeof req.body.RegistroDiarioCajaDetalle === "string" &&
-          req.body.RegistroDiarioCajaDetalle.trim()) ||
-        "Agregado al cierre";
-      const grupo = (
-        await client.query(
-          `SELECT TRIM("TipoGastoGrupoDescripcion") AS d FROM "tipogastogrupo"
-           WHERE "TipoGastoId" = $1 AND "TipoGastoGrupoId" = $2`,
-          [tipo, grupoId]
-        )
-      ).rows[0];
-      if (!grupo || grupoId === 2) throw errorConStatus(400, "Grupo de gasto inválido");
-      const descripcion = grupo.d.toUpperCase();
-      if (descripcion.startsWith("PASE ")) {
-        throw errorConStatus(400, "Los pases entre cajas no se agregan a un cierre anterior.");
-      }
-      if (esGrupoWestern(descripcion)) {
-        throw errorConStatus(400, "Los movimientos Western no se agregan desde acá.");
-      }
-      // Un cobro de JSI suelto (sin su registro en jsicobro) no aparecería en
-      // los reportes de JSI
-      if (tipo === 2 && grupoId === grupoJSI) {
-        throw errorConStatus(400, "Para un cobro de JSI elegí la opción \"Cobro de JSI\".");
-      }
-    }
+    const alta = await validarAlta(client, {
+      origen: req.body.Origen,
+      tipo: req.body.TipoGastoId,
+      grupoId: req.body.TipoGastoGrupoId,
+      detalle: req.body.RegistroDiarioCajaDetalle,
+      clienteId: req.body.ClienteId,
+      monto: req.body.RegistroDiarioCajaMonto,
+      motivo: req.body.Motivo,
+    });
 
     await client.query("BEGIN");
     const cierre = (
@@ -156,53 +104,15 @@ exports.agregarMovimiento = async (req, res) => {
       )
     ).rows[0];
     if (!cierre) throw errorConStatus(404, "Cierre no encontrado");
-
-    // Cobro de JSI: se crea el cobro (caja y fecha del cierre) y su registro
-    // de caja lleva el detalle de JuntaSaneamientoTab
-    if (esJSI) {
-      const cobro = await JSICobro.create(
-        {
-          CajaId: cierre.CajaId,
-          JSICobroFecha: cierre.RegistroDiarioCajaFecha,
-          ClienteId: cliente.ClienteId,
-          JSICobroMonto: monto,
-          JSICobroUsuarioId: req.user.id,
-        },
-        client
-      );
-      detalle = JSICobro.detalleRegistro(cliente, cobro.JSICobroId);
-    }
-
-    const registro = await RegistroDiarioCaja.crearEnCierreAnterior(client, {
+    const { registro, diferencia } = await agregarEnCierre(client, {
       cierre,
-      TipoGastoId: tipo,
-      TipoGastoGrupoId: grupoId,
-      Monto: monto,
-      Detalle: detalle,
-      UsuarioId: req.user.id,
-    });
-    // Aplicar el movimiento (revertir un monto negativo) en las demás cajas
-    // del gasto, sin tocar la caja del cajero. JSI usa la misma regla.
-    await revertirAperturadaYDemas(client, registro, -monto, true);
-    const diferencia = await CierreDiferencia.registrarParaCierre(
-      client,
-      id,
-      `Mov. #${registro.RegistroDiarioCajaId} agregado (${motivo})`
-    );
-    await RegistroCorreccion.registrar(client, {
-      tipo: "ALTA",
-      registro: { ...registro, RegistroDiarioCajaMonto: 0, RegistroDiarioCajaDetalle: null },
-      montoNuevo: monto,
-      detalleNuevo: detalle,
-      cierreId: id,
-      diferencia,
-      motivo: esJSI ? `Cobro de JSI: ${motivo}` : motivo,
+      alta,
       usuarioId: req.user.id,
     });
     await client.query("COMMIT");
 
     res.status(201).json({
-      message: esJSI
+      message: alta.esJSI
         ? "Cobro de JSI agregado al cierre: se creó el cobro, se recalculó la diferencia y el turno en curso no cambió."
         : "Movimiento agregado al cierre: se recalculó su diferencia y el turno en curso no cambió.",
       data: { registro, diferencia, detalle: await CierreDiferencia.getDetalle(id) },

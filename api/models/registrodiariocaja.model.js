@@ -689,7 +689,10 @@ const RegistroDiarioCaja = {
   // y cuenta en su ticket y su diferencia, no en el turno en curso. `cierre`
   // es la fila CIERRE. No toca saldos ni recalcula la diferencia (lo hace quien
   // llama, dentro de su transacción `q`).
-  crearEnCierreAnterior: async (q, { cierre, TipoGastoId, TipoGastoGrupoId, Monto, Detalle, UsuarioId }) => {
+  crearEnCierreAnterior: async (
+    q,
+    { cierre, TipoGastoId, TipoGastoGrupoId, Monto, Detalle, UsuarioId, Cambio = 0, MTCN = 0, CargoEnvio = 0 }
+  ) => {
     const result = await q.query(
       `INSERT INTO "registrodiariocaja" (
          "CajaId", "RegistroDiarioCajaFecha", "TipoGastoId", "TipoGastoGrupoId",
@@ -697,20 +700,39 @@ const RegistroDiarioCaja = {
          "RegistroDiarioCajaCargoEnvio", "RegistroDiarioCajaMonto", "RegistroDiarioCajaPendiente1",
          "RegistroDiarioCajaPendiente2", "RegistroDiarioCajaPendiente3", "RegistroDiarioCajaPendiente4",
          "UsuarioId", "RegistroDiarioCajaCierreId"
-       ) VALUES ($1, $2, $3, $4, 0, $5, 0, 0, $6, 0, 0, 0, 0, $7, $8)
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 0, 0, 0, 0, $10, $11)
        RETURNING *`,
       [
         cierre.CajaId,
         cierre.RegistroDiarioCajaFecha,
         TipoGastoId,
         TipoGastoGrupoId,
+        Cambio,
         Detalle,
+        MTCN,
+        CargoEnvio,
         Monto,
         UsuarioId,
         cierre.RegistroDiarioCajaId,
       ]
     );
     return result.rows[0];
+  },
+
+  // Último cierre de la caja en el día (de Paraguay) de `fecha`, para cargar en
+  // él un movimiento que faltó. Sólo mira los últimos `dias` días. Devuelve la
+  // fila CIERRE o null.
+  getCierreDelDia: async (cajaId, fecha, { dias = 7 } = {}, q = db) => {
+    const dia = diaParaguay(fecha);
+    if (!dia) return null;
+    const result = await q.query(
+      `SELECT * FROM "registrodiariocaja"
+       WHERE "CajaId" = $1 AND "TipoGastoId" = ${EGRESO} AND "TipoGastoGrupoId" = ${GRUPO_TURNO}
+         AND "RegistroDiarioCajaFecha" >= now() - ($2::int + 1) * interval '1 day'
+       ORDER BY "RegistroDiarioCajaId" DESC`,
+      [cajaId, dias]
+    );
+    return result.rows.find((c) => diaParaguay(c.RegistroDiarioCajaFecha) === dia) || null;
   },
 
   // Rechaza (Error con status 400) un movimiento fechado antes del día en que
@@ -731,12 +753,14 @@ const RegistroDiarioCaja = {
     const diaApertura = diaParaguay(apertura.RegistroDiarioCajaFecha);
     if (diaMovimiento && diaApertura && diaMovimiento < diaApertura) {
       const formato = (dia) => dia.split("-").reverse().join("/");
+      // codigo TURNO_CERRADO: las pestañas de Cobranza y JSI ofrecen cargarlo
+      // en el cierre de ese día (POST /registrodiariocaja/en-cierre-anterior)
       throw Object.assign(
         new Error(
           `La fecha ${formato(diaMovimiento)} es anterior a la apertura del turno en curso de la caja (${formato(diaApertura)}). ` +
-            "No se carga con fecha atrasada porque caería en el turno de hoy. Si es un movimiento que faltó en un cierre anterior, un supervisor lo agrega desde Diferencias de Cierre (Agregar movimiento faltante); si está mal cargado, se corrige o elimina desde su pantalla."
+            "No se carga con fecha atrasada porque caería en el turno de hoy. Si es un movimiento que faltó en un cierre anterior, desde Cobranza o JSI se puede cargar en ese cierre; en otros casos, un supervisor lo agrega desde Diferencias de Cierre. Si está mal cargado, se corrige o elimina desde su pantalla."
         ),
-        { status: 400 }
+        { status: 400, codigo: "TURNO_CERRADO", dia: diaMovimiento }
       );
     }
   },

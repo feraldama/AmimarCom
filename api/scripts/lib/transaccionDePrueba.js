@@ -84,7 +84,21 @@ const conTransaccionDePrueba = async (prueba) => {
        WHERE table_name = 'registrodiariocaja' AND column_name = 'RegistroDiarioCajaCierreId'`
     );
     if (!conCierreAsignado) await migrar("2026-10-22_registro_cierre_asignado.sql");
-    const usuario = (await uno(`SELECT "UsuarioId" FROM usuario LIMIT 1`)).UsuarioId;
+    // Usuario sin cajas abiertas: las pruebas le abren una (los endpoints de
+    // caja buscan "la caja abierta del usuario")
+    const usuario = (
+      await uno(
+        `SELECT u."UsuarioId" FROM usuario u
+         WHERE NOT EXISTS (
+           SELECT 1 FROM registrodiariocaja a
+           WHERE a."UsuarioId" = u."UsuarioId" AND a."TipoGastoId" = 2 AND a."TipoGastoGrupoId" = 2
+             AND NOT EXISTS (
+               SELECT 1 FROM registrodiariocaja c
+               WHERE c."CajaId" = a."CajaId" AND c."TipoGastoId" = 1 AND c."TipoGastoGrupoId" = 2
+                 AND c."RegistroDiarioCajaId" > a."RegistroDiarioCajaId"))
+         ORDER BY u."UsuarioId" LIMIT 1`
+      )
+    ).UsuarioId;
     const user = { id: usuario, isAdmin: "S" };
     await prueba({ realQuery, uno, transaccion, llamar, ok, user, usuario });
   } catch (e) {

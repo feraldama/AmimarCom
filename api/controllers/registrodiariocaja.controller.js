@@ -1,6 +1,7 @@
 const RegistroDiarioCaja = require("../models/registrodiariocaja.model");
 const { revertirMovimiento } = require("../utils/ajusteCajas");
 const { aplicarEnTurno, motivoEliminacion } = require("../utils/correccionTurno");
+const { validarAlta, agregarEnCierre, errorConStatus } = require("../utils/altaEnCierre");
 const db = require("../config/db");
 const { parseCajaIds } = require("../utils/reportes");
 
@@ -183,7 +184,109 @@ exports.create = async (req, res) => {
       data: registro,
     });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    // codigo TURNO_CERRADO: la pestaña ofrece cargarlo en ese cierre
+    res.status(400).json({ message: error.message, codigo: error.codigo });
+  }
+};
+
+// Cuántos días hacia atrás puede cargar el cajero en un cierre anterior
+// (más atrás, lo agrega un supervisor desde Diferencias de Cierre)
+const DIAS_CIERRE_ANTERIOR = 7;
+
+// Cargar desde las pestañas de caja (Cobranza, JSI) un movimiento de un día
+// cuyo turno ya se cerró: cuando el alta normal se rechaza por fecha
+// (codigo TURNO_CERRADO), la pestaña pide un motivo y llama acá. Queda en el
+// cierre de ese día de la caja (ver utils/altaEnCierre.js): se recalcula su
+// diferencia, la caja del cajero no se toca y el turno en curso no cambia.
+// Las cajas las mueve el servidor (la pestaña no actualiza saldos).
+// Body: CajaId (la que el usuario tiene abierta), Fecha, Motivo,
+//   RegistroDiarioCajaMonto y, según Origen:
+//   "MOVIMIENTO" (Cobranza): TipoGastoId, TipoGastoGrupoId,
+//     RegistroDiarioCajaDetalle, RegistroDiarioCajaCambio, RegistroDiarioCajaMTCN,
+//     RegistroDiarioCajaCargoEnvio
+//   "JSI": ClienteId y CodigoJSI (si el cliente no tiene código)
+exports.cargarEnCierreAnterior = async (req, res) => {
+  const client = await db.connect();
+  try {
+    const cajaId = Number(req.body.CajaId);
+    const estado = await RegistroDiarioCaja.getEstadoAperturaPorUsuario(req.user.id);
+    if (
+      !Number.isInteger(cajaId) ||
+      Number(estado.cajaId) !== cajaId ||
+      !(estado.aperturaId > estado.cierreId)
+    ) {
+      throw errorConStatus(400, "Para cargar en un cierre anterior tenés que tener abierta esa caja.");
+    }
+    // Tiene que ser una fecha anterior al turno en curso (si no, va normal)
+    let dia;
+    try {
+      await RegistroDiarioCaja.validarFechaEnTurno(cajaId, req.body.Fecha);
+    } catch (error) {
+      if (error.codigo !== "TURNO_CERRADO") throw error;
+      dia = error.dia;
+    }
+    if (!dia) {
+      throw errorConStatus(400, "La fecha es del turno en curso: cargalo normalmente.");
+    }
+    const diaTexto = dia.split("-").reverse().join("/");
+
+    const alta = await validarAlta(client, {
+      origen: req.body.Origen,
+      tipo: req.body.TipoGastoId,
+      grupoId: req.body.TipoGastoGrupoId,
+      detalle: req.body.RegistroDiarioCajaDetalle,
+      cambio: req.body.RegistroDiarioCajaCambio,
+      mtcn: req.body.RegistroDiarioCajaMTCN,
+      cargo: req.body.RegistroDiarioCajaCargoEnvio,
+      clienteId: req.body.ClienteId,
+      codigoJSI: req.body.CodigoJSI,
+      monto: req.body.RegistroDiarioCajaMonto,
+      motivo: req.body.Motivo,
+    });
+    const encontrado = await RegistroDiarioCaja.getCierreDelDia(
+      cajaId,
+      dia,
+      { dias: DIAS_CIERRE_ANTERIOR },
+      client
+    );
+    if (!encontrado) {
+      throw errorConStatus(
+        400,
+        `No hay un cierre de esta caja el ${diaTexto} en los últimos ${DIAS_CIERRE_ANTERIOR} días. Si corresponde, un supervisor lo agrega desde Diferencias de Cierre.`
+      );
+    }
+
+    await client.query("BEGIN");
+    const cierre = (
+      await client.query(
+        `SELECT * FROM "registrodiariocaja" WHERE "RegistroDiarioCajaId" = $1 FOR UPDATE`,
+        [encontrado.RegistroDiarioCajaId]
+      )
+    ).rows[0];
+    const { registro, diferencia } = await agregarEnCierre(client, {
+      cierre,
+      alta,
+      usuarioId: req.user.id,
+      prefijoMotivo: "Cargado por el cajero: ",
+    });
+    await client.query("COMMIT");
+
+    const hora = new Date(cierre.RegistroDiarioCajaFecha).toLocaleTimeString("es-PY", {
+      timeZone: "America/Asuncion",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+    res.status(201).json({
+      message: `Cargado en el cierre del ${diaTexto} (${hora}): se recalculó la diferencia de ese cierre y el turno de hoy no cambia.`,
+      data: { registro, diferencia, cierreId: cierre.RegistroDiarioCajaId },
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    if (!error.status) console.error("Error al cargar en un cierre anterior:", error);
+    res.status(error.status || 500).json({ message: error.message });
+  } finally {
+    client.release();
   }
 };
 
