@@ -5,7 +5,7 @@ import {
   deleteRegistroDiarioCaja,
   searchRegistrosDiariosCaja,
   createRegistroDiarioCaja,
-  updateRegistroDiarioCaja,
+  corregirRegistroDiarioCaja,
 } from "../../services/registros.service";
 import MovementsList, {
   type Movimiento,
@@ -17,6 +17,7 @@ import { getCajas } from "../../services/cajas.service";
 import { getTiposGasto } from "../../services/tipogasto.service";
 import { getAllTipoGastoGrupo } from "../../services/tipogastogrupo.service";
 import Swal from "sweetalert2";
+import { confirmarEliminacionConMotivo } from "../../utils/confirmarEliminacion";
 import { usePermiso } from "../../hooks/usePermiso";
 
 interface CajaOption {
@@ -201,35 +202,27 @@ export default function MovementsPage() {
   );
 
   const handleDelete = async (movimiento: Movimiento) => {
-    Swal.fire({
-      title: "¿Estás seguro?",
-      text: "¡No podrás revertir esto!",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#0d9488",
-      cancelButtonColor: "#d33",
-      confirmButtonText: "Sí, eliminar!",
-      cancelButtonText: "Cancelar",
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        try {
-          await deleteRegistroDiarioCaja(movimiento.RegistroDiarioCajaId);
-          Swal.fire({
-            icon: "success",
-            title: "Registro eliminado exitosamente",
-          });
-          fetchMovimientos();
-        } catch (error: unknown) {
-          const err = error as { message?: string };
-          const msg = err?.message || "No se pudo eliminar el registro";
-          Swal.fire({
-            icon: "warning",
-            title: "No permitido",
-            text: msg,
-          });
-        }
-      }
-    });
+    const motivo = await confirmarEliminacionConMotivo();
+    if (motivo === null) return;
+    try {
+      const response = await deleteRegistroDiarioCaja(
+        movimiento.RegistroDiarioCajaId,
+        motivo
+      );
+      Swal.fire({
+        icon: "success",
+        title: response?.message || "Registro eliminado exitosamente",
+      });
+      fetchMovimientos();
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      const msg = err?.message || "No se pudo eliminar el registro";
+      Swal.fire({
+        icon: "warning",
+        title: "No permitido",
+        text: msg,
+      });
+    }
   };
 
   const handleCreate = () => {
@@ -244,17 +237,36 @@ export default function MovementsPage() {
 
   const handleSubmit = async (movementData: Movimiento) => {
     let mensaje = "";
-    try {
-      if (currentMovement) {
-        await updateRegistroDiarioCaja(
+    if (currentMovement) {
+      try {
+        const response = await corregirRegistroDiarioCaja(
           currentMovement.RegistroDiarioCajaId,
-          movementData
+          {
+            RegistroDiarioCajaMonto: Number(movementData.RegistroDiarioCajaMonto),
+            RegistroDiarioCajaDetalle: movementData.RegistroDiarioCajaDetalle,
+            Motivo: String(movementData.Motivo ?? ""),
+          }
         );
-        mensaje = "Registro actualizado exitosamente";
-      } else {
-        const response = await createRegistroDiarioCaja(movementData);
-        mensaje = response.message || "Registro creado exitosamente";
+        setIsModalOpen(false);
+        Swal.fire({
+          icon: "success",
+          title: "Movimiento corregido",
+          text: response?.message,
+        });
+        fetchMovimientos();
+      } catch (error: unknown) {
+        const err = error as { message?: string };
+        Swal.fire({
+          icon: "warning",
+          title: "No se pudo corregir",
+          text: err?.message || "No se pudo corregir el movimiento",
+        });
       }
+      return;
+    }
+    try {
+      const response = await createRegistroDiarioCaja(movementData);
+      mensaje = response.message || "Registro creado exitosamente";
 
       setIsModalOpen(false);
       Swal.fire({
@@ -363,7 +375,6 @@ export default function MovementsPage() {
           setSortOrder(order);
           setCurrentPage(1);
         }}
-        disableEdit={true}
       />
       <Pagination
         currentPage={currentPage}

@@ -425,7 +425,7 @@ export default function WesternPagosTab() {
       setFechaPagos(`${yyyy}-${mm}-${dd}T${hh}:${min}`);
     } catch (err: unknown) {
       const errorMsg =
-        err instanceof Error ? err.message : "No se pudo registrar el pago";
+        (err as { message?: string })?.message || "No se pudo registrar el pago";
       Swal.fire("Error", errorMsg, "error");
     } finally {
       setIsSubmittingPagos(false);
@@ -610,7 +610,7 @@ export default function WesternPagosTab() {
       setFechaEnvios(`${yyyy}-${mm}-${dd}T${hh}:${min}`);
     } catch (err: unknown) {
       const errorMsg =
-        err instanceof Error ? err.message : "No se pudo registrar el envío";
+        (err as { message?: string })?.message || "No se pudo registrar el envío";
       Swal.fire("Error", errorMsg, "error");
     } finally {
       setIsSubmittingEnvios(false);

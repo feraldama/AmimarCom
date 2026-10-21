@@ -1,4 +1,5 @@
 import { Plus } from "lucide-react";
+import { useEffect, useState } from "react";
 import SearchButton from "../common/Input/SearchButton";
 import ActionButton from "../common/Button/ActionButton";
 import DataTable from "../common/Table/DataTable";
@@ -20,6 +21,8 @@ export interface Movimiento {
   RegistroDiarioCajaMTCN: string;
   RegistroDiarioCajaCargoEnvio: number;
   RegistroDiarioCajaCambio: number;
+  // Por qué no se puede corregir (null si se puede); lo calcula el backend
+  MotivoNoCorregible?: string | null;
   [key: string]: unknown;
 }
 
@@ -60,6 +63,19 @@ export default function MovementsList({
   onSubmit,
   disableEdit,
 }: MovementsListProps) {
+  // Corrección: sólo monto y detalle (el movimiento conserva caja, tipo y turno)
+  const [monto, setMonto] = useState("");
+  const [detalle, setDetalle] = useState("");
+  const [motivo, setMotivo] = useState("");
+
+  useEffect(() => {
+    setMonto(
+      currentMovement ? String(Number(currentMovement.RegistroDiarioCajaMonto)) : ""
+    );
+    setDetalle(currentMovement?.RegistroDiarioCajaDetalle || "");
+    setMotivo("");
+  }, [currentMovement]);
+
   // Formatear fecha
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -142,7 +158,12 @@ export default function MovementsList({
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (currentMovement) {
-      onSubmit(currentMovement);
+      onSubmit({
+        ...currentMovement,
+        RegistroDiarioCajaMonto: Number(monto),
+        RegistroDiarioCajaDetalle: detalle,
+        Motivo: motivo,
+      });
     }
   };
 
@@ -173,6 +194,7 @@ export default function MovementsList({
         columns={columns}
         data={movimientos}
         onEdit={disableEdit ? undefined : onEdit}
+        editDisabledReason={(m) => m.MotivoNoCorregible}
         onDelete={onDelete}
         emptyMessage="No se encontraron registros"
         sortKey={sortKey}
@@ -184,13 +206,13 @@ export default function MovementsList({
         isOpen={!!isModalOpen}
         onClose={onCloseModal}
         title={
-          currentMovement ? "Editar movimiento" : "Crear nuevo movimiento"
+          currentMovement ? "Corregir movimiento" : "Crear nuevo movimiento"
         }
         size="2xl"
         footer={
           <>
             <ActionButton
-              label={currentMovement ? "Actualizar" : "Crear"}
+              label={currentMovement ? "Corregir" : "Crear"}
               type="submit"
               form={formId}
             />
@@ -202,7 +224,86 @@ export default function MovementsList({
           </>
         }
       >
-        <form id={formId} onSubmit={handleSubmit} className="space-y-6" />
+        <form id={formId} onSubmit={handleSubmit} className="space-y-6">
+          {currentMovement && (
+            <>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                <div>
+                  <span className="text-gray-500">Caja: </span>
+                  {currentMovement.CajaDescripcion}
+                </div>
+                <div>
+                  <span className="text-gray-500">Fecha: </span>
+                  {formatDate(currentMovement.RegistroDiarioCajaFecha)}
+                </div>
+                <div>
+                  <span className="text-gray-500">Tipo: </span>
+                  {currentMovement.TipoGastoDescripcion}
+                </div>
+                <div>
+                  <span className="text-gray-500">Grupo: </span>
+                  {currentMovement.TipoGastoGrupoDescripcion}
+                </div>
+              </div>
+              <p className="text-sm text-gray-600">
+                El movimiento conserva su turno. Si es de un cierre anterior, se
+                recalcula la diferencia de ese cierre y la caja del turno en
+                curso no cambia.
+              </p>
+              <div>
+                <label
+                  htmlFor="RegistroDiarioCajaMonto"
+                  className="block mb-2 text-sm font-medium text-gray-900"
+                >
+                  Monto
+                </label>
+                <input
+                  type="number"
+                  id="RegistroDiarioCajaMonto"
+                  value={monto}
+                  onChange={(e) => setMonto(e.target.value)}
+                  min="0"
+                  step="any"
+                  required
+                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="RegistroDiarioCajaDetalle"
+                  className="block mb-2 text-sm font-medium text-gray-900"
+                >
+                  Descripción
+                </label>
+                <input
+                  type="text"
+                  id="RegistroDiarioCajaDetalle"
+                  value={detalle}
+                  onChange={(e) => setDetalle(e.target.value)}
+                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="MotivoCorreccion"
+                  className="block mb-2 text-sm font-medium text-gray-900"
+                >
+                  Motivo de la corrección
+                </label>
+                <textarea
+                  id="MotivoCorreccion"
+                  value={motivo}
+                  onChange={(e) => setMotivo(e.target.value)}
+                  maxLength={500}
+                  rows={2}
+                  required
+                  placeholder="Ej.: se cargó 100.000 y el cliente pagó 150.000"
+                  className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-ring focus:border-primary block w-full p-2.5"
+                />
+              </div>
+            </>
+          )}
+        </form>
       </Modal>
     </>
   );

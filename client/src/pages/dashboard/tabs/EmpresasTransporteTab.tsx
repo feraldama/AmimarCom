@@ -280,9 +280,8 @@ export default function EmpresasTransporteTab() {
       resetForm();
     } catch (err: unknown) {
       const errorMsg =
-        err instanceof Error
-          ? err.message
-          : "No se pudo registrar el pago de transporte";
+        (err as { message?: string })?.message ||
+          "No se pudo registrar el pago de transporte";
       Swal.fire("Error", errorMsg, "error");
     } finally {
       setIsSubmitting(false);

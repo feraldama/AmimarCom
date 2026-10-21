@@ -1,5 +1,6 @@
 const db = require("../config/db");
 const CierreDiferencia = require("./cierrediferencia.model");
+const { esRegistroPagoAdmin } = require("../utils/ajusteCajas");
 
 /**
  * Normaliza RegistroDiarioCajaFecha para que siempre incluya fecha y hora.
@@ -25,6 +26,20 @@ function normalizeRegistroFecha(value) {
   }
   const d = value instanceof Date ? value : new Date(value);
   return isNaN(d.getTime()) ? new Date() : d;
+}
+
+// Día (YYYY-MM-DD) de una fecha en Paraguay. Lo que llega del frontend
+// ("YYYY-MM-DD" o "YYYY-MM-DDTHH:mm") ya es hora de Paraguay y se toma tal cual;
+// un Date (lo que guarda el servidor, ej. la apertura) se pasa a la zona de
+// Paraguay para no depender del huso del servidor. Sin valor: hoy.
+function diaParaguay(value) {
+  const str = typeof value === "string" ? value.trim() : "";
+  if (/^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d+)?)?)?$/.test(str)) {
+    return str.slice(0, 10);
+  }
+  const d = !value ? new Date() : value instanceof Date ? value : new Date(value);
+  if (isNaN(d.getTime())) return null;
+  return d.toLocaleDateString("en-CA", { timeZone: "America/Asuncion" });
 }
 
 // Mapeo override para cajas cuyo grupo PASE no sigue la convención
@@ -64,6 +79,16 @@ function filtroCajasSql(params, cajaIds, columna) {
 const EGRESO = 1;
 const INGRESO = 2;
 const GRUPO_TURNO = 2;
+
+// Marcadores que dejan en el detalle los movimientos creados junto con otra
+// tabla, y dónde se corrigen
+const ORIGENES_VINCULADOS = [
+  ["ColegioCobranzaId:", "una cobranza de colegio: corregila desde Cobranzas de Colegios"],
+  ["JSICobroId:", "un cobro de la Junta de Saneamiento"],
+  ["PagoTransId:", "un pago de transporte"],
+  ["DivisaMovimientoId:", "un movimiento de divisas"],
+  ["PagoAdminId:", "un pago admin"],
+];
 
 const INSERT_REGISTRO_QUERY = `
   INSERT INTO "registrodiariocaja" (
@@ -536,58 +561,9 @@ const RegistroDiarioCaja = {
     }
   },
 
-  update: async (id, registroData) => {
-    // Construir la consulta dinamicamente
-    let updateFields = [];
-    let values = [];
-    let paramIndex = 1;
-
-    const camposActualizables = [
-      "CajaId",
-      "RegistroDiarioCajaFecha",
-      "TipoGastoId",
-      "TipoGastoGrupoId",
-      "RegistroDiarioCajaDetalle",
-      "RegistroDiarioCajaMonto",
-      "UsuarioId",
-    ];
-
-    camposActualizables.forEach((campo) => {
-      if (registroData[campo] !== undefined) {
-        updateFields.push(`"${campo}" = $${paramIndex++}`);
-        const valor =
-          campo === "RegistroDiarioCajaFecha"
-            ? normalizeRegistroFecha(registroData[campo])
-            : registroData[campo];
-        values.push(valor);
-      }
-    });
-
-    if (updateFields.length === 0) {
-      return null; // No hay campos para actualizar
-    }
-
-    values.push(id);
-
-    const query = `
-      UPDATE "registrodiariocaja"
-      SET ${updateFields.join(", ")}
-      WHERE "RegistroDiarioCajaId" = $${paramIndex}
-    `;
-
-    const result = await db.query(query, values);
-
-    if (result.rowCount === 0) {
-      return null; // No se encontro el registro
-    }
-
-    // Obtener el registro actualizado
-    const registro = await RegistroDiarioCaja.getById(id);
-    return registro;
-  },
-
-  delete: async (id) => {
-    const result = await db.query(
+  // `q` permite correr la consulta dentro de una transacción (client de pg)
+  delete: async (id, q = db) => {
+    const result = await q.query(
       'DELETE FROM "registrodiariocaja" WHERE "RegistroDiarioCajaId" = $1',
       [id]
     );
@@ -631,6 +607,77 @@ const RegistroDiarioCaja = {
       [cajaId]
     );
     return result.rows.length > 0 ? result.rows[0] : null;
+  },
+
+  // Por qué un movimiento no se puede corregir desde Registro Diario de Caja
+  // (null si se puede). `registro` tiene que traer TipoGastoGrupoDescripcion
+  // (el listado y la corrección la traen con el JOIN a tipogastogrupo). Los
+  // movimientos atados a otra tabla o a la contraparte de un pase no se
+  // corrigen acá: cambiar sólo el monto del registro los desincroniza.
+  motivoNoCorregible: (registro) => {
+    if (Number(registro.TipoGastoGrupoId) === GRUPO_TURNO) {
+      return "Las filas de apertura y cierre de turno no se corrigen.";
+    }
+    const detalle = registro.RegistroDiarioCajaDetalle || "";
+    const vinculo = ORIGENES_VINCULADOS.find(([marca]) => detalle.includes(marca));
+    if (vinculo) return `El movimiento pertenece a ${vinculo[1]}.`;
+    if (esRegistroPagoAdmin(registro)) return "El movimiento pertenece a un pago admin.";
+    const grupo = String(registro.TipoGastoGrupoDescripcion || "").trim().toUpperCase();
+    if (grupo.startsWith("PASE ")) {
+      return "Los pases entre cajas no se corrigen: eliminá el pase y volvé a registrarlo.";
+    }
+    if (grupo.includes("WESTERN")) {
+      return "Los movimientos Western están vinculados al envío/pago y no se corrigen desde acá.";
+    }
+    return null;
+  },
+
+  // Cierre del turno ya cerrado al que pertenece un movimiento: la primera
+  // fila de turno de su caja posterior al movimiento, si es un CIERRE (el turno
+  // se arma por rango de IDs, igual que el ticket y las diferencias). Devuelve
+  // null si el turno sigue abierto, si el movimiento quedó fuera de todo turno,
+  // si la caja no trabaja por turnos o si el registro es una fila de turno.
+  getCierreDeTurnoCerrado: async (registro, q = db) => {
+    if (Number(registro.TipoGastoGrupoId) === GRUPO_TURNO) return null;
+    const result = await q.query(
+      `SELECT "RegistroDiarioCajaId", "TipoGastoId" FROM "registrodiariocaja"
+       WHERE "CajaId" = $1 AND "TipoGastoGrupoId" = ${GRUPO_TURNO}
+         AND "RegistroDiarioCajaId" > $2
+       ORDER BY "RegistroDiarioCajaId" LIMIT 1`,
+      [registro.CajaId, registro.RegistroDiarioCajaId]
+    );
+    const siguiente = result.rows[0];
+    return siguiente && Number(siguiente.TipoGastoId) === EGRESO
+      ? Number(siguiente.RegistroDiarioCajaId)
+      : null;
+  },
+
+  // Rechaza (Error con status 400) un movimiento fechado antes del día en que
+  // se abrió el turno en curso de la caja. Le tocaría un ID dentro del turno
+  // abierto y lo descuadraría con plata que ya se contó en un cierre anterior.
+  // Un movimiento de un turno cerrado se corrige o se elimina (eso recalcula
+  // la diferencia de ese cierre), no se vuelve a cargar con fecha atrasada.
+  // No valida si la caja no tiene un turno abierto.
+  validarFechaEnTurno: async (cajaId, fecha) => {
+    if (!cajaId) return;
+    const apertura = await RegistroDiarioCaja.getUltimaApertura(cajaId);
+    if (!apertura) return;
+    const cierre = await RegistroDiarioCaja.getUltimoCierre(cajaId);
+    if (cierre && cierre.RegistroDiarioCajaId > apertura.RegistroDiarioCajaId) {
+      return;
+    }
+    const diaMovimiento = diaParaguay(fecha);
+    const diaApertura = diaParaguay(apertura.RegistroDiarioCajaFecha);
+    if (diaMovimiento && diaApertura && diaMovimiento < diaApertura) {
+      const formato = (dia) => dia.split("-").reverse().join("/");
+      throw Object.assign(
+        new Error(
+          `La fecha ${formato(diaMovimiento)} es anterior a la apertura del turno en curso de la caja (${formato(diaApertura)}). ` +
+            "Un movimiento de un cierre anterior no se vuelve a cargar con fecha atrasada: corregilo o eliminalo desde Registro Diario de Caja."
+        ),
+        { status: 400 }
+      );
+    }
   },
 
   // Apertura (apertura = 0) o cierre (apertura = 1) de turno, atómico: valida

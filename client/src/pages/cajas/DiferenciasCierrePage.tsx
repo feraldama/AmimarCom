@@ -1,4 +1,4 @@
-import { Scale, AlertTriangle, CheckCircle2, Search } from "lucide-react";
+import { Scale, AlertTriangle, CheckCircle2, Search, History } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import Swal from "sweetalert2";
 import CampoFecha from "@/components/common/CampoFecha";
@@ -64,6 +64,22 @@ function DiferenciaBadge({ monto }: { monto: number }) {
     </span>
   );
 }
+
+// La diferencia se recalculó porque se corrigieron/eliminaron movimientos del
+// turno después del cierre
+function BadgeCorrecciones({ cantidad }: { cantidad: number }) {
+  return (
+    <span
+      className="flex items-center gap-1 text-xs font-medium text-primary"
+      title="Se corrigieron o eliminaron movimientos de este turno después del cierre"
+    >
+      <History className="size-3.5" /> Recalculada ({cantidad})
+    </span>
+  );
+}
+
+const formatDif = (v: string | number | null) =>
+  v === null ? "—" : formatMiles(Number(v));
 
 export default function DiferenciasCierrePage() {
   const puedeLeer = usePermiso("CIERREDIFERENCIAS", "leer");
@@ -223,9 +239,16 @@ export default function DiferenciasCierrePage() {
       label: "Revisión",
       render: (r: Fila) =>
         Number(r.Diferencia) === 0 ? (
-          <span className="text-gray-400">—</span>
+          r.CantCorrecciones > 0 ? (
+            <BadgeCorrecciones cantidad={r.CantCorrecciones} />
+          ) : (
+            <span className="text-gray-400">—</span>
+          )
         ) : (
           <div className="max-w-56">
+            {r.CantCorrecciones > 0 && (
+              <BadgeCorrecciones cantidad={r.CantCorrecciones} />
+            )}
             {r.Revisado ? (
               <span className="inline-flex items-center gap-1 text-success-700 text-xs font-medium">
                 <CheckCircle2 className="size-3.5" /> Revisado
@@ -253,6 +276,7 @@ export default function DiferenciasCierrePage() {
 
   const abs = detalle ? Math.abs(Number(detalle.Diferencia)) : 0;
   const coincidenciasTurno = detalle?.movimientos.filter((m) => m.Coincidencia) ?? [];
+  const corregidos = new Set(detalle?.correcciones.map((c) => c.MovimientoId) ?? []);
   const textoCoincidencia = (c: "MISMO_MONTO" | "MITAD") =>
     c === "MISMO_MONTO"
       ? "Mismo monto que la diferencia: ¿cargado de más o dos veces?"
@@ -525,7 +549,14 @@ export default function DiferenciasCierrePage() {
                           {m.Tipo}
                         </td>
                         <td className="px-3 py-1.5">{m.Grupo}</td>
-                        <td className="px-3 py-1.5">{m.Detalle}</td>
+                        <td className="px-3 py-1.5">
+                          {m.Detalle}
+                          {corregidos.has(m.Id) && (
+                            <span className="ml-1.5 text-xs font-medium text-primary">
+                              (corregido)
+                            </span>
+                          )}
+                        </td>
                         <td className="px-3 py-1.5">{m.UsuarioId}</td>
                         <td className="px-3 py-1.5 text-right whitespace-nowrap">
                           {formatMiles(Number(m.Monto))}
@@ -536,6 +567,51 @@ export default function DiferenciasCierrePage() {
                 </table>
               </div>
             </div>
+
+            {detalle.correcciones.length > 0 && (
+              <div>
+                <p className="flex items-center gap-1.5 text-sm font-semibold text-gray-900 mb-2">
+                  <History className="size-4" /> Correcciones después del cierre (
+                  {detalle.correcciones.length})
+                </p>
+                <div className="rounded-lg border border-gray-200 overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50">
+                      <tr className="text-left text-xs font-semibold text-gray-500 uppercase">
+                        <th className="px-3 py-2">Fecha</th>
+                        <th className="px-3 py-2">Mov.</th>
+                        <th className="px-3 py-2">Cambio</th>
+                        <th className="px-3 py-2 text-right">Diferencia</th>
+                        <th className="px-3 py-2">Motivo</th>
+                        <th className="px-3 py-2">Usuario</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {detalle.correcciones.map((c) => (
+                        <tr key={c.Id}>
+                          <td className="px-3 py-1.5 whitespace-nowrap">
+                            {formatFechaHora(c.Fecha)}
+                          </td>
+                          <td className="px-3 py-1.5" title={c.DetalleAnterior || ""}>
+                            #{c.MovimientoId}
+                          </td>
+                          <td className="px-3 py-1.5 whitespace-nowrap">
+                            {c.Tipo === "ELIMINACION"
+                              ? `Eliminado (${formatMiles(Number(c.MontoAnterior))})`
+                              : `${formatMiles(Number(c.MontoAnterior))} → ${formatDif(c.MontoNuevo)}`}
+                          </td>
+                          <td className="px-3 py-1.5 text-right whitespace-nowrap">
+                            {formatDif(c.DiferenciaAnterior)} → {formatDif(c.DiferenciaNueva)}
+                          </td>
+                          <td className="px-3 py-1.5">{c.Motivo}</td>
+                          <td className="px-3 py-1.5">{c.UsuarioNombre || c.UsuarioId}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
 
             {abs > 0 && (
               <div className="border-t border-gray-200 pt-4 space-y-3">

@@ -1,8 +1,8 @@
 const JSICobro = require("../models/jsicobro.model");
 const { parseCajaIds } = require("../utils/reportes");
 const RegistroDiarioCaja = require("../models/registrodiariocaja.model");
-const CajaGasto = require("../models/cajagasto.model");
-const db = require("../config/db");
+const { revertirAperturadaYDemas } = require("../utils/ajusteCajas");
+const { crearHandlersCobroVinculado } = require("../utils/cobroVinculado");
 
 const CAJA_JSI_ID = 14;
 
@@ -85,6 +85,7 @@ exports.getById = async (req, res) => {
 // Crear un nuevo cobro
 exports.create = async (req, res) => {
   try {
+    await RegistroDiarioCaja.validarFechaEnTurno(req.body.CajaId, req.body.JSICobroFecha);
     const jsicobro = await JSICobro.create({
       ...req.body,
       JSICobroUsuarioId: req.user.id, // Asumiendo que tienes el usuario en req.user
@@ -98,158 +99,33 @@ exports.create = async (req, res) => {
   }
 };
 
-// Actualizar un cobro
-exports.update = async (req, res) => {
-  try {
-    const jsicobro = await JSICobro.update(req.params.id, req.body);
-    if (!jsicobro) {
-      return res.status(404).json({ message: "Cobro de JSI no encontrado" });
-    }
-    res.json({
-      message: "Cobro de JSI actualizado exitosamente",
-      data: jsicobro,
-    });
-  } catch (error) {
-    res.status(400).json({ message: error.message });
-  }
-};
+// Editar y eliminar un cobro de JSI mantienen su registro de caja en sintonía
+// (ver utils/cobroVinculado.js): corregir el monto de un cobro de un turno ya
+// cerrado recalcula la diferencia de ese cierre sin descuadrar el turno en
+// curso. Al crearse (JuntaSaneamientoTab.handleSubmit) el registro deja
+// "JSICobroId:<id>" en el detalle.
+const handlersJSI = crearHandlersCobroVinculado({
+  Modelo: JSICobro,
+  tabla: "jsicobro",
+  campoId: "JSICobroId",
+  campoMonto: "JSICobroMonto",
+  camposFijos: ["CajaId"],
+  getRegistros: async (cobro, q) =>
+    (
+      await q.query(
+        `SELECT * FROM "registrodiariocaja" WHERE "RegistroDiarioCajaDetalle" LIKE $1`,
+        [`%JSICobroId:${cobro.JSICobroId}%`]
+      )
+    ).rows,
+  revertir: revertirAperturadaYDemas,
+  nombre: "Cobro de JSI",
+});
 
-// Eliminar un cobro
-exports.delete = async (req, res) => {
-  try {
-    const jsicobroId = req.params.id;
+// Actualizar un cobro de JSI
+exports.update = handlersJSI.update;
 
-    // Obtener el cobro antes de eliminarlo para tener el ID
-    const jsicobro = await JSICobro.getById(jsicobroId);
-    if (!jsicobro) {
-      return res.status(404).json({ message: "Cobro de JSI no encontrado" });
-    }
-
-    // Buscar el registro relacionado en registrodiariocaja usando JSICobroId
-    const registrosRelacionadosResult = await db.query(
-      `SELECT "RegistroDiarioCajaId"
-       FROM "registrodiariocaja"
-       WHERE "RegistroDiarioCajaDetalle" LIKE $1`,
-      [`%JSICobroId:${jsicobroId}%`]
-    );
-    const registrosRelacionados = registrosRelacionadosResult.rows;
-
-    // Eliminar el cobro de JSI primero
-    const success = await JSICobro.delete(jsicobroId);
-    if (!success) {
-      return res.status(404).json({ message: "Cobro de JSI no encontrado" });
-    }
-
-    // Si hay registros relacionados, eliminar cada uno y actualizar montos
-    if (registrosRelacionados && registrosRelacionados.length > 0) {
-      for (const registro of registrosRelacionados) {
-        const registroCompleto = await RegistroDiarioCaja.getById(
-          registro.RegistroDiarioCajaId
-        );
-        if (registroCompleto) {
-          const {
-            TipoGastoId: regTipoGastoId,
-            TipoGastoGrupoId: regTipoGastoGrupoId,
-            RegistroDiarioCajaMonto: regMonto,
-            CajaId: regCajaId,
-          } = registroCompleto;
-
-          const monto = Number(regMonto) || 0;
-          const regCajaIdNumero = regCajaId ? Number(regCajaId) : null;
-
-          // Al crear el cobro JSI (ver JuntaSaneamientoTab.handleSubmit) las
-          // cajas se movieron así:
-          //   caja aperturada            -> +monto
-          //   demás cajas con el gasto   -> -monto (excluyendo la aperturada)
-          // Al eliminar el movimiento aplicamos exactamente lo opuesto:
-          //   caja aperturada            -> -monto
-          //   demás cajas con el gasto   -> +monto
-
-          // 1) Revertir la caja aperturada (la del registro): RESTAR el monto
-          if (regCajaIdNumero) {
-            const cajaAperturadaResult = await db.query(
-              'SELECT "CajaMonto" FROM "caja" WHERE "CajaId" = $1',
-              [regCajaIdNumero]
-            );
-            const cajaAperturada =
-              cajaAperturadaResult.rows.length > 0
-                ? cajaAperturadaResult.rows[0]
-                : null;
-
-            if (cajaAperturada) {
-              const montoActual = Number(cajaAperturada.CajaMonto) || 0;
-              await db.query(
-                'UPDATE "caja" SET "CajaMonto" = $1 WHERE "CajaId" = $2',
-                [montoActual - monto, regCajaIdNumero]
-              );
-            }
-          }
-
-          // 2) Revertir las demás cajas con el gasto (excluyendo la
-          //    aperturada): SUMAR el monto
-          const cajasIdsDemas = new Set();
-          if (regTipoGastoId && regTipoGastoGrupoId) {
-            const cajasConGasto = await CajaGasto.getByTipoGastoAndGrupo(
-              regTipoGastoId,
-              regTipoGastoGrupoId
-            );
-            cajasConGasto.forEach((cajaGasto) => {
-              if (
-                cajaGasto.CajaId &&
-                Number(cajaGasto.CajaId) !== regCajaIdNumero
-              ) {
-                cajasIdsDemas.add(Number(cajaGasto.CajaId));
-              }
-            });
-          }
-
-          if (cajasIdsDemas.size > 0) {
-            const actualizaciones = Array.from(cajasIdsDemas).map(
-              async (cajaIdParaActualizar) => {
-                const cajaActualResult = await db.query(
-                  'SELECT "CajaMonto" FROM "caja" WHERE "CajaId" = $1',
-                  [cajaIdParaActualizar]
-                );
-                const cajaActual =
-                  cajaActualResult.rows.length > 0
-                    ? cajaActualResult.rows[0]
-                    : null;
-
-                if (cajaActual) {
-                  const cajaMontoActual = Number(cajaActual.CajaMonto) || 0;
-                  await db.query(
-                    'UPDATE "caja" SET "CajaMonto" = $1 WHERE "CajaId" = $2',
-                    [cajaMontoActual + monto, cajaIdParaActualizar]
-                  );
-                }
-              }
-            );
-
-            await Promise.all(actualizaciones);
-          }
-
-          // Eliminar el registro de registrodiariocaja
-          await RegistroDiarioCaja.delete(registro.RegistroDiarioCajaId);
-        }
-      }
-    }
-
-    res.json({ message: "Cobro de JSI eliminado exitosamente" });
-  } catch (error) {
-    if (
-      error &&
-      error.message &&
-      error.message.includes("a foreign key constraint fails")
-    ) {
-      return res.status(400).json({
-        message:
-          "No se puede eliminar el cobro porque tiene movimientos asociados.",
-      });
-    }
-    console.error("Error al eliminar cobro de JSI:", error);
-    res.status(500).json({ message: error.message });
-  }
-};
+// Eliminar un cobro de JSI
+exports.delete = handlersJSI.delete;
 
 // Reporte: cobros JSI del período, para la rendición a la Junta de Saneamiento
 exports.reporteCobros = async (req, res) => {

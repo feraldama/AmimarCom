@@ -292,7 +292,7 @@ export default function DivisasTab() {
       setFechaCompra(`${yyyy}-${mm}-${dd}T${hh}:${min}`);
     } catch (err: unknown) {
       const errorMsg =
-        err instanceof Error ? err.message : "No se pudo registrar la compra";
+        (err as { message?: string })?.message || "No se pudo registrar la compra";
       Swal.fire("Error", errorMsg, "error");
     } finally {
       setIsSubmittingCompra(false);
@@ -455,7 +455,7 @@ export default function DivisasTab() {
       setFechaVenta(`${yyyy}-${mm}-${dd}T${hh}:${min}`);
     } catch (err: unknown) {
       const errorMsg =
-        err instanceof Error ? err.message : "No se pudo registrar la venta";
+        (err as { message?: string })?.message || "No se pudo registrar la venta";
       Swal.fire("Error", errorMsg, "error");
     } finally {
       setIsSubmittingVenta(false);

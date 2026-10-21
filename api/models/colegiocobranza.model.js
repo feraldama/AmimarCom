@@ -16,8 +16,9 @@ const ColegioCobranza = {
     return result.rows;
   },
 
-  getById: async (id) => {
-    const result = await db.query(
+  // `q` permite correr la consulta dentro de una transacción (client de pg)
+  getById: async (id, q = db) => {
+    const result = await q.query(
       `SELECT cc.*,
         c."CajaDescripcion",
         n."NominaNombre",
@@ -261,7 +262,7 @@ const ColegioCobranza = {
     return cobranza;
   },
 
-  update: async (id, cobranzaData) => {
+  update: async (id, cobranzaData, q = db) => {
     let updateFields = [];
     let values = [];
     let paramIndex = 1;
@@ -304,7 +305,7 @@ const ColegioCobranza = {
 
     if (updateFields.length === 0) {
       // Si no hay campos para actualizar, devolver la cobranza actual sin cambios
-      const cobranza = await ColegioCobranza.getById(id);
+      const cobranza = await ColegioCobranza.getById(id, q);
       return cobranza;
     }
 
@@ -316,19 +317,19 @@ const ColegioCobranza = {
       WHERE "ColegioCobranzaId" = $${paramIndex}
     `;
 
-    const result = await db.query(query, values);
+    const result = await q.query(query, values);
 
     if (result.rowCount === 0) {
       return null;
     }
 
     // Obtener el registro actualizado
-    const cobranza = await ColegioCobranza.getById(id);
+    const cobranza = await ColegioCobranza.getById(id, q);
     return cobranza;
   },
 
-  delete: async (id) => {
-    const result = await db.query(
+  delete: async (id, q = db) => {
+    const result = await q.query(
       'DELETE FROM "colegiocobranza" WHERE "ColegioCobranzaId" = $1',
       [id]
     );

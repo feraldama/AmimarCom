@@ -128,26 +128,36 @@ export const createPaseCaja = async (paseData: {
   }
 };
 
-export const updateRegistroDiarioCaja = async (
+// Corrige el monto/detalle de un movimiento conservando su turno. Si es de un
+// turno ya cerrado, el backend recalcula la diferencia de ese cierre y no toca
+// la caja del turno en curso. El motivo es obligatorio y queda auditado.
+export const corregirRegistroDiarioCaja = async (
   id: string | number,
-  registroData: Record<string, unknown>
+  datos: {
+    RegistroDiarioCajaMonto: number;
+    RegistroDiarioCajaDetalle: string;
+    Motivo: string;
+  }
 ) => {
   try {
-    const response = await api.put(`/registrodiariocaja/${id}`, registroData);
+    const response = await api.put(`/registrodiariocaja/${id}/corregir`, datos);
     return response.data;
   } catch (error) {
     const axiosError = error as AxiosError<{ message?: string }>;
     throw (
       axiosError.response?.data || {
-        message: "Error al actualizar el registro",
+        message: "Error al corregir el registro",
       }
     );
   }
 };
 
-export const deleteRegistroDiarioCaja = async (id: string | number) => {
+// `motivo` queda en la auditoría si el movimiento es de un turno ya cerrado
+export const deleteRegistroDiarioCaja = async (id: string | number, motivo?: string) => {
   try {
-    const response = await api.delete(`/registrodiariocaja/${id}`);
+    const response = await api.delete(`/registrodiariocaja/${id}`, {
+      data: motivo ? { Motivo: motivo } : undefined,
+    });
     return response.data;
   } catch (error) {
     const axiosError = error as AxiosError<{ message?: string }>;

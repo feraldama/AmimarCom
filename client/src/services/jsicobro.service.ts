@@ -103,9 +103,12 @@ export const updateJSICobro = async (
   }
 };
 
-export const deleteJSICobro = async (id: string | number) => {
+// `motivo` queda en la auditoría si el movimiento es de un turno ya cerrado
+export const deleteJSICobro = async (id: string | number, motivo?: string) => {
   try {
-    const response = await api.delete(`/jsicobro/${id}`);
+    const response = await api.delete(`/jsicobro/${id}`, {
+      data: motivo ? { Motivo: motivo } : undefined,
+    });
     return response.data;
   } catch (error) {
     const axiosError = error as AxiosError<{ message?: string }>;

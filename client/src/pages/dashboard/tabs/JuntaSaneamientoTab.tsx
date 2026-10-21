@@ -336,9 +336,8 @@ export default function JuntaSaneamientoTab() {
       resetForm();
     } catch (err: unknown) {
       const errorMsg =
-        err instanceof Error
-          ? err.message
-          : "No se pudo registrar el cobro de JSI";
+        (err as { message?: string })?.message ||
+          "No se pudo registrar el cobro de JSI";
       Swal.fire("Error", errorMsg, "error");
     } finally {
       setIsSubmitting(false);

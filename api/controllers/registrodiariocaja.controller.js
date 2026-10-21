@@ -1,5 +1,6 @@
 const RegistroDiarioCaja = require("../models/registrodiariocaja.model");
-const CajaGasto = require("../models/cajagasto.model");
+const { revertirMovimiento } = require("../utils/ajusteCajas");
+const { aplicarEnTurno, motivoEliminacion } = require("../utils/correccionTurno");
 const db = require("../config/db");
 const { parseCajaIds } = require("../utils/reportes");
 
@@ -63,6 +64,16 @@ const parseFiltros = (query) => ({
   tipoGastoGrupoId: query.tipoGastoGrupoId || undefined,
 });
 
+// Agrega a cada fila del listado MotivoNoCorregible (null si se puede
+// corregir), para que la pantalla deshabilite "Corregir" explicando por qué
+const conMotivoNoCorregible = (result) => ({
+  ...result,
+  data: result.data.map((r) => ({
+    ...r,
+    MotivoNoCorregible: RegistroDiarioCaja.motivoNoCorregible(r),
+  })),
+});
+
 exports.getAll = async (req, res) => {
   const sortBy = req.query.sortBy || "RegistroDiarioCajaFecha";
   const sortOrder = req.query.sortOrder || "DESC";
@@ -78,7 +89,7 @@ exports.getAll = async (req, res) => {
       sortOrder,
       parseFiltros(req.query),
     );
-    res.json(result);
+    res.json(conMotivoNoCorregible(result));
   } catch (error) {
     console.error("Error al obtener registros:", error);
     res.status(500).json({ message: error.message });
@@ -110,7 +121,7 @@ exports.search = async (req, res) => {
       parseFiltros(req.query),
     );
 
-    res.json(result);
+    res.json(conMotivoNoCorregible(result));
   } catch (error) {
     console.error("Error en búsqueda de registros:", error);
     res.status(500).json({ error: "Error al buscar registros" });
@@ -156,6 +167,10 @@ exports.create = async (req, res) => {
           "Los pases entre cajas deben registrarse desde la pestaña Pase de Cajas, que genera el egreso y el ingreso juntos.",
       });
     }
+    await RegistroDiarioCaja.validarFechaEnTurno(
+      req.body.CajaId,
+      req.body.RegistroDiarioCajaFecha
+    );
 
     const registro = await RegistroDiarioCaja.create({
       ...req.body,
@@ -197,6 +212,9 @@ exports.createPase = async (req, res) => {
         .status(400)
         .json({ message: "El monto debe ser un número mayor a cero" });
     }
+    for (const cajaId of [CajaOrigenId, CajaDestinoId]) {
+      await RegistroDiarioCaja.validarFechaEnTurno(cajaId, RegistroDiarioCajaFecha);
+    }
 
     const resultado = await RegistroDiarioCaja.createPase({
       CajaOrigenId,
@@ -217,24 +235,86 @@ exports.createPase = async (req, res) => {
   }
 };
 
-// Actualizar un registro
-exports.update = async (req, res) => {
+// Corregir el monto (y opcionalmente el detalle) de un movimiento sin
+// eliminarlo. Conserva el ID, así el movimiento sigue perteneciendo a su turno:
+// si es de un turno ya cerrado se recalcula la diferencia de ese cierre y no
+// se toca la caja aperturada (esa plata ya se contó en el arqueo). Es la forma
+// de arreglar un movimiento de un cierre anterior sin generar un faltante o
+// sobrante en el turno en curso. Exige un motivo y queda auditado en
+// registrocorreccion.
+exports.corregir = async (req, res) => {
+  const errorConStatus = (status, message) =>
+    Object.assign(new Error(message), { status });
+  const client = await db.connect();
   try {
-    const registro = await RegistroDiarioCaja.update(req.params.id, req.body);
-    if (!registro) {
-      return res.status(404).json({ message: "Registro no encontrado" });
+    const montoNuevo = Number(req.body.RegistroDiarioCajaMonto);
+    if (!Number.isFinite(montoNuevo) || montoNuevo < 0) {
+      throw errorConStatus(400, "El monto debe ser un número mayor o igual a cero");
     }
+    const motivo =
+      typeof req.body.Motivo === "string" ? req.body.Motivo.trim() : "";
+    if (!motivo) {
+      throw errorConStatus(400, "Indicá el motivo de la corrección");
+    }
+
+    await client.query("BEGIN");
+    // Bloquea el movimiento: dos correcciones simultáneas no pueden aplicar
+    // el ajuste de saldos dos veces sobre el mismo monto anterior.
+    const registro = (
+      await client.query(
+        `SELECT r.*, tg."TipoGastoGrupoDescripcion"
+         FROM "registrodiariocaja" r
+         LEFT JOIN "tipogastogrupo" tg
+           ON tg."TipoGastoId" = r."TipoGastoId" AND tg."TipoGastoGrupoId" = r."TipoGastoGrupoId"
+         WHERE r."RegistroDiarioCajaId" = $1
+         FOR UPDATE OF r`,
+        [req.params.id]
+      )
+    ).rows[0];
+    if (!registro) throw errorConStatus(404, "Registro no encontrado");
+    const motivoRechazo = RegistroDiarioCaja.motivoNoCorregible(registro);
+    if (motivoRechazo) throw errorConStatus(400, motivoRechazo);
+
+    const detalleNuevo =
+      typeof req.body.RegistroDiarioCajaDetalle === "string" &&
+      req.body.RegistroDiarioCajaDetalle.trim()
+        ? req.body.RegistroDiarioCajaDetalle.trim()
+        : registro.RegistroDiarioCajaDetalle;
+
+    const { cierreId, diferencia } = await aplicarEnTurno(client, registro, {
+      montoNuevo,
+      detalleNuevo,
+      revertir: revertirMovimiento,
+      motivo,
+      usuarioId: req.user.id,
+    });
+    await client.query("COMMIT");
+
     res.json({
-      message: "Registro actualizado exitosamente",
-      data: registro,
+      message: cierreId
+        ? "Movimiento corregido. Era de un turno ya cerrado: se recalculó la diferencia de ese cierre y el turno en curso no cambia."
+        : "Movimiento corregido.",
+      data: {
+        registro: await RegistroDiarioCaja.getById(registro.RegistroDiarioCajaId),
+        cierreId,
+        diferencia,
+      },
     });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    await client.query("ROLLBACK");
+    if (!error.status) console.error("Error al corregir registro:", error);
+    res.status(error.status || 500).json({ message: error.message });
+  } finally {
+    client.release();
   }
 };
 
-// Eliminar un registro
+// Eliminar un registro. Salvo los pases (que tienen su propia transacción),
+// todo corre en una transacción con el movimiento bloqueado: revertir saldos,
+// borrar y, si era de un turno ya cerrado, recalcular esa diferencia y
+// auditarlo con el motivo recibido. Si algo falla no queda nada a medias.
 exports.delete = async (req, res) => {
+  const client = await db.connect();
   try {
     // Obtener el registro antes de eliminarlo para tener los datos necesarios
     const registro = await RegistroDiarioCaja.getById(req.params.id);
@@ -256,291 +336,37 @@ exports.delete = async (req, res) => {
       });
     }
 
-    const {
-      CajaId,
-      TipoGastoId,
-      TipoGastoGrupoId,
-      RegistroDiarioCajaMonto,
-      RegistroDiarioCajaCambio,
-      RegistroDiarioCajaFecha,
-      UsuarioId,
-      RegistroDiarioCajaDetalle,
-    } = registro;
-
-    // Verificar si es un registro de PAGO ADMIN
-    // Pago admin usa TipoGastoId=1, TipoGastoGrupoId=21 para egreso
-    // y TipoGastoId=2, TipoGastoGrupoId=26 para ingreso
-    const esPagoAdmin =
-      (TipoGastoId === 1 && TipoGastoGrupoId === 21) ||
-      (TipoGastoId === 2 && TipoGastoGrupoId === 26) ||
-      (RegistroDiarioCajaDetalle &&
-        RegistroDiarioCajaDetalle.includes("PAGO ADMIN"));
-
-    // Determinar si es ingreso (TipoGastoId === 2) o egreso (TipoGastoId === 1)
-    // Al eliminar, invertimos la operación:
-    // - Si era egreso (restó), ahora sumamos
-    // - Si era ingreso (sumó), ahora restamos
-    const esIngreso = TipoGastoId === 2;
-    const monto = Number(RegistroDiarioCajaMonto) || 0;
-    const cambio = Number(RegistroDiarioCajaCambio) || 0;
-
-    // Detectar si el registro proviene de un movimiento de divisa
-    // (DivisasTab COMPRA/VENTA). En esos casos las cajas DIVISA (TipoId=3)
-    // siguen una convención opuesta a Western: la creación SUMA cantidad a
-    // la DIVISA al COMPRAR y RESTA al VENDER, así que el reverso debe
-    // RESTAR/SUMAR sin la inversión de signo extra que aplica el flujo
-    // Western.
-    const detalleNorm = (RegistroDiarioCajaDetalle || "").trim();
-    const esDivisaMovimiento =
-      detalleNorm.startsWith("Compra DivisaMovimientoId:") ||
-      detalleNorm.startsWith("Venta DivisaMovimientoId:");
-
-    // Conjunto de IDs de cajas a actualizar
-    const cajasIdsParaActualizar = new Set();
-
-    // Agregar la caja del registro
-    if (CajaId) {
-      cajasIdsParaActualizar.add(Number(CajaId));
-    }
-
-    // Obtener todas las cajas que tienen el mismo TipoGastoId y TipoGastoGrupoId en cajagasto
-    if (TipoGastoId && TipoGastoGrupoId) {
-      const cajasConGasto = await CajaGasto.getByTipoGastoAndGrupo(
-        TipoGastoId,
-        TipoGastoGrupoId,
-      );
-      cajasConGasto.forEach((cajaGasto) => {
-        if (cajaGasto.CajaId) {
-          cajasIdsParaActualizar.add(Number(cajaGasto.CajaId));
-        }
-      });
-    }
-
-    // Verificar casos especiales para WESTERN PAGOS USD CON COTIZACION
-    // Grupos vigentes: 8 (USD COTIZACION) y 13. Se mantiene 19 por compatibilidad
-    // con datos previos a la migración del grupo USD COTIZACION (19 -> 8).
-    const esCasoEspecialUSDCotPagos =
-      TipoGastoId === 1 && (TipoGastoGrupoId === 8 || TipoGastoGrupoId === 19);
-    const esCasoEspecial13 = TipoGastoId === 1 && TipoGastoGrupoId === 13;
-    const esCasoEspecial4 = TipoGastoId === 1 && TipoGastoGrupoId === 4; // PAGOS: suma a demás cajas
-    const esCasoEspecialUSDPagos = TipoGastoId === 1 && TipoGastoGrupoId === 20; // PAGOS USD puro: aperturada GS no participa
-    // Verificar casos especiales para WESTERN ENVÍOS (opuestos a los de pagos).
-    // Grupos vigentes: 15 (USD COTIZACION) y 13. Se mantiene 24 por compatibilidad.
-    const esCasoEspecialUSDCotEnvios =
-      TipoGastoId === 2 && (TipoGastoGrupoId === 15 || TipoGastoGrupoId === 24);
-    const esCasoEspecial13Envios = TipoGastoId === 2 && TipoGastoGrupoId === 13;
-    const esCasoEspecial5 = TipoGastoId === 2 && TipoGastoGrupoId === 5; // ENVÍOS: resta a demás cajas
-    const esCasoEspecialUSDEnvios = TipoGastoId === 2 && TipoGastoGrupoId === 28; // ENVÍOS USD puro: aperturada GS no participa
-    const cambioNumero = cambio > 0 ? cambio : 1; // Evitar división por 0
-
-    // Si es un registro de PAGO ADMIN, no actualizar las cajas aquí
-    // porque ya se actualizan en pagoadmin.controller.js al eliminar el pago admin
-    if (!esPagoAdmin) {
-      // Separar la caja del registro de las demás cajas
-      const cajaIdRegistro = CajaId ? Number(CajaId) : null;
-      const cajasIdsConGasto = new Set();
-
-      // Obtener todas las cajas que tienen el mismo TipoGastoId y TipoGastoGrupoId en cajagasto
-      if (TipoGastoId && TipoGastoGrupoId) {
-        const cajasConGasto = await CajaGasto.getByTipoGastoAndGrupo(
-          TipoGastoId,
-          TipoGastoGrupoId,
-        );
-        cajasConGasto.forEach((cajaGasto) => {
-          if (cajaGasto.CajaId) {
-            cajasIdsConGasto.add(Number(cajaGasto.CajaId));
-          }
-        });
-      }
-
-      // Actualizar la caja del registro (caja aperturada)
-      if (
-        cajaIdRegistro &&
-        !esCasoEspecial13Envios &&
-        !esCasoEspecialUSDPagos &&
-        !esCasoEspecialUSDEnvios
-      ) {
-        // Casos especiales USD puro (20/28): no tocar la caja aperturada al eliminar.
-        // El grupo 13 (EXTRACCIONES) SÍ se revierte aquí: al crearse desde la
-        // pestaña Pago se debita la caja aperturada, por lo que al eliminar hay
-        // que devolverle el monto (antes se salteaba y la plata no volvía).
-        const cajaResult = await db.query(
-          'SELECT "CajaMonto", "CajaTipoId" FROM "caja" WHERE "CajaId" = $1',
-          [cajaIdRegistro]
-        );
-        const cajaActual = cajaResult.rows.length > 0 ? cajaResult.rows[0] : null;
-
-        if (cajaActual) {
-          const cajaMontoActual = Number(cajaActual.CajaMonto) || 0;
-          const cajaTipoId = Number(cajaActual.CajaTipoId);
-
-          // Al eliminar, revertir la operación según la nueva lógica:
-          // - Si era EGRESO: se había restado, ahora SUMAR
-          // - Si era INGRESO: se había sumado, ahora RESTAR
-          const esEgreso = TipoGastoId === 1;
-          let montoAplicar;
-          if (esEgreso) {
-            // EGRESO: revertir la resta (sumar)
-            montoAplicar = monto;
-          } else if (esIngreso) {
-            // INGRESO: revertir la suma (restar)
-            montoAplicar = -monto;
-          } else {
-            // Por defecto, mantener lógica anterior
-            montoAplicar = esIngreso ? -monto : monto;
-          }
-
-          if (cajaTipoId === 3) {
-            // Operación opuesta para CajaTipoId=3
-            montoAplicar = -montoAplicar;
-          }
-
-          const nuevoMonto = cajaMontoActual + montoAplicar;
-
-          await db.query(
-            'UPDATE "caja" SET "CajaMonto" = $1 WHERE "CajaId" = $2',
-            [nuevoMonto, cajaIdRegistro]
-          );
-        }
-      }
-
-      // Actualizar las demás cajas
-      const cajasParaActualizar = Array.from(cajasIdsConGasto).filter(
-        (id) => id !== cajaIdRegistro,
-      );
-
-      if (cajasParaActualizar.length > 0) {
-        const actualizaciones = cajasParaActualizar.map(
-          async (cajaIdParaActualizar) => {
-            const cajaResult2 = await db.query(
-              'SELECT "CajaMonto", "CajaTipoId" FROM "caja" WHERE "CajaId" = $1',
-              [cajaIdParaActualizar]
-            );
-            const cajaActual = cajaResult2.rows.length > 0 ? cajaResult2.rows[0] : null;
-
-            if (cajaActual) {
-              const cajaMontoActual = Number(cajaActual.CajaMonto) || 0;
-              const cajaTipoId = Number(cajaActual.CajaTipoId);
-              let nuevoMonto;
-
-              if (esCasoEspecialUSDCotPagos || esCasoEspecial13) {
-                // Casos especiales de PAGOS: revertir la suma de Monto/CambioDolar (restar)
-                const montoConvertido = monto / cambioNumero;
-                let montoAplicar = -montoConvertido; // Revertir: restar
-
-                if (cajaTipoId === 3) {
-                  // Operación opuesta para CajaTipoId=3
-                  montoAplicar = montoConvertido;
-                }
-
-                nuevoMonto = cajaMontoActual + montoAplicar;
-              } else if (esCasoEspecialUSDCotEnvios || esCasoEspecial13Envios) {
-                // Casos especiales de ENVÍOS: revertir la resta de Monto/CambioDolar (sumar)
-                const montoConvertido = monto / cambioNumero;
-                let montoAplicar = montoConvertido; // Revertir: sumar (opuesto a pagos)
-
-                if (cajaTipoId === 3) {
-                  // Operación opuesta para CajaTipoId=3
-                  montoAplicar = -montoConvertido;
-                }
-
-                nuevoMonto = cajaMontoActual + montoAplicar;
-              } else if (esCasoEspecial4) {
-                // Caso especial 4 (PAGOS): se había sumado a las demás cajas, al eliminar RESTAR
-                // Misma lógica que CobranzaTab para EGRESO
-                let valorAUsar = monto;
-                if (cajaTipoId === 3 && cambio > 0) {
-                  valorAUsar = monto / cambio;
-                }
-
-                let montoAplicar = -valorAUsar; // Revertir: restar
-
-                if (cajaTipoId === 3) {
-                  // Operación opuesta para CajaTipoId=3
-                  montoAplicar = -montoAplicar;
-                }
-
-                nuevoMonto = cajaMontoActual + montoAplicar;
-              } else if (esCasoEspecial5) {
-                // Caso especial 5 (ENVÍOS): se había restado a las demás cajas, al eliminar SUMAR
-                // Misma lógica que CobranzaTab para INGRESO
-                let valorAUsar = monto;
-                if (cajaTipoId === 3 && cambio > 0) {
-                  valorAUsar = monto / cambio;
-                }
-
-                let montoAplicar = valorAUsar; // Revertir: sumar
-
-                if (cajaTipoId === 3) {
-                  // Operación opuesta para CajaTipoId=3
-                  montoAplicar = -montoAplicar;
-                }
-
-                nuevoMonto = cajaMontoActual + montoAplicar;
-              } else {
-                // Caso normal: revertir la operación según la nueva lógica.
-                // Para cajaTipoId=3 (DIVISAS), dividir por cambio sólo si el
-                // movimiento original era en GS con cotización (no para
-                // grupos USD-puros 20/28, donde el monto ya está en USD).
-                let valorAUsar = monto;
-                if (
-                  cajaTipoId === 3 &&
-                  cambio > 0 &&
-                  !esCasoEspecialUSDPagos &&
-                  !esCasoEspecialUSDEnvios
-                ) {
-                  valorAUsar = monto / cambio;
-                }
-
-                const esEgreso = TipoGastoId === 1;
-                let montoAplicar;
-                if (esEgreso) {
-                  // EGRESO: se había sumado a las demás cajas, al eliminar RESTAR
-                  montoAplicar = -valorAUsar;
-                } else if (esIngreso) {
-                  // INGRESO: se había restado a las demás cajas, al eliminar SUMAR
-                  montoAplicar = valorAUsar;
-                } else {
-                  // Por defecto, mantener lógica anterior
-                  if (esIngreso) {
-                    montoAplicar = -valorAUsar;
-                  } else {
-                    montoAplicar = valorAUsar;
-                  }
-                }
-
-                // Inversión para cajaTipoId=3 sólo aplica al flujo Western
-                // (donde la DIVISA pierde plata al crear). En divisamovimiento
-                // la convención es opuesta (DIVISA gana al comprar / pierde al
-                // vender), así que NO invertimos el signo.
-                if (cajaTipoId === 3 && !esDivisaMovimiento) {
-                  // Operación opuesta para CajaTipoId=3
-                  montoAplicar = -montoAplicar;
-                }
-
-                nuevoMonto = cajaMontoActual + montoAplicar;
-              }
-
-              await db.query(
-                'UPDATE "caja" SET "CajaMonto" = $1 WHERE "CajaId" = $2',
-                [nuevoMonto, cajaIdParaActualizar]
-              );
-            }
-          },
-        );
-
-        await Promise.all(actualizaciones);
-      }
-    } // Fin del if (!esPagoAdmin)
-
-    // Eliminar el registro
-    const success = await RegistroDiarioCaja.delete(req.params.id);
-    if (!success) {
+    await client.query("BEGIN");
+    // Releído con bloqueo: si otro pedido lo corrigió o eliminó mientras
+    // tanto, se trabaja sobre lo que quedó
+    const bloqueado = (
+      await client.query(
+        `SELECT * FROM "registrodiariocaja" WHERE "RegistroDiarioCajaId" = $1 FOR UPDATE`,
+        [registro.RegistroDiarioCajaId]
+      )
+    ).rows[0];
+    if (!bloqueado) {
+      await client.query("ROLLBACK");
       return res.status(404).json({ message: "Registro no encontrado" });
     }
 
-    res.json({ message: "Registro eliminado exitosamente" });
+    // Los registros de PAGO ADMIN no tocan saldos acá: ya se actualizan en
+    // pagoadmin.controller.js al eliminar el pago admin (ver revertirMovimiento)
+    const { cierreId } = await aplicarEnTurno(client, bloqueado, {
+      eliminar: true,
+      revertir: revertirMovimiento,
+      motivo: motivoEliminacion(req, "Eliminación de un movimiento de un turno ya cerrado"),
+      usuarioId: req.user.id,
+    });
+    await client.query("COMMIT");
+
+    res.json({
+      message: cierreId
+        ? "Registro eliminado. Era de un turno ya cerrado: se recalculó la diferencia de ese cierre."
+        : "Registro eliminado exitosamente",
+    });
   } catch (error) {
+    await client.query("ROLLBACK");
     if (
       error &&
       error.message &&
@@ -553,6 +379,8 @@ exports.delete = async (req, res) => {
     }
     console.error("Error al eliminar registro:", error);
     res.status(500).json({ message: error.message });
+  } finally {
+    client.release();
   }
 };
 

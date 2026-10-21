@@ -305,7 +305,7 @@ export default function CobranzaColegiosTab() {
       handleCancel();
     } catch (err: unknown) {
       const errorMsg =
-        err instanceof Error ? err.message : "No se pudo registrar la cobranza";
+        (err as { message?: string })?.message || "No se pudo registrar la cobranza";
       Swal.fire("Error", errorMsg, "error");
     } finally {
       setIsSubmitting(false);

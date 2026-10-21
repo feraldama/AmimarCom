@@ -20,6 +20,8 @@ export interface CierreDiferencia {
   Revisado: boolean;
   RevisadoPor: string | null;
   RevisadoFecha: string | null;
+  // Movimientos de este turno corregidos/eliminados después del cierre
+  CantCorrecciones: number;
 }
 
 export interface MovimientoTurno {
@@ -46,9 +48,26 @@ export interface MovimientoOtraCaja {
   UsuarioId: string;
 }
 
+// Auditoría de un movimiento del turno corregido o eliminado después del cierre
+export interface CorreccionTurno {
+  Id: number;
+  Fecha: string; // YYYY-MM-DD HH24:MI
+  MovimientoId: number;
+  Tipo: "CORRECCION" | "ELIMINACION";
+  MontoAnterior: string | number;
+  MontoNuevo: string | number | null; // null en una eliminación
+  DetalleAnterior: string | null;
+  DiferenciaAnterior: string | number | null;
+  DiferenciaNueva: string | number | null;
+  Motivo: string;
+  UsuarioId: string;
+  UsuarioNombre: string;
+}
+
 export interface CierreDiferenciaDetalle extends CierreDiferencia {
   movimientos: MovimientoTurno[];
   otrasCajas: MovimientoOtraCaja[];
+  correcciones: CorreccionTurno[];
 }
 
 export interface TotalesDiferencias {

@@ -1,9 +1,10 @@
 const ColegioCobranza = require("../models/colegiocobranza.model");
 const { parseCajaIds } = require("../utils/reportes");
 const RegistroDiarioCaja = require("../models/registrodiariocaja.model");
-const CajaGasto = require("../models/cajagasto.model");
 const Nomina = require("../models/nomina.model");
 const Colegio = require("../models/colegio.model");
+const { revertirAperturadaYDemas } = require("../utils/ajusteCajas");
+const { aplicarEnTurno, motivoEliminacion } = require("../utils/correccionTurno");
 const db = require("../config/db");
 
 // Lee los parámetros de filtro de la query (compartidos por getAll y search)
@@ -84,6 +85,10 @@ exports.getById = async (req, res) => {
 // Crear una nueva cobranza
 exports.create = async (req, res) => {
   try {
+    await RegistroDiarioCaja.validarFechaEnTurno(
+      req.body.CajaId,
+      req.body.ColegioCobranzaFecha
+    );
     const cobranza = await ColegioCobranza.create(req.body);
     res.status(201).json({
       message: "Cobranza creada exitosamente",
@@ -94,185 +99,204 @@ exports.create = async (req, res) => {
   }
 };
 
-// Actualizar una cobranza
+// Registros de registrodiariocaja creados junto con la cobranza
+// (CobranzaColegiosTab deja "NominaId:<id> ColegioCobranzaId:<id>" en el detalle).
+const getRegistrosDeCobranza = async (nominaId, colegioCobranzaId, q = db) => {
+  const result = await q.query(
+    `SELECT * FROM "registrodiariocaja"
+     WHERE "RegistroDiarioCajaDetalle" LIKE $1
+     AND "RegistroDiarioCajaDetalle" LIKE $2`,
+    [`%NominaId:${nominaId}%`, `%ColegioCobranzaId:${colegioCobranzaId}%`]
+  );
+  return result.rows;
+};
+
+// Total cobrado, con la misma fórmula que la pantalla de cobranza:
+// importe del curso x meses + días de mora x 1.000 + examen - descuento
+const MULTA_POR_DIA = 1000;
+const calcularTotal = (cobranza, importe) =>
+  Math.max(
+    0,
+    importe * (Number(cobranza.ColegioCobranzaMes) || 0) +
+      (Number(cobranza.ColegioCobranzaDiasMora) || 0) * MULTA_POR_DIA +
+      (Number(cobranza.ColegioCobranzaExamen) || 0) -
+      (Number(cobranza.ColegioCobranzaDescuento) || 0)
+  );
+
+// Alumno con su colegio (grupo de gasto) e importe de la cuota de su curso
+const getNominaConCurso = async (nominaId, q = db) => {
+  const result = await q.query(
+    `SELECT n."NominaId", n."NominaNombre", n."NominaApellido", n."ColegioId",
+            col."ColegioNombre", col."TipoGastoId", col."TipoGastoGrupoId",
+            cur."ColegioCursoImporte"
+     FROM "nomina" n
+     LEFT JOIN "colegio" col ON col."ColegioId" = n."ColegioId"
+     LEFT JOIN "colegiocurso" cur
+       ON cur."ColegioId" = n."ColegioId" AND cur."ColegioCursoId" = n."ColegioCursoId"
+     WHERE n."NominaId" = $1`,
+    [nominaId]
+  );
+  return result.rows[0];
+};
+
+// Actualizar una cobranza. Si cambia lo cobrado (meses, mora, examen,
+// descuento o alumno) corrige también su registro de caja conservando su ID:
+// así sigue en su turno y, si ese turno ya se cerró, se recalcula la
+// diferencia de ese cierre sin descuadrar el turno en curso. El cambio en
+// caja queda auditado en registrocorreccion. Todo corre en una transacción con
+// la cobranza y su registro bloqueados, para que dos ediciones simultáneas no
+// apliquen el ajuste dos veces.
 exports.update = async (req, res) => {
+  const errorConStatus = (status, message) =>
+    Object.assign(new Error(message), { status });
+  const client = await db.connect();
   try {
-    const cobranza = await ColegioCobranza.update(req.params.id, req.body);
-    if (!cobranza) {
-      return res.status(404).json({ message: "Cobranza no encontrada" });
+    await client.query("BEGIN");
+    const bloqueada = await client.query(
+      `SELECT 1 FROM "colegiocobranza" WHERE "ColegioCobranzaId" = $1 FOR UPDATE`,
+      [req.params.id]
+    );
+    if (bloqueada.rows.length === 0) {
+      throw errorConStatus(404, "Cobranza no encontrada");
     }
+    const anterior = await ColegioCobranza.getById(req.params.id, client);
+    const [registro] = await getRegistrosDeCobranza(
+      anterior.NominaId,
+      anterior.ColegioCobranzaId,
+      client
+    );
+    // Mismo criterio que ColegioCobranza.update: vacío/null no pisa el valor
+    const nueva = { ...anterior };
+    for (const [campo, valor] of Object.entries(req.body)) {
+      if (valor !== undefined && valor !== null && valor !== "") nueva[campo] = valor;
+    }
+
+    let ajuste = null;
+    if (registro) {
+      if (Number(nueva.CajaId) !== Number(registro.CajaId)) {
+        throw errorConStatus(
+          400,
+          "No se puede cambiar la caja de una cobranza ya registrada en caja: eliminala y volvé a cargarla."
+        );
+      }
+      const nominaAnterior = await getNominaConCurso(anterior.NominaId, client);
+      const nominaNueva =
+        Number(nueva.NominaId) === Number(anterior.NominaId)
+          ? nominaAnterior
+          : await getNominaConCurso(nueva.NominaId, client);
+      if (!nominaNueva) throw errorConStatus(400, "Nómina no encontrada");
+      if (
+        Number(nominaNueva.TipoGastoId) !== Number(registro.TipoGastoId) ||
+        Number(nominaNueva.TipoGastoGrupoId) !== Number(registro.TipoGastoGrupoId)
+      ) {
+        throw errorConStatus(
+          400,
+          "El alumno elegido es de otro colegio: eliminá la cobranza y volvé a cargarla."
+        );
+      }
+      // Se aplica la diferencia entre totales (no el total recalculado) para
+      // no arrastrar un cambio posterior del importe del curso.
+      const diferencia =
+        calcularTotal(nueva, Number(nominaNueva.ColegioCursoImporte) || 0) -
+        calcularTotal(anterior, Number(nominaAnterior?.ColegioCursoImporte) || 0);
+      const alumno = `${(nominaNueva.NominaApellido || "").trim()}, ${(
+        nominaNueva.NominaNombre || ""
+      ).trim()}`;
+      ajuste = {
+        diferencia,
+        detalle: `Cobranza Colegio: ${(nominaNueva.ColegioNombre || "").trim()} - Nómina: ${alumno} | NominaId:${nominaNueva.NominaId} ColegioCobranzaId:${anterior.ColegioCobranzaId}`,
+      };
+    }
+
+    const cobranza = await ColegioCobranza.update(req.params.id, req.body, client);
+    let cierreId = null;
+    if (ajuste) {
+      ({ cierreId } = await aplicarEnTurno(client, registro, {
+        montoNuevo: (Number(registro.RegistroDiarioCajaMonto) || 0) + ajuste.diferencia,
+        detalleNuevo: ajuste.detalle,
+        revertir: revertirAperturadaYDemas,
+        motivo: `Edición de la cobranza de colegio #${anterior.ColegioCobranzaId}`,
+        usuarioId: req.user.id,
+      }));
+    }
+    await client.query("COMMIT");
+
     res.json({
-      message: "Cobranza actualizada exitosamente",
+      message: cierreId
+        ? "Cobranza actualizada. Era de un turno ya cerrado: se recalculó la diferencia de ese cierre."
+        : "Cobranza actualizada exitosamente",
       data: cobranza,
     });
   } catch (error) {
-    res.status(400).json({ message: error.message });
+    await client.query("ROLLBACK");
+    res.status(error.status || 400).json({ message: error.message });
+  } finally {
+    client.release();
   }
 };
 
-// Eliminar una cobranza
+// Eliminar una cobranza. Corre en una transacción con la cobranza bloqueada:
+// se borra la cobranza y cada registro de caja asociado (revirtiendo saldos y,
+// si era de un turno ya cerrado, recalculando esa diferencia y auditándolo).
+// Si algo falla no queda nada a medias.
 exports.delete = async (req, res) => {
+  const client = await db.connect();
   try {
-    // Obtener la cobranza antes de eliminarla para tener los datos necesarios
-    const cobranza = await ColegioCobranza.getById(req.params.id);
-    if (!cobranza) {
-      return res.status(404).json({ message: "Cobranza no encontrada" });
-    }
-
-    const { CajaId, ColegioCobranzaFecha, UsuarioId, NominaId } = cobranza;
-
-    // Obtener la nómina para saber el ColegioId
-    const nomina = await Nomina.getById(NominaId);
-    if (!nomina || !nomina.ColegioId) {
-      // Si no hay nómina o colegio, solo eliminar la cobranza
-      const success = await ColegioCobranza.delete(req.params.id);
-      if (!success) {
-        return res.status(404).json({ message: "Cobranza no encontrada" });
-      }
-      return res.json({ message: "Cobranza eliminada exitosamente" });
-    }
-
-    // Obtener el colegio para saber TipoGastoId y TipoGastoGrupoId
-    const colegio = await Colegio.getById(nomina.ColegioId);
-    if (!colegio || !colegio.TipoGastoId || !colegio.TipoGastoGrupoId) {
-      // Si no hay colegio o no tiene TipoGastoId/TipoGastoGrupoId, solo eliminar la cobranza
-      const success = await ColegioCobranza.delete(req.params.id);
-      if (!success) {
-        return res.status(404).json({ message: "Cobranza no encontrada" });
-      }
-      return res.json({ message: "Cobranza eliminada exitosamente" });
-    }
-
-    // Obtener el ColegioCobranzaId antes de eliminar
-    const colegioCobranzaId = cobranza.ColegioCobranzaId;
-
-    // Buscar el registro relacionado en registrodiariocaja usando NominaId y ColegioCobranzaId
-    const registrosRelacionadosResult = await db.query(
-      `SELECT "RegistroDiarioCajaId", "RegistroDiarioCajaMonto"
-       FROM "registrodiariocaja"
-       WHERE "RegistroDiarioCajaDetalle" LIKE $1
-       AND "RegistroDiarioCajaDetalle" LIKE $2`,
-      [`%NominaId:${NominaId}%`, `%ColegioCobranzaId:${colegioCobranzaId}%`]
+    await client.query("BEGIN");
+    const bloqueada = await client.query(
+      `SELECT 1 FROM "colegiocobranza" WHERE "ColegioCobranzaId" = $1 FOR UPDATE`,
+      [req.params.id]
     );
-    const registrosRelacionados = registrosRelacionadosResult.rows;
-
-    // Eliminar la cobranza primero
-    const success = await ColegioCobranza.delete(req.params.id);
-    if (!success) {
+    if (bloqueada.rows.length === 0) {
+      await client.query("ROLLBACK");
       return res.status(404).json({ message: "Cobranza no encontrada" });
     }
+    // Obtener la cobranza antes de eliminarla para tener los datos necesarios
+    const cobranza = await ColegioCobranza.getById(req.params.id, client);
+    const { NominaId } = cobranza;
 
-    // Si hay registros relacionados, eliminar cada uno y actualizar montos
-    if (registrosRelacionados && registrosRelacionados.length > 0) {
-      for (const registro of registrosRelacionados) {
-        const registroCompleto = await RegistroDiarioCaja.getById(
-          registro.RegistroDiarioCajaId
-        );
-        if (registroCompleto) {
-          const {
-            TipoGastoId: regTipoGastoId,
-            TipoGastoGrupoId: regTipoGastoGrupoId,
-            RegistroDiarioCajaMonto: regMonto,
-            CajaId: regCajaId,
-          } = registroCompleto;
+    // Sólo si la nómina tiene un colegio con TipoGastoId y TipoGastoGrupoId
+    // la cobranza generó registros de caja; si no, se elimina sólo la cobranza
+    const nomina = await Nomina.getById(NominaId);
+    const colegio =
+      nomina && nomina.ColegioId ? await Colegio.getById(nomina.ColegioId) : null;
+    const registrosRelacionados =
+      colegio && colegio.TipoGastoId && colegio.TipoGastoGrupoId
+        ? await getRegistrosDeCobranza(NominaId, cobranza.ColegioCobranzaId, client)
+        : [];
 
-          // Determinar si es ingreso (TipoGastoId === 2) o egreso (TipoGastoId === 1)
-          const esIngreso = regTipoGastoId === 2;
-          const monto = Number(regMonto) || 0;
-          const regCajaIdNumero = regCajaId ? Number(regCajaId) : null;
+    await ColegioCobranza.delete(req.params.id, client);
 
-          // La caja aperturada y las demás cajas se movieron en direcciones
-          // OPUESTAS al crear la cobranza (ver CobranzaTab.handleSubmit):
-          //   INGRESO -> aperturada +monto, demás -monto
-          //   EGRESO  -> aperturada -monto, demás +monto
-          // Por eso el reverso debe separar la caja del registro de las demás
-          // y aplicarles el signo contrario al que recibieron al crearse.
-
-          // 1) Revertir la caja aperturada (la del registro)
-          if (regCajaIdNumero) {
-            const cajaAperturadaResult = await db.query(
-              'SELECT "CajaMonto" FROM "caja" WHERE "CajaId" = $1',
-              [regCajaIdNumero]
-            );
-            const cajaAperturada =
-              cajaAperturadaResult.rows.length > 0
-                ? cajaAperturadaResult.rows[0]
-                : null;
-
-            if (cajaAperturada) {
-              const montoActual = Number(cajaAperturada.CajaMonto) || 0;
-              // INGRESO sumó -> ahora resta; EGRESO restó -> ahora suma
-              const nuevoMonto = esIngreso
-                ? montoActual - monto
-                : montoActual + monto;
-
-              await db.query(
-                'UPDATE "caja" SET "CajaMonto" = $1 WHERE "CajaId" = $2',
-                [nuevoMonto, regCajaIdNumero]
-              );
-            }
-          }
-
-          // 2) Revertir las demás cajas (incluida la caja del colegio),
-          //    excluyendo la caja aperturada
-          const cajasIdsDemas = new Set();
-          if (regTipoGastoId && regTipoGastoGrupoId) {
-            const cajasConGasto = await CajaGasto.getByTipoGastoAndGrupo(
-              regTipoGastoId,
-              regTipoGastoGrupoId
-            );
-            cajasConGasto.forEach((cajaGasto) => {
-              if (
-                cajaGasto.CajaId &&
-                Number(cajaGasto.CajaId) !== regCajaIdNumero
-              ) {
-                cajasIdsDemas.add(Number(cajaGasto.CajaId));
-              }
-            });
-          }
-
-          if (cajasIdsDemas.size > 0) {
-            const actualizaciones = Array.from(cajasIdsDemas).map(
-              async (cajaIdParaActualizar) => {
-                // Obtener el monto actual de la caja
-                const cajaActualResult = await db.query(
-                  'SELECT "CajaMonto" FROM "caja" WHERE "CajaId" = $1',
-                  [cajaIdParaActualizar]
-                );
-                const cajaActual = cajaActualResult.rows.length > 0 ? cajaActualResult.rows[0] : null;
-
-                if (cajaActual) {
-                  const cajaMontoActual = Number(cajaActual.CajaMonto) || 0;
-                  // En la creación las demás cajas recibieron el signo OPUESTO
-                  // a la aperturada, así que el reverso también es opuesto:
-                  //   INGRESO restó a las demás -> ahora suma
-                  //   EGRESO  sumó a las demás  -> ahora resta
-                  const nuevoMonto = esIngreso
-                    ? cajaMontoActual + monto
-                    : cajaMontoActual - monto;
-
-                  // Actualizar el monto de la caja
-                  await db.query(
-                    'UPDATE "caja" SET "CajaMonto" = $1 WHERE "CajaId" = $2',
-                    [nuevoMonto, cajaIdParaActualizar]
-                  );
-                }
-              }
-            );
-
-            await Promise.all(actualizaciones);
-          }
-
-          // Eliminar el registro de registrodiariocaja
-          await RegistroDiarioCaja.delete(registro.RegistroDiarioCajaId);
-        }
-      }
+    // Eliminar cada registro relacionado revirtiendo los saldos. Si es de un
+    // turno ya cerrado no se toca la caja aperturada y se recalcula la
+    // diferencia de ese cierre.
+    let turnoCerrado = false;
+    const motivo = motivoEliminacion(
+      req,
+      `Eliminación de la cobranza de colegio #${cobranza.ColegioCobranzaId}`
+    );
+    for (const registro of registrosRelacionados) {
+      const { cierreId } = await aplicarEnTurno(client, registro, {
+        eliminar: true,
+        revertir: revertirAperturadaYDemas,
+        motivo,
+        usuarioId: req.user.id,
+      });
+      if (cierreId) turnoCerrado = true;
     }
+    await client.query("COMMIT");
 
-    res.json({ message: "Cobranza eliminada exitosamente" });
+    res.json({
+      message: turnoCerrado
+        ? "Cobranza eliminada. Era de un turno ya cerrado: se recalculó la diferencia de ese cierre."
+        : "Cobranza eliminada exitosamente",
+    });
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error("Error al eliminar cobranza:", error);
     res.status(500).json({ message: error.message });
+  } finally {
+    client.release();
   }
 };
 
@@ -297,7 +321,6 @@ exports.reporteCobranzas = async (req, res) => {
       parseCajaIds(req.query),
     );
 
-    const MULTA_POR_DIA = 1000;
     const comisionPct = registros.length
       ? Number(registros[0].ColegioComision) || 0
       : 0;

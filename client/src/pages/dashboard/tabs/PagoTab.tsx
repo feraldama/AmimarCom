@@ -214,7 +214,7 @@ export default function PagosTab() {
       setFecha(`${yyyy}-${mm}-${dd}T${hh}:${min}`);
     } catch (err: unknown) {
       const errorMsg =
-        err instanceof Error ? err.message : "No se pudo registrar el pago";
+        (err as { message?: string })?.message || "No se pudo registrar el pago";
       Swal.fire("Error", errorMsg, "error");
     } finally {
       setIsSubmitting(false);

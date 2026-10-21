@@ -24,7 +24,10 @@ const SELECT_LISTADO = `
     d."CierreDiferenciaObservacion" AS "Observacion",
     d."CierreDiferenciaRevisado" AS "Revisado",
     d."CierreDiferenciaRevisadoPor" AS "RevisadoPor",
-    to_char(d."CierreDiferenciaRevisadoFecha", 'YYYY-MM-DD HH24:MI') AS "RevisadoFecha"
+    to_char(d."CierreDiferenciaRevisadoFecha", 'YYYY-MM-DD HH24:MI') AS "RevisadoFecha",
+    -- Correcciones/eliminaciones de movimientos hechas después del cierre
+    (SELECT COUNT(*)::int FROM "registrocorreccion" rc
+      WHERE rc."RegistroCorreccionCierreId" = d."RegistroDiarioCajaId") AS "CantCorrecciones"
   FROM "cierrediferencia" d
   JOIN "caja" c ON c."CajaId" = d."CajaId"
   LEFT JOIN "usuario" u ON u."UsuarioId" = d."UsuarioId"
@@ -42,9 +45,22 @@ const ORDEN = {
 
 const CierreDiferencia = {
   // Calcula y guarda la diferencia del cierre `cierreId` (fila CIERRE ya
-  // insertada). `q` es el client de la transacción del cierre.
-  registrarParaCierre: async (q, cierreId) => {
-    await q.query(
+  // insertada). `q` es el client de la transacción del cierre (o de la
+  // corrección). Si ya existe la recalcula (se corrigió o eliminó un movimiento
+  // de ese turno ya cerrado) y, si el monto cambió, la vuelve a pendiente de
+  // revisión (lo revisado era otra cifra) y agrega `nota` a la observación con
+  // el monto anterior y el nuevo.
+  // Devuelve { anterior, nueva } (anterior null si no existía).
+  registrarParaCierre: async (q, cierreId, nota) => {
+    const previa = await q.query(
+      `SELECT "CierreDiferenciaMonto" FROM "cierrediferencia"
+       WHERE "RegistroDiarioCajaId" = $1 FOR UPDATE`,
+      [cierreId]
+    );
+    const anterior = previa.rows[0]
+      ? Number(previa.rows[0].CierreDiferenciaMonto)
+      : null;
+    const result = await q.query(
       `INSERT INTO "cierrediferencia" (
          "RegistroDiarioCajaId", "CierreDiferenciaAperturaId", "CajaId", "UsuarioId",
          "CierreDiferenciaFecha", "CierreDiferenciaApertura", "CierreDiferenciaIngresos",
@@ -75,9 +91,39 @@ const CierreDiferencia = {
            AND r."RegistroDiarioCajaId" < c."RegistroDiarioCajaId"
        ) m ON TRUE
        WHERE c."RegistroDiarioCajaId" = $1
-       ON CONFLICT DO NOTHING`,
+       ON CONFLICT ("RegistroDiarioCajaId") DO UPDATE SET
+         "CierreDiferenciaApertura" = EXCLUDED."CierreDiferenciaApertura",
+         "CierreDiferenciaIngresos" = EXCLUDED."CierreDiferenciaIngresos",
+         "CierreDiferenciaEgresos" = EXCLUDED."CierreDiferenciaEgresos",
+         "CierreDiferenciaTeorico" = EXCLUDED."CierreDiferenciaTeorico",
+         "CierreDiferenciaContado" = EXCLUDED."CierreDiferenciaContado",
+         "CierreDiferenciaMonto" = EXCLUDED."CierreDiferenciaMonto",
+         "CierreDiferenciaRevisado" = "cierrediferencia"."CierreDiferenciaRevisado"
+           AND "cierrediferencia"."CierreDiferenciaMonto" = EXCLUDED."CierreDiferenciaMonto",
+         "CierreDiferenciaRevisadoPor" = CASE
+           WHEN "cierrediferencia"."CierreDiferenciaMonto" = EXCLUDED."CierreDiferenciaMonto"
+           THEN "cierrediferencia"."CierreDiferenciaRevisadoPor" END,
+         "CierreDiferenciaRevisadoFecha" = CASE
+           WHEN "cierrediferencia"."CierreDiferenciaMonto" = EXCLUDED."CierreDiferenciaMonto"
+           THEN "cierrediferencia"."CierreDiferenciaRevisadoFecha" END
+       RETURNING "CierreDiferenciaMonto"`,
       [cierreId]
     );
+    const nueva = result.rows[0]
+      ? Number(result.rows[0].CierreDiferenciaMonto)
+      : anterior;
+
+    if (nota && anterior !== null && anterior !== nueva) {
+      const gs = (n) => Number(n).toLocaleString("es-PY");
+      await q.query(
+        `UPDATE "cierrediferencia"
+         SET "CierreDiferenciaObservacion" = LEFT(CONCAT_WS(' | ',
+               NULLIF(TRIM("CierreDiferenciaObservacion"), ''), $2::text), 500)
+         WHERE "RegistroDiarioCajaId" = $1`,
+        [cierreId, `${nota}: diferencia ${gs(anterior)} -> ${gs(nueva)}`]
+      );
+    }
+    return { anterior, nueva };
   },
 
   // Listado paginado con filtros y totales del filtro completo.
@@ -229,7 +275,32 @@ const CierreDiferencia = {
             )
           ).rows;
 
-    return { ...cabecera, movimientos, otrasCajas };
+    // Auditoría: qué movimientos de este turno se corrigieron o eliminaron
+    // después del cierre, quién, por qué y cómo cambió la diferencia
+    const correcciones = (
+      await db.query(
+        `SELECT
+           rc."RegistroCorreccionId" AS "Id",
+           to_char(rc."RegistroCorreccionFecha", 'YYYY-MM-DD HH24:MI') AS "Fecha",
+           rc."RegistroDiarioCajaId" AS "MovimientoId",
+           rc."RegistroCorreccionTipo" AS "Tipo",
+           rc."RegistroCorreccionMontoAnterior"::numeric AS "MontoAnterior",
+           rc."RegistroCorreccionMontoNuevo"::numeric AS "MontoNuevo",
+           rc."RegistroCorreccionDetalleAnterior" AS "DetalleAnterior",
+           rc."RegistroCorreccionDiferenciaAnterior"::numeric AS "DiferenciaAnterior",
+           rc."RegistroCorreccionDiferenciaNueva"::numeric AS "DiferenciaNueva",
+           rc."RegistroCorreccionMotivo" AS "Motivo",
+           rc."UsuarioId",
+           TRIM(CONCAT(u."UsuarioNombre", ' ', u."UsuarioApellido")) AS "UsuarioNombre"
+         FROM "registrocorreccion" rc
+         LEFT JOIN "usuario" u ON u."UsuarioId" = rc."UsuarioId"
+         WHERE rc."RegistroCorreccionCierreId" = $1
+         ORDER BY rc."RegistroCorreccionId"`,
+        [id]
+      )
+    ).rows;
+
+    return { ...cabecera, movimientos, otrasCajas, correcciones };
   },
 
   // Guarda la observación y el estado de revisión. Devuelve la fila o

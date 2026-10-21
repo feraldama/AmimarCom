@@ -14,6 +14,7 @@ import FilterPanel, { FilterSelect } from "../../components/common/FilterPanel";
 import { getCajas } from "../../services/cajas.service";
 import { getColegios } from "../../services/colegio.service";
 import Swal from "sweetalert2";
+import { confirmarEliminacionConMotivo } from "../../utils/confirmarEliminacion";
 import { usePermiso } from "../../hooks/usePermiso";
 
 interface CajaOption {
@@ -188,35 +189,27 @@ export default function ColegioCobranzasPage() {
   };
 
   const handleDelete = async (cobranza: ColegioCobranza) => {
-    Swal.fire({
-      title: "¿Estás seguro?",
-      text: "¡No podrás revertir esto!",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#0d9488",
-      cancelButtonColor: "#d33",
-      confirmButtonText: "Sí, eliminar!",
-      cancelButtonText: "Cancelar",
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        try {
-          await deleteColegioCobranza(cobranza.ColegioCobranzaId);
-          Swal.fire({
-            icon: "success",
-            title: "Cobranza eliminada exitosamente",
-          });
-          fetchCobranzas();
-        } catch (error: unknown) {
-          const err = error as { message?: string };
-          const msg = err?.message || "No se pudo eliminar la cobranza";
-          Swal.fire({
-            icon: "warning",
-            title: "No permitido",
-            text: msg,
-          });
-        }
-      }
-    });
+    const motivo = await confirmarEliminacionConMotivo();
+    if (motivo === null) return;
+    try {
+      const response = await deleteColegioCobranza(
+        cobranza.ColegioCobranzaId,
+        motivo
+      );
+      Swal.fire({
+        icon: "success",
+        title: response?.message || "Cobranza eliminada exitosamente",
+      });
+      fetchCobranzas();
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      const msg = err?.message || "No se pudo eliminar la cobranza";
+      Swal.fire({
+        icon: "warning",
+        title: "No permitido",
+        text: msg,
+      });
+    }
   };
 
   const handleCreate = () => {
@@ -233,11 +226,11 @@ export default function ColegioCobranzasPage() {
     let mensaje = "";
     try {
       if (currentCobranza) {
-        await updateColegioCobranza(
+        const response = await updateColegioCobranza(
           currentCobranza.ColegioCobranzaId,
           cobranzaData
         );
-        mensaje = "Cobranza actualizada exitosamente";
+        mensaje = response?.message || "Cobranza actualizada exitosamente";
       } else {
         const response = await createColegioCobranza(cobranzaData);
         mensaje = response.message || "Cobranza creada exitosamente";
@@ -253,11 +246,9 @@ export default function ColegioCobranzasPage() {
       });
       fetchCobranzas();
     } catch (error) {
-      if (error instanceof Error) {
-        setError(error.message);
-      } else {
-        setError("Error desconocido");
-      }
+      // El service rechaza con el cuerpo de la respuesta ({ message }), no con un Error
+      const msg = (error as { message?: string })?.message;
+      setError(msg || "Error desconocido");
     }
   };
 
@@ -325,7 +316,8 @@ export default function ColegioCobranzasPage() {
           puedeEliminar ? (cobranza) => handleDelete(cobranza) : undefined
         }
         onEdit={puedeEditar ? handleEdit : undefined}
-        onCreate={puedeCrear ? handleCreate : undefined}        onSearch={handleSearch}
+        onCreate={puedeCrear ? handleCreate : undefined}
+        onSearch={handleSearch}
         searchTerm={searchTerm}
         onKeyPress={handleKeyPress}
         onSearchSubmit={applySearch}

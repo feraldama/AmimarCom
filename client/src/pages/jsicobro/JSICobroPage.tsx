@@ -15,6 +15,7 @@ import FilterPanel, { FilterSelect } from "../../components/common/FilterPanel";
 import { getCajas } from "../../services/cajas.service";
 import { getClientes } from "../../services/clientes.service";
 import Swal from "sweetalert2";
+import { confirmarEliminacionConMotivo } from "../../utils/confirmarEliminacion";
 import { usePermiso } from "../../hooks/usePermiso";
 
 interface CajaOption {
@@ -173,35 +174,24 @@ export default function JSICobroPage() {
   };
 
   const handleDelete = async (jsicobro: JSICobro) => {
-    Swal.fire({
-      title: "¿Estás seguro?",
-      text: "¡No podrás revertir esto!",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#0d9488",
-      cancelButtonColor: "#d33",
-      confirmButtonText: "Sí, eliminar!",
-      cancelButtonText: "Cancelar",
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        try {
-          await deleteJSICobro(jsicobro.JSICobroId!);
-          Swal.fire({
-            icon: "success",
-            title: "Cobro eliminado exitosamente",
-          });
-          fetchJSICobros();
-        } catch (error: unknown) {
-          const err = error as { message?: string };
-          const msg = err?.message || "No se pudo eliminar el cobro";
-          Swal.fire({
-            icon: "warning",
-            title: "No permitido",
-            text: msg,
-          });
-        }
-      }
-    });
+    const motivo = await confirmarEliminacionConMotivo();
+    if (motivo === null) return;
+    try {
+      const response = await deleteJSICobro(jsicobro.JSICobroId!, motivo);
+      Swal.fire({
+        icon: "success",
+        title: response?.message || "Cobro eliminado exitosamente",
+      });
+      fetchJSICobros();
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      const msg = err?.message || "No se pudo eliminar el cobro";
+      Swal.fire({
+        icon: "warning",
+        title: "No permitido",
+        text: msg,
+      });
+    }
   };
 
   const handleCreate = () => {
@@ -218,8 +208,8 @@ export default function JSICobroPage() {
     let mensaje = "";
     try {
       if (currentJSICobro) {
-        await updateJSICobro(currentJSICobro.JSICobroId!, jsicobroData);
-        mensaje = "Cobro actualizado exitosamente";
+        const response = await updateJSICobro(currentJSICobro.JSICobroId!, jsicobroData);
+        mensaje = response?.message || "Cobro actualizado exitosamente";
       } else {
         const response = await createJSICobro(jsicobroData);
         mensaje = response.message || "Cobro creado exitosamente";
@@ -235,11 +225,9 @@ export default function JSICobroPage() {
       });
       fetchJSICobros();
     } catch (error) {
-      if (error instanceof Error) {
-        setError(error.message);
-      } else {
-        setError("Error desconocido");
-      }
+      // El service rechaza con el cuerpo de la respuesta ({ message }), no con un Error
+      const msg = (error as { message?: string })?.message;
+      setError(msg || "Error desconocido");
     }
   };
 

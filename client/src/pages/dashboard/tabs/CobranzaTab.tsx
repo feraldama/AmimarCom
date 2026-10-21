@@ -292,7 +292,7 @@ export default function CobranzaTab() {
       setFecha(`${yyyy}-${mm}-${dd}T${hh}:${min}`);
     } catch (err: unknown) {
       const errorMsg =
-        err instanceof Error ? err.message : "No se pudo registrar la cobranza";
+        (err as { message?: string })?.message || "No se pudo registrar la cobranza";
       Swal.fire("Error", errorMsg, "error");
     } finally {
       setIsSubmitting(false);

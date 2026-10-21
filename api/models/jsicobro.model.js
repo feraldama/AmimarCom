@@ -6,7 +6,8 @@ const JSICobro = {
     return result.rows;
   },
 
-  getById: async (id) => {
+  // `q` permite correr las consultas dentro de una transacción (client de pg)
+  getById: async (id, q = db) => {
     const query = `
       SELECT j.*,
         c."CajaDescripcion",
@@ -17,7 +18,7 @@ const JSICobro = {
       LEFT JOIN "clientes" cl ON j."ClienteId" = cl."ClienteId"
       WHERE j."JSICobroId" = $1
     `;
-    const result = await db.query(query, [id]);
+    const result = await q.query(query, [id]);
     return result.rows && result.rows.length > 0 ? result.rows[0] : null;
   },
 
@@ -224,7 +225,7 @@ const JSICobro = {
     return JSICobro.getById(result.rows[0].JSICobroId);
   },
 
-  update: async (id, jsicobroData) => {
+  update: async (id, jsicobroData, q = db) => {
     // Construir la consulta dinámicamente
     let updateFields = [];
     let values = [];
@@ -258,18 +259,18 @@ const JSICobro = {
       WHERE "JSICobroId" = $${paramIndex}
     `;
 
-    const result = await db.query(query, values);
+    const result = await q.query(query, values);
 
     if (result.rowCount === 0) {
       return null; // No se encontró el registro
     }
 
     // Obtener el registro actualizado
-    return JSICobro.getById(id);
+    return JSICobro.getById(id, q);
   },
 
-  delete: async (id) => {
-    const result = await db.query(
+  delete: async (id, q = db) => {
+    const result = await q.query(
       'DELETE FROM "jsicobro" WHERE "JSICobroId" = $1',
       [id]
     );

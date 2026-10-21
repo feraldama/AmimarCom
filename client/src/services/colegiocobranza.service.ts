@@ -121,9 +121,12 @@ export const updateColegioCobranza = async (
   }
 };
 
-export const deleteColegioCobranza = async (id: string | number) => {
+// `motivo` queda en la auditoría si el movimiento es de un turno ya cerrado
+export const deleteColegioCobranza = async (id: string | number, motivo?: string) => {
   try {
-    const response = await api.delete(`/colegiocobranza/${id}`);
+    const response = await api.delete(`/colegiocobranza/${id}`, {
+      data: motivo ? { Motivo: motivo } : undefined,
+    });
     return response.data;
   } catch (error) {
     const axiosError = error as AxiosError<{ message?: string }>;

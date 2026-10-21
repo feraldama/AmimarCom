@@ -80,6 +80,7 @@ exports.getById = async (req, res) => {
 // Crear un nuevo envío western
 exports.create = async (req, res) => {
   try {
+    await RegistroDiarioCaja.validarFechaEnTurno(req.body.CajaId, req.body.WesternEnvioFecha);
     const envio = await WesternEnvio.create({
       ...req.body,
       UsuarioId: req.user.id, // Asumiendo que tienes el usuario en req.user

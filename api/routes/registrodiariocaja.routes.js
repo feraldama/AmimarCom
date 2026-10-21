@@ -89,11 +89,13 @@ router.post(
   verificarPermiso("OPERARCAJA", "crear"),
   registroDiarioCajaController.aperturaCierreCaja
 );
+// Corrige el monto/detalle de un movimiento conservando su turno (también los
+// de un turno ya cerrado: recalcula la diferencia de ese cierre)
 router.put(
-  "/:id",
+  "/:id/corregir",
   authMiddleware,
   verificarPermiso("REGISTRODIARIOCAJA", "editar"),
-  registroDiarioCajaController.update
+  registroDiarioCajaController.corregir
 );
 // También lo usa Movimientos de Divisas para borrar el registro asociado
 router.delete(

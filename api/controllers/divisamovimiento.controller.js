@@ -1,4 +1,5 @@
 const DivisaMovimiento = require("../models/divisamovimiento.model");
+const RegistroDiarioCaja = require("../models/registrodiariocaja.model");
 const { parseCajaIds } = require("../utils/reportes");
 
 // Lee los parámetros de filtro de la query (compartidos por getAll y search)
@@ -94,6 +95,7 @@ exports.create = async (req, res) => {
           "Los campos CajaId, DivisaMovimientoTipo, DivisaId y UsuarioId son requeridos",
       });
     }
+    await RegistroDiarioCaja.validarFechaEnTurno(req.body.CajaId, req.body.DivisaMovimientoFecha);
     const divisaMovimiento = await DivisaMovimiento.create(req.body);
     res.status(201).json({
       message: "Movimiento de divisa creado exitosamente",

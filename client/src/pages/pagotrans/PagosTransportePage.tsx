@@ -15,6 +15,7 @@ import FilterPanel, { FilterSelect } from "../../components/common/FilterPanel";
 import { getCajas } from "../../services/cajas.service";
 import { getTransportes } from "../../services/transporte.service";
 import Swal from "sweetalert2";
+import { confirmarEliminacionConMotivo } from "../../utils/confirmarEliminacion";
 import { usePermiso } from "../../hooks/usePermiso";
 
 interface CajaOption {
@@ -174,35 +175,24 @@ export default function PagosTransportePage() {
   };
 
   const handleDelete = async (pagoTrans: PagoTrans) => {
-    Swal.fire({
-      title: "¿Estás seguro?",
-      text: "¡No podrás revertir esto!",
-      icon: "warning",
-      showCancelButton: true,
-      confirmButtonColor: "#0d9488",
-      cancelButtonColor: "#d33",
-      confirmButtonText: "Sí, eliminar!",
-      cancelButtonText: "Cancelar",
-    }).then(async (result) => {
-      if (result.isConfirmed) {
-        try {
-          await deletePagoTrans(pagoTrans.PagoTransId!);
-          Swal.fire({
-            icon: "success",
-            title: "Pago eliminado exitosamente",
-          });
-          fetchPagosTrans();
-        } catch (error: unknown) {
-          const err = error as { message?: string };
-          const msg = err?.message || "No se pudo eliminar el pago";
-          Swal.fire({
-            icon: "warning",
-            title: "No permitido",
-            text: msg,
-          });
-        }
-      }
-    });
+    const motivo = await confirmarEliminacionConMotivo();
+    if (motivo === null) return;
+    try {
+      const response = await deletePagoTrans(pagoTrans.PagoTransId!, motivo);
+      Swal.fire({
+        icon: "success",
+        title: response?.message || "Pago eliminado exitosamente",
+      });
+      fetchPagosTrans();
+    } catch (error: unknown) {
+      const err = error as { message?: string };
+      const msg = err?.message || "No se pudo eliminar el pago";
+      Swal.fire({
+        icon: "warning",
+        title: "No permitido",
+        text: msg,
+      });
+    }
   };
 
   const handleCreate = () => {
@@ -219,8 +209,8 @@ export default function PagosTransportePage() {
     let mensaje = "";
     try {
       if (currentPagoTrans) {
-        await updatePagoTrans(currentPagoTrans.PagoTransId!, pagoTransData);
-        mensaje = "Pago actualizado exitosamente";
+        const response = await updatePagoTrans(currentPagoTrans.PagoTransId!, pagoTransData);
+        mensaje = response?.message || "Pago actualizado exitosamente";
       } else {
         const response = await createPagoTrans(pagoTransData);
         mensaje = response.message || "Pago creado exitosamente";
@@ -236,11 +226,9 @@ export default function PagosTransportePage() {
       });
       fetchPagosTrans();
     } catch (error) {
-      if (error instanceof Error) {
-        setError(error.message);
-      } else {
-        setError("Error desconocido");
-      }
+      // El service rechaza con el cuerpo de la respuesta ({ message }), no con un Error
+      const msg = (error as { message?: string })?.message;
+      setError(msg || "Error desconocido");
     }
   };
 

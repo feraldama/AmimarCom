@@ -6,7 +6,8 @@ const PagoTrans = {
     return result.rows;
   },
 
-  getById: async (id) => {
+  // `q` permite correr las consultas dentro de una transacción (client de pg)
+  getById: async (id, q = db) => {
     const query = `
       SELECT p.*,
         t."TransporteNombre",
@@ -19,7 +20,7 @@ const PagoTrans = {
       LEFT JOIN "clientes" cl ON p."ClienteId" = cl."ClienteId"
       WHERE p."PagoTransId" = $1
     `;
-    const result = await db.query(query, [id]);
+    const result = await q.query(query, [id]);
     return result.rows && result.rows.length > 0 ? result.rows[0] : null;
   },
 
@@ -275,7 +276,7 @@ const PagoTrans = {
     return PagoTrans.getById(result.rows[0].PagoTransId);
   },
 
-  update: async (id, pagoTransData) => {
+  update: async (id, pagoTransData, q = db) => {
     // Construir la consulta dinámicamente
     let updateFields = [];
     let values = [];
@@ -320,18 +321,18 @@ const PagoTrans = {
       WHERE "PagoTransId" = $${paramIndex}
     `;
 
-    const result = await db.query(query, values);
+    const result = await q.query(query, values);
 
     if (result.rowCount === 0) {
       return null; // No se encontró el registro
     }
 
     // Obtener el registro actualizado
-    return PagoTrans.getById(id);
+    return PagoTrans.getById(id, q);
   },
 
-  delete: async (id) => {
-    const result = await db.query(
+  delete: async (id, q = db) => {
+    const result = await q.query(
       'DELETE FROM "pagotrans" WHERE "PagoTransId" = $1',
       [id]
     );

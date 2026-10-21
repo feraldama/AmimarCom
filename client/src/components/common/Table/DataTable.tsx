@@ -26,6 +26,9 @@ interface DataTableProps<T extends DataTableRow> {
   columns: DataTableColumn<T>[];
   data: T[];
   onEdit?: (item: T) => void;
+  // Si devuelve un texto, el botón Editar de esa fila queda deshabilitado y
+  // el texto se muestra como explicación
+  editDisabledReason?: (item: T) => string | null | undefined;
   onDelete?: (item: T, e?: React.MouseEvent) => void;
   onViewCredit?: (item: T) => void;
   emptyMessage?: string;
@@ -42,6 +45,7 @@ function DataTable<T extends DataTableRow>({
   columns,
   data,
   onEdit,
+  editDisabledReason,
   onDelete,
   onViewCredit,
   emptyMessage = "No se encontraron registros",
@@ -156,18 +160,26 @@ function DataTable<T extends DataTableRow>({
                       customActions(item)
                     ) : (
                       <div className="flex items-center justify-center gap-0.5">
-                        {onEdit && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => onEdit(item)}
-                            title="Editar"
-                            aria-label="Editar"
-                            className="size-9 text-primary hover:text-primary"
-                          >
-                            <Pencil className="size-4" />
-                          </Button>
-                        )}
+                        {onEdit &&
+                          (() => {
+                            const motivo = editDisabledReason?.(item);
+                            // Un botón deshabilitado no muestra su title: va
+                            // en un span que lo envuelve
+                            return (
+                              <span title={motivo || "Editar"}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => onEdit(item)}
+                                  disabled={Boolean(motivo)}
+                                  aria-label={motivo ? `Editar: ${motivo}` : "Editar"}
+                                  className="size-9 text-primary hover:text-primary"
+                                >
+                                  <Pencil className="size-4" />
+                                </Button>
+                              </span>
+                            );
+                          })()}
                         {onViewCredit && item.VentaTipo === "CR" && (
                           <Button
                             variant="ghost"
