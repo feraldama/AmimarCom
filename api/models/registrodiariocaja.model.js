@@ -90,6 +90,15 @@ const ORIGENES_VINCULADOS = [
   ["PagoAdminId:", "un pago admin"],
 ];
 
+// Orígenes con pantalla propia para eliminar: esa pantalla borra el cobro y su
+// registro de caja juntos, con su regla de saldos. Borrar sólo el registro
+// desde Registro Diario dejaría el cobro huérfano.
+const ORIGENES_CON_PANTALLA = [
+  ["ColegioCobranzaId:", "una cobranza de colegio", "Admin. Colegios > Cobranzas"],
+  ["JSICobroId:", "un cobro de JSI", "Cobros JSI"],
+  ["PagoTransId:", "un pago de transporte", "Pagos Transporte"],
+];
+
 const INSERT_REGISTRO_QUERY = `
   INSERT INTO "registrodiariocaja" (
     "CajaId",
@@ -630,6 +639,18 @@ const RegistroDiarioCaja = {
       return "Los movimientos Western están vinculados al envío/pago y no se corrigen desde acá.";
     }
     return null;
+  },
+
+  // Por qué un movimiento no se puede eliminar desde Registro Diario de Caja
+  // (null si se puede): los de un cobro con pantalla propia se eliminan desde
+  // ahí. Los de divisas y Western sí pasan por acá (sus pantallas usan este
+  // mismo borrado).
+  motivoNoEliminable: (registro) => {
+    const detalle = registro.RegistroDiarioCajaDetalle || "";
+    const origen = ORIGENES_CON_PANTALLA.find(([marca]) => detalle.includes(marca));
+    return origen
+      ? `El movimiento es de ${origen[1]}: eliminalo desde ${origen[2]}, que borra el cobro y su registro de caja juntos.`
+      : null;
   },
 
   // Cierre del turno ya cerrado al que pertenece un movimiento: la primera

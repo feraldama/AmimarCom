@@ -23,6 +23,8 @@ export interface Movimiento {
   RegistroDiarioCajaCambio: number;
   // Por qué no se puede corregir (null si se puede); lo calcula el backend
   MotivoNoCorregible?: string | null;
+  // Por qué no se puede eliminar desde acá (null si se puede)
+  MotivoNoEliminable?: string | null;
   [key: string]: unknown;
 }
 
@@ -195,6 +197,7 @@ export default function MovementsList({
         data={movimientos}
         onEdit={disableEdit ? undefined : onEdit}
         editDisabledReason={(m) => m.MotivoNoCorregible}
+        deleteDisabledReason={(m) => m.MotivoNoEliminable}
         onDelete={onDelete}
         emptyMessage="No se encontraron registros"
         sortKey={sortKey}

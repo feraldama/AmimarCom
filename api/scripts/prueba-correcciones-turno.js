@@ -81,7 +81,8 @@ const ok = (cond, msg) => {
     const usuario = (await uno(`SELECT "UsuarioId" FROM usuario LIMIT 1`)).UsuarioId;
     const user = { id: usuario, isAdmin: "S" };
     const caja = await uno(`SELECT * FROM caja WHERE "CajaTipoId" = 1 ORDER BY "CajaId" LIMIT 1`);
-    const cliente = await uno(`SELECT "ClienteId" FROM clientes LIMIT 1`);
+    const cliente = await uno(`SELECT "ClienteId" FROM clientes ORDER BY "ClienteId" LIMIT 1`);
+    const otroCliente = await uno(`SELECT "ClienteId" FROM clientes ORDER BY "ClienteId" OFFSET 1 LIMIT 1`);
     const grupo = await uno(
       `SELECT * FROM tipogastogrupo WHERE "TipoGastoId" = 2 AND "TipoGastoGrupoId" <> 2
          AND TRIM("TipoGastoGrupoDescripcion") NOT ILIKE 'PASE %'
@@ -103,7 +104,7 @@ const ok = (cond, msg) => {
       `SELECT "TipoGastoGrupoId" FROM tipogastogrupo
        WHERE "TipoGastoId" = 2 AND TRIM("TipoGastoGrupoDescripcion") ILIKE 'J.S.I.%' LIMIT 1`
     );
-    if (!caja || !cliente || !grupo || !alumno || !transporte || !grupoJSI) {
+    if (!caja || !cliente || !otroCliente || !grupo || !alumno || !transporte || !grupoJSI) {
       throw new Error("Faltan datos de base (caja interna, cliente, colegio, transporte o grupo JSI)");
     }
 
@@ -174,6 +175,10 @@ const ok = (cond, msg) => {
     ok(fila(x.RegistroDiarioCajaId).MotivoNoCorregible === null, "movimiento común: corregible");
     ok(Boolean(fila(c1.RegistroDiarioCajaId).MotivoNoCorregible), "fila de cierre: no corregible");
     ok(/Cobranzas de Colegios/.test(fila(z.RegistroDiarioCajaId).MotivoNoCorregible || ""), "cobranza de colegio: no corregible desde acá");
+    ok(fila(x.RegistroDiarioCajaId).MotivoNoEliminable === null, "movimiento común: eliminable");
+    ok(/Cobros JSI/.test(fila(j.RegistroDiarioCajaId).MotivoNoEliminable || ""), "cobro de JSI: se elimina desde Cobros JSI");
+    r = await llamar(rdc.delete, { params: { id: j.RegistroDiarioCajaId }, body: { Motivo: "x" }, user });
+    ok(r.status === 400 && (await existe2(j.RegistroDiarioCajaId)), "eliminar el registro de un cobro JSI desde Registro Diario: 400, sigue existiendo");
     r = await llamar(rdc.corregir, { params: { id: x.RegistroDiarioCajaId }, body: { RegistroDiarioCajaMonto: 150000 }, user });
     ok(r.status === 400, "corregir sin motivo: 400");
     let d = await dif();
@@ -200,6 +205,11 @@ const ok = (cond, msg) => {
     ok(r.status === 200 && (await montoDe(j.RegistroDiarioCajaId)) === 80000, "registro del cobro 50.000 -> 80.000 (mismo ID): " + r.body.message);
     ok((await dif()) === d + 30000, `diferencia ${d} -> ${await dif()}`);
     d = await dif();
+    r = await llamar(jsic.update, { params: { id: jsi.JSICobroId }, body: { ClienteId: otroCliente.ClienteId }, user });
+    const detalleJ = (await uno(`SELECT "RegistroDiarioCajaDetalle" d FROM registrodiariocaja WHERE "RegistroDiarioCajaId" = $1`, [j.RegistroDiarioCajaId])).d;
+    ok(r.status === 200 && detalleJ.startsWith(`ClienteId:${otroCliente.ClienteId} |`) && detalleJ.endsWith(`JSICobroId:${jsi.JSICobroId}`),
+      "cambio de cliente: detalle rehecho -> " + detalleJ);
+    ok((await montoDe(j.RegistroDiarioCajaId)) === 80000 && (await dif()) === d, "cambio de cliente: monto y diferencia sin cambios");
     r = await llamar(jsic.delete, { params: { id: jsi.JSICobroId }, body: { Motivo: "cobro anulado" }, user });
     ok(r.status === 200 && !(await existe2(j.RegistroDiarioCajaId)) && (await dif()) === d - 80000, `cobro eliminado: diferencia ${d} -> ${await dif()}`);
 
@@ -224,7 +234,7 @@ const ok = (cond, msg) => {
     console.log("Diferencias de Cierre: auditoría");
     const det = await llamar(cdc.getDetalle, { params: { id: c1.RegistroDiarioCajaId }, user });
     const tipos = det.body.correcciones.map((c) => c.Tipo);
-    ok(tipos.length === 8, `8 correcciones auditadas (${tipos.join(", ")})`);
+    ok(tipos.length === 9, `9 correcciones auditadas (${tipos.join(", ")})`);
     ok(det.body.correcciones.some((c) => c.Motivo === "se cargó dos veces"), "el motivo de la eliminación quedó auditado");
     ok(det.body.correcciones.every((c) => c.DiferenciaAnterior !== null && c.DiferenciaNueva !== null), "cada una guarda la diferencia antes/después");
   } catch (e) {

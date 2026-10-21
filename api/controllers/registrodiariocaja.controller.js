@@ -64,13 +64,15 @@ const parseFiltros = (query) => ({
   tipoGastoGrupoId: query.tipoGastoGrupoId || undefined,
 });
 
-// Agrega a cada fila del listado MotivoNoCorregible (null si se puede
-// corregir), para que la pantalla deshabilite "Corregir" explicando por qué
-const conMotivoNoCorregible = (result) => ({
+// Agrega a cada fila del listado MotivoNoCorregible y MotivoNoEliminable
+// (null si se puede), para que la pantalla deshabilite "Corregir" y
+// "Eliminar" explicando por qué
+const conMotivosAcciones = (result) => ({
   ...result,
   data: result.data.map((r) => ({
     ...r,
     MotivoNoCorregible: RegistroDiarioCaja.motivoNoCorregible(r),
+    MotivoNoEliminable: RegistroDiarioCaja.motivoNoEliminable(r),
   })),
 });
 
@@ -89,7 +91,7 @@ exports.getAll = async (req, res) => {
       sortOrder,
       parseFiltros(req.query),
     );
-    res.json(conMotivoNoCorregible(result));
+    res.json(conMotivosAcciones(result));
   } catch (error) {
     console.error("Error al obtener registros:", error);
     res.status(500).json({ message: error.message });
@@ -121,7 +123,7 @@ exports.search = async (req, res) => {
       parseFiltros(req.query),
     );
 
-    res.json(conMotivoNoCorregible(result));
+    res.json(conMotivosAcciones(result));
   } catch (error) {
     console.error("Error en búsqueda de registros:", error);
     res.status(500).json({ error: "Error al buscar registros" });
@@ -335,6 +337,9 @@ exports.delete = async (req, res) => {
         data: resultado,
       });
     }
+
+    const motivoRechazo = RegistroDiarioCaja.motivoNoEliminable(registro);
+    if (motivoRechazo) return res.status(400).json({ message: motivoRechazo });
 
     await client.query("BEGIN");
     // Releído con bloqueo: si otro pedido lo corrigió o eliminó mientras

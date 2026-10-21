@@ -16,6 +16,9 @@ const { aplicarEnTurno, motivoEliminacion } = require("./correccionTurno");
 //   getRegistros  (cobro, q) => registros de caja del cobro
 //   revertir      estrategia de saldos (ver utils/ajusteCajas.js)
 //   nombre        "Cobro de JSI", "Pago de transporte"... (mensajes)
+//   detalleRegistro  opcional: (anterior, actualizado, registro, q) => nuevo
+//                 detalle del registro de caja, o null si no cambia (ej. JSI
+//                 lo rehace si cambió el cliente)
 const crearHandlersCobroVinculado = ({
   Modelo,
   tabla,
@@ -25,6 +28,7 @@ const crearHandlersCobroVinculado = ({
   getRegistros,
   revertir,
   nombre,
+  detalleRegistro,
 }) => {
   const errorConStatus = (status, message) =>
     Object.assign(new Error(message), { status });
@@ -76,10 +80,18 @@ const crearHandlersCobroVinculado = ({
       const actualizado = await Modelo.update(req.params.id, req.body, client);
       if (!actualizado) throw noEncontrado();
 
+      const detalleNuevo =
+        registro && detalleRegistro
+          ? await detalleRegistro(anterior, actualizado, registro, client)
+          : null;
+      const cambiaDetalle =
+        detalleNuevo !== null && detalleNuevo !== registro?.RegistroDiarioCajaDetalle;
+
       let cierreId = null;
-      if (registro && diferencia !== 0) {
+      if (registro && (diferencia !== 0 || cambiaDetalle)) {
         ({ cierreId } = await aplicarEnTurno(client, registro, {
           montoNuevo: (Number(registro.RegistroDiarioCajaMonto) || 0) + diferencia,
+          detalleNuevo: cambiaDetalle ? detalleNuevo : undefined,
           revertir,
           motivo: `Edición del ${nombre.toLowerCase()} #${req.params.id}`,
           usuarioId: req.user.id,

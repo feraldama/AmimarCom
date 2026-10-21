@@ -119,6 +119,33 @@ const handlersJSI = crearHandlersCobroVinculado({
     ).rows,
   revertir: revertirAperturadaYDemas,
   nombre: "Cobro de JSI",
+  // Si cambió el cliente, el detalle del registro de caja se rehace con el
+  // mismo formato que JuntaSaneamientoTab:
+  //   ClienteId:<id> | Cliente:<nombre> | CodJSI:<código> | JSICobroId:<id>
+  detalleRegistro: async (anterior, actualizado, registro, q) => {
+    if (Number(actualizado.ClienteId) === Number(anterior.ClienteId)) return null;
+    const cliente = (
+      await q.query(
+        `SELECT "ClienteId", "ClienteNombre", "ClienteApellido", "ClienteCodJSI"
+         FROM "clientes" WHERE "ClienteId" = $1`,
+        [actualizado.ClienteId]
+      )
+    ).rows[0];
+    if (!cliente) return null;
+    const nombre = `${cliente.ClienteNombre ?? ""} ${cliente.ClienteApellido ?? ""}`
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 150); // RegistroDiarioCajaDetalle es varchar(250)
+    const codigo = Number(cliente.ClienteCodJSI) ? String(cliente.ClienteCodJSI) : "";
+    return [
+      `ClienteId:${cliente.ClienteId}`,
+      nombre && `Cliente:${nombre}`,
+      codigo && `CodJSI:${codigo}`,
+      `JSICobroId:${actualizado.JSICobroId}`,
+    ]
+      .filter(Boolean)
+      .join(" | ");
+  },
 });
 
 // Actualizar un cobro de JSI

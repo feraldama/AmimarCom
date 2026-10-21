@@ -30,6 +30,8 @@ interface DataTableProps<T extends DataTableRow> {
   // el texto se muestra como explicación
   editDisabledReason?: (item: T) => string | null | undefined;
   onDelete?: (item: T, e?: React.MouseEvent) => void;
+  // Igual que editDisabledReason, para el botón Eliminar
+  deleteDisabledReason?: (item: T) => string | null | undefined;
   onViewCredit?: (item: T) => void;
   emptyMessage?: string;
   actions?: boolean;
@@ -47,6 +49,7 @@ function DataTable<T extends DataTableRow>({
   onEdit,
   editDisabledReason,
   onDelete,
+  deleteDisabledReason,
   onViewCredit,
   emptyMessage = "No se encontraron registros",
   actions = true,
@@ -192,21 +195,27 @@ function DataTable<T extends DataTableRow>({
                             <CreditCard className="size-4" />
                           </Button>
                         )}
-                        {onDelete && (
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onDelete(item, e);
-                            }}
-                            title="Eliminar"
-                            aria-label="Eliminar"
-                            className="size-9 text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="size-4" />
-                          </Button>
-                        )}
+                        {onDelete &&
+                          (() => {
+                            const motivo = deleteDisabledReason?.(item);
+                            return (
+                              <span title={motivo || "Eliminar"}>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onDelete(item, e);
+                                  }}
+                                  disabled={Boolean(motivo)}
+                                  aria-label={motivo ? `Eliminar: ${motivo}` : "Eliminar"}
+                                  className="size-9 text-destructive hover:text-destructive"
+                                >
+                                  <Trash2 className="size-4" />
+                                </Button>
+                              </span>
+                            );
+                          })()}
                       </div>
                     )}
                   </td>
