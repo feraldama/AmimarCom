@@ -7,7 +7,7 @@ import { pedirMotivo } from "./confirmarEliminacion";
 export const esTurnoCerrado = (error: unknown) =>
   (error as { codigo?: string })?.codigo === "TURNO_CERRADO";
 
-// Cuando una pestaña de caja (Cobranza, JSI) recibe TURNO_CERRADO, ofrece
+// Cuando una pestaña de caja (Cobranza, Western, JSI) recibe TURNO_CERRADO, ofrece
 // cargar el movimiento en el cierre de ese día: pide el motivo y lo manda al
 // backend, que lo asigna a ese cierre, recalcula su diferencia y mueve las
 // cajas (sin tocar la caja del cajero ni el turno en curso). Devuelve true si

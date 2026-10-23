@@ -345,6 +345,38 @@ conTransaccionDePrueba(async ({ realQuery, uno, transaccion, llamar, ok, user, u
     `SELECT COUNT(*)::int AS n FROM registrocorreccion WHERE "RegistroCorreccionMotivo" LIKE 'Cargado por el cajero:%'`);
   ok(auditoriaCajero.n === 2, "queda auditado como cargado por el cajero");
 
+  console.log("El cajero carga desde Western un pago con la fecha de ayer");
+  r = await llamar(rdc.create, {
+    body: { CajaId: caja.CajaId, RegistroDiarioCajaFecha: AYER, TipoGastoId: 1, TipoGastoGrupoId: westernGs, RegistroDiarioCajaMonto: 80000 },
+    user,
+  });
+  ok(r.status === 400 && r.body.codigo === "TURNO_CERRADO", "Western con fecha de ayer: el alta normal avisa TURNO_CERRADO");
+  r = await cargar({ TipoGastoId: 1, TipoGastoGrupoId: westernGs, RegistroDiarioCajaMonto: 80000, Motivo: "x" });
+  ok(r.status === 400 && /Western/.test(r.body.message), "un grupo Western por la vía de Cobranza: 400");
+  const s4 = await saldos();
+  const esperadoW = new Map(s4);
+  for (const [id, m] of await efectoWestern(westernGs, 80000)) esperadoW.set(id, esperadoW.get(id) + m);
+  esperadoW.set(caja.CajaId, s4.get(caja.CajaId)); // la caja del cajero no se toca
+  d = await dif();
+  r = await cargar({ Origen: "WESTERN", TipoGastoId: 1, TipoGastoGrupoId: westernGs, RegistroDiarioCajaMonto: 80000,
+    RegistroDiarioCajaDetalle: "pago de ayer", RegistroDiarioCajaMTCN: 456, ClienteId: cliente.ClienteId, Motivo: "se olvidó cargar ayer" });
+  const westernAyer = r.body?.data?.registro;
+  ok(r.status === 201 && westernAyer.RegistroDiarioCajaCierreId === c1.RegistroDiarioCajaId && (await dif()) === d - 80000,
+    `Pago Western cargado en el cierre de ayer: diferencia ${d} -> ${await dif()}`);
+  const envioAyer = await uno(
+    `SELECT * FROM westernenvio WHERE "CajaId" = $1 AND "TipoGastoId" = 1 AND "TipoGastoGrupoId" = $2
+       AND "WesternEnvioFecha" = $3 AND "WesternEnvioMonto" = 80000`,
+    [caja.CajaId, westernGs, c1.RegistroDiarioCajaFecha]
+  );
+  ok(envioAyer && Number(envioAyer.ClienteId) === Number(cliente.ClienteId) && Number(envioAyer.WesternEnvioMTCN) === 456,
+    "se creó el westernenvio emparejado (fecha del cierre, cliente y MTCN)");
+  ok(cajasIguales(esperadoW, await saldos()) && (await teoricoHoy()) === teoricoAntes,
+    "demás cajas Western ajustadas como desde la pestaña; caja del cajero y turno de hoy sin cambios");
+  d = await dif();
+  r = await llamar(wec.delete, { params: { id: envioAyer.WesternEnvioId }, body: { Motivo: "prueba" }, user });
+  ok(r.status === 200 && !(await existe2(westernAyer.RegistroDiarioCajaId)) && (await dif()) === d + 80000 && cajasIguales(s4, await saldos()),
+    `eliminarlo desde Western deja todo como antes: diferencia ${d} -> ${await dif()}`);
+
   ok((await saldoCaja()) === saldoHoy, "la caja del turno de hoy no cambió en ningún paso");
 
   console.log("Atomicidad: una eliminación que falla en el último paso no deja nada a medias");
@@ -355,7 +387,7 @@ conTransaccionDePrueba(async ({ realQuery, uno, transaccion, llamar, ok, user, u
   console.log("Diferencias de Cierre: auditoría");
   const det = await llamar(cdc.getDetalle, { params: { id: c1.RegistroDiarioCajaId }, user });
   const tipos = det.body.correcciones.map((c) => c.Tipo);
-  ok(tipos.length === 19, `19 correcciones auditadas (${tipos.join(", ")})`);
+  ok(tipos.length === 21, `21 correcciones auditadas (${tipos.join(", ")})`);
   ok(det.body.correcciones.some((c) => c.Motivo === "se cargó dos veces"), "el motivo de la eliminación quedó auditado");
   ok(det.body.correcciones.every((c) => c.DiferenciaAnterior !== null && c.DiferenciaNueva !== null), "cada una guarda la diferencia antes/después");
 });

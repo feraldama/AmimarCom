@@ -207,8 +207,9 @@ const WesternEnvio = {
     };
   },
 
-  create: async (envioData) => {
-    const result = await db.query(
+  // `q` permite crearlo dentro de una transacción (client de pg)
+  create: async (envioData, q = db) => {
+    const result = await q.query(
       `INSERT INTO "westernenvio" (
         "CajaId",
         "WesternEnvioFecha",
@@ -242,7 +243,7 @@ const WesternEnvio = {
       ]
     );
 
-    return WesternEnvio.getById(result.rows[0].WesternEnvioId);
+    return WesternEnvio.getById(result.rows[0].WesternEnvioId, q);
   },
 
   update: async (id, envioData, q = db) => {

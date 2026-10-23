@@ -753,12 +753,12 @@ const RegistroDiarioCaja = {
     const diaApertura = diaParaguay(apertura.RegistroDiarioCajaFecha);
     if (diaMovimiento && diaApertura && diaMovimiento < diaApertura) {
       const formato = (dia) => dia.split("-").reverse().join("/");
-      // codigo TURNO_CERRADO: las pestañas de Cobranza y JSI ofrecen cargarlo
-      // en el cierre de ese día (POST /registrodiariocaja/en-cierre-anterior)
+      // codigo TURNO_CERRADO: las pestañas de Cobranza, Western y JSI ofrecen
+      // cargarlo en el cierre de ese día (POST /registrodiariocaja/en-cierre-anterior)
       throw Object.assign(
         new Error(
           `La fecha ${formato(diaMovimiento)} es anterior a la apertura del turno en curso de la caja (${formato(diaApertura)}). ` +
-            "No se carga con fecha atrasada porque caería en el turno de hoy. Si es un movimiento que faltó en un cierre anterior, desde Cobranza o JSI se puede cargar en ese cierre; en otros casos, un supervisor lo agrega desde Diferencias de Cierre. Si está mal cargado, se corrige o elimina desde su pantalla."
+            "No se carga con fecha atrasada porque caería en el turno de hoy. Si es un movimiento que faltó en un cierre anterior, desde Cobranza, Western o JSI se puede cargar en ese cierre; en otros casos, un supervisor lo agrega desde Diferencias de Cierre. Si está mal cargado, se corrige o elimina desde su pantalla."
         ),
         { status: 400, codigo: "TURNO_CERRADO", dia: diaMovimiento }
       );

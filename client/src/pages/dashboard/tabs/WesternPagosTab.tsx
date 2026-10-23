@@ -17,6 +17,7 @@ import {
 import ClienteModal from "../../../components/common/ClienteModal";
 import Swal from "sweetalert2";
 import { formatMiles, formatMilesSmart } from "../../../utils/utils";
+import { esTurnoCerrado, ofrecerCargaEnCierreAnterior } from "../../../utils/cierreAnterior";
 
 interface Caja {
   id: string | number;
@@ -290,7 +291,7 @@ export default function WesternPagosTab() {
         tipoGastoGrupoIdPagos === 8 ? Number(cambioDolarPagos) || 0 : 0;
 
       // Crear el registro diario de caja
-      await createRegistroDiarioCaja({
+      const datosRegistro = {
         CajaId: cajaIdPagos,
         RegistroDiarioCajaFecha: fechaPagos,
         TipoGastoId: tipoGastoIdPagos,
@@ -301,7 +302,23 @@ export default function WesternPagosTab() {
         RegistroDiarioCajaCambio: cambioPersistirPagos,
         RegistroDiarioCajaMTCN: mtcnPagos || 0,
         RegistroDiarioCajaCargoEnvio: 0, // No se usa en Pagos
-      });
+      };
+      try {
+        await createRegistroDiarioCaja(datosRegistro);
+      } catch (err) {
+        // Fecha de un turno ya cerrado: se ofrece cargarlo en el cierre de ese
+        // día (el backend crea también el westernenvio y mueve las cajas, acá
+        // no se toca ningún saldo)
+        if (!esTurnoCerrado(err)) throw err;
+        const cargado = await ofrecerCargaEnCierreAnterior({
+          ...datosRegistro,
+          Origen: "WESTERN",
+          Fecha: fechaPagos,
+          ClienteId: Number(clienteSeleccionadoPagos.ClienteId),
+        });
+        if (cargado) handleCancelPagos();
+        return;
+      }
 
       // Crear registro en westernenvio para pagos (TipoGastoId=1)
       await createWesternEnvio({
@@ -474,7 +491,7 @@ export default function WesternPagosTab() {
         tipoGastoGrupoIdEnvios === 15 ? Number(cambioDolarEnvios) || 0 : 0;
 
       // Crear el registro diario de caja
-      await createRegistroDiarioCaja({
+      const datosRegistro = {
         CajaId: cajaIdEnvios,
         RegistroDiarioCajaFecha: fechaEnvios,
         TipoGastoId: tipoGastoIdEnvios,
@@ -485,7 +502,21 @@ export default function WesternPagosTab() {
         RegistroDiarioCajaCambio: cambioPersistirEnvios,
         RegistroDiarioCajaMTCN: mtcnEnvios || 0,
         RegistroDiarioCajaCargoEnvio: cargoEnvioEnvios || 0,
-      });
+      };
+      try {
+        await createRegistroDiarioCaja(datosRegistro);
+      } catch (err) {
+        // Fecha de un turno ya cerrado: igual que en pagos
+        if (!esTurnoCerrado(err)) throw err;
+        const cargado = await ofrecerCargaEnCierreAnterior({
+          ...datosRegistro,
+          Origen: "WESTERN",
+          Fecha: fechaEnvios,
+          ClienteId: Number(clienteSeleccionadoEnvios.ClienteId),
+        });
+        if (cargado) handleCancelEnvios();
+        return;
+      }
 
       // Crear registro en westernenvio para envíos (TipoGastoId=2)
       await createWesternEnvio({

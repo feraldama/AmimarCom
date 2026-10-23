@@ -193,7 +193,7 @@ exports.create = async (req, res) => {
 // (más atrás, lo agrega un supervisor desde Diferencias de Cierre)
 const DIAS_CIERRE_ANTERIOR = 7;
 
-// Cargar desde las pestañas de caja (Cobranza, JSI) un movimiento de un día
+// Cargar desde las pestañas de caja (Cobranza, Western, JSI) un movimiento de un día
 // cuyo turno ya se cerró: cuando el alta normal se rechaza por fecha
 // (codigo TURNO_CERRADO), la pestaña pide un motivo y llama acá. Queda en el
 // cierre de ese día de la caja (ver utils/altaEnCierre.js): se recalcula su
@@ -204,6 +204,8 @@ const DIAS_CIERRE_ANTERIOR = 7;
 //   "MOVIMIENTO" (Cobranza): TipoGastoId, TipoGastoGrupoId,
 //     RegistroDiarioCajaDetalle, RegistroDiarioCajaCambio, RegistroDiarioCajaMTCN,
 //     RegistroDiarioCajaCargoEnvio
+//   "WESTERN" (WesternPagosTab): los mismos campos que MOVIMIENTO, con un
+//     grupo Western, y ClienteId (crea también el registro en westernenvio)
 //   "JSI": ClienteId y CodigoJSI (si el cliente no tiene código)
 exports.cargarEnCierreAnterior = async (req, res) => {
   const client = await db.connect();
