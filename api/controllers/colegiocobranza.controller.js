@@ -111,33 +111,7 @@ const getRegistrosDeCobranza = async (nominaId, colegioCobranzaId, q = db) => {
   return result.rows;
 };
 
-// Total cobrado, con la misma fórmula que la pantalla de cobranza:
-// importe del curso x meses + días de mora x 1.000 + examen - descuento
-const MULTA_POR_DIA = 1000;
-const calcularTotal = (cobranza, importe) =>
-  Math.max(
-    0,
-    importe * (Number(cobranza.ColegioCobranzaMes) || 0) +
-      (Number(cobranza.ColegioCobranzaDiasMora) || 0) * MULTA_POR_DIA +
-      (Number(cobranza.ColegioCobranzaExamen) || 0) -
-      (Number(cobranza.ColegioCobranzaDescuento) || 0)
-  );
-
-// Alumno con su colegio (grupo de gasto) e importe de la cuota de su curso
-const getNominaConCurso = async (nominaId, q = db) => {
-  const result = await q.query(
-    `SELECT n."NominaId", n."NominaNombre", n."NominaApellido", n."ColegioId",
-            col."ColegioNombre", col."TipoGastoId", col."TipoGastoGrupoId",
-            cur."ColegioCursoImporte"
-     FROM "nomina" n
-     LEFT JOIN "colegio" col ON col."ColegioId" = n."ColegioId"
-     LEFT JOIN "colegiocurso" cur
-       ON cur."ColegioId" = n."ColegioId" AND cur."ColegioCursoId" = n."ColegioCursoId"
-     WHERE n."NominaId" = $1`,
-    [nominaId]
-  );
-  return result.rows[0];
-};
+const { calcularTotal, getNominaConCurso, MULTA_POR_DIA } = ColegioCobranza;
 
 // Actualizar una cobranza. Si cambia lo cobrado (meses, mora, examen,
 // descuento o alumno) corrige también su registro de caja conservando su ID:

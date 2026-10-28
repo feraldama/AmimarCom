@@ -1,4 +1,4 @@
-import { Scale, AlertTriangle, CheckCircle2, Search, History } from "lucide-react";
+import { Scale, AlertTriangle, CheckCircle2, Search, History, Plus } from "lucide-react";
 import { useEffect, useState, useCallback } from "react";
 import Swal from "sweetalert2";
 import CampoFecha from "@/components/common/CampoFecha";
@@ -11,43 +11,16 @@ import {
   getDiferencias,
   getDiferenciaDetalle,
   updateDiferenciaRevision,
-  agregarMovimientoACierre,
   type CierreDiferencia,
   type CierreDiferenciaDetalle,
   type FiltrosDiferencias,
   type TotalesDiferencias,
 } from "../../services/cierrediferencia.service";
 import { getCajas } from "../../services/cajas.service";
-import { getAllTipoGastoGrupo } from "../../services/tipogastogrupo.service";
-import { getAllClientesSinPaginacion } from "../../services/clientes.service";
-import ClienteModal from "../../components/common/ClienteModal";
-import type { Cliente } from "../../types/cliente.types";
 import { usePermiso } from "../../hooks/usePermiso";
 import { formatMiles } from "../../utils/utils";
-
-interface GrupoGasto {
-  TipoGastoId: number;
-  TipoGastoGrupoId: number;
-  TipoGastoGrupoDescripcion: string;
-}
-
-// Formulario vacío de "Agregar movimiento faltante". origen: un movimiento de
-// Cobranza / Pago / carga manual, o un cobro de JSI (crea también el cobro)
-const ALTA_VACIA = {
-  origen: "MOVIMIENTO" as "MOVIMIENTO" | "JSI",
-  tipo: 2,
-  grupo: "",
-  monto: "",
-  detalle: "",
-  motivo: "",
-  cliente: null as Cliente | null,
-};
-
-interface CajaOpcion {
-  CajaId: number;
-  CajaDescripcion: string;
-  CajaTipoId?: number | null;
-}
+import CargaDiaAnteriorModal, { type CajaOpcion } from "./CargaDiaAnteriorModal";
+import { DIAS_TOPE_SUPERVISOR, primerDiaCargable } from "../../utils/cierreAnterior";
 
 type Fila = CierreDiferencia & { id: number; [key: string]: unknown };
 
@@ -127,12 +100,10 @@ export default function DiferenciasCierrePage() {
   const [observacion, setObservacion] = useState("");
   const [revisado, setRevisado] = useState(false);
   const [guardando, setGuardando] = useState(false);
-  const [grupos, setGrupos] = useState<GrupoGasto[]>([]);
-  const [altaAbierta, setAltaAbierta] = useState(false);
-  const [alta, setAlta] = useState(ALTA_VACIA);
-  const [agregando, setAgregando] = useState(false);
-  const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [showClienteModal, setShowClienteModal] = useState(false);
+  // Modal de carga: abierto desde el botón general (sin cierre) o desde el
+  // detalle de un cierre (fijado en ese)
+  const [cargaAbierta, setCargaAbierta] = useState(false);
+  const [cargaEnCierre, setCargaEnCierre] = useState<CierreDiferenciaDetalle | null>(null);
 
   const cargar = useCallback(async () => {
     if (!puedeLeer) return;
@@ -168,40 +139,6 @@ export default function DiferenciasCierrePage() {
       .catch((err) => console.error("Error al cargar cajas:", err));
   }, [puedeLeer]);
 
-  // Grupos para "Agregar movimiento faltante": sin apertura/cierre (grupo 2),
-  // pases ni Western (esos se cargan desde su pantalla)
-  useEffect(() => {
-    if (!puedeEditar) return;
-    getAllTipoGastoGrupo()
-      .then((data: GrupoGasto[]) =>
-        setGrupos(
-          (data || [])
-            .filter((g) => {
-              const d = (g.TipoGastoGrupoDescripcion || "").trim().toUpperCase();
-              return (
-                g.TipoGastoGrupoId !== 2 &&
-                !d.startsWith("PASE ") &&
-                !d.includes("WESTERN") &&
-                // Los cobros de JSI van por la opción "Cobro de JSI"
-                !(g.TipoGastoId === 2 && d.startsWith("J.S.I."))
-              );
-            })
-            .sort((a, b) =>
-              a.TipoGastoGrupoDescripcion.trim().localeCompare(b.TipoGastoGrupoDescripcion.trim())
-            )
-        )
-      )
-      .catch((err) => console.error("Error al cargar grupos de gasto:", err));
-  }, [puedeEditar]);
-
-  // Clientes para "Cobro de JSI": se cargan la primera vez que se elige
-  useEffect(() => {
-    if (alta.origen !== "JSI" || clientes.length > 0) return;
-    getAllClientesSinPaginacion()
-      .then((data: { data?: Cliente[] }) => setClientes(data.data || []))
-      .catch((err) => console.error("Error al cargar clientes:", err));
-  }, [alta.origen, clientes.length]);
-
   const setFiltro = <K extends keyof FiltrosDiferencias>(k: K, v: FiltrosDiferencias[K]) =>
     setFiltros((prev) => ({ ...prev, [k]: v }));
 
@@ -217,8 +154,6 @@ export default function DiferenciasCierrePage() {
   };
 
   const abrirDetalle = async (id: number) => {
-    setAltaAbierta(false);
-    setAlta(ALTA_VACIA);
     setDetalleAbierto(true);
     setDetalleLoading(true);
     setDetalle(null);
@@ -258,51 +193,6 @@ export default function DiferenciasCierrePage() {
       });
     } finally {
       setGuardando(false);
-    }
-  };
-
-  const agregarMovimiento = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!detalle) return;
-    setAgregando(true);
-    try {
-      if (alta.origen === "JSI" && !alta.cliente) {
-        Swal.fire({ icon: "warning", title: "Elegí el cliente del cobro de JSI" });
-        return;
-      }
-      const respuesta = await agregarMovimientoACierre(
-        detalle.Id,
-        alta.origen === "JSI"
-          ? {
-              Origen: "JSI",
-              ClienteId: Number(alta.cliente!.ClienteId),
-              RegistroDiarioCajaMonto: Number(alta.monto),
-              Motivo: alta.motivo,
-            }
-          : {
-              TipoGastoId: alta.tipo,
-              TipoGastoGrupoId: Number(alta.grupo),
-              RegistroDiarioCajaMonto: Number(alta.monto),
-              RegistroDiarioCajaDetalle: alta.detalle,
-              Motivo: alta.motivo,
-            }
-      );
-      setDetalle(respuesta.data.detalle);
-      setObservacion(respuesta.data.detalle.Observacion || "");
-      setRevisado(respuesta.data.detalle.Revisado);
-      setAltaAbierta(false);
-      setAlta(ALTA_VACIA);
-      Swal.fire({ icon: "success", title: "Movimiento agregado", text: respuesta.message });
-      cargar();
-    } catch (err) {
-      Swal.fire({
-        icon: "warning",
-        title: "No se pudo agregar",
-        text: (err as { message?: string })?.message || "Error desconocido",
-        confirmButtonColor: "#0d9488",
-      });
-    } finally {
-      setAgregando(false);
     }
   };
 
@@ -398,6 +288,18 @@ export default function DiferenciasCierrePage() {
         title="Diferencias de Cierre"
         subtitle="Sobrantes y faltantes de cada cierre de caja"
         icon={Scale}
+        actions={
+          puedeEditar && (
+            <ActionButton
+              label="Cargar movimiento de un día anterior"
+              icon={Plus}
+              onClick={() => {
+                setCargaEnCierre(null);
+                setCargaAbierta(true);
+              }}
+            />
+          )
+        }
       />
 
       {error && (
@@ -732,169 +634,22 @@ export default function DiferenciasCierrePage() {
 
             {puedeEditar && (
               <div className="border border-gray-200 rounded-lg p-3">
-                {!altaAbierta ? (
+                {detalle.Fecha.slice(0, 10) >= primerDiaCargable() ? (
                   <button
                     type="button"
                     className="text-primary hover:underline text-sm cursor-pointer"
-                    onClick={() => setAltaAbierta(true)}
+                    onClick={() => {
+                      setCargaEnCierre(detalle);
+                      setDetalleAbierto(false);
+                      setCargaAbierta(true);
+                    }}
                   >
                     + Agregar movimiento faltante a este cierre
                   </button>
                 ) : (
-                  <form onSubmit={agregarMovimiento} className="space-y-3">
-                    <p className="text-sm text-gray-600">
-                      Para algo que faltó cargar en este turno (por ejemplo, una cobranza
-                      que se eliminó). Queda en este cierre, no en el turno en curso: se
-                      recalcula esta diferencia, la caja del cajero no se toca y las demás
-                      cajas del gasto se ajustan. Los cobros de colegios, transporte,
-                      Western y divisas todavía no se agregan desde acá.
-                    </p>
-                    <div>
-                      <label htmlFor="altaOrigen" className="block text-xs font-medium text-gray-700 mb-1">
-                        Qué falta
-                      </label>
-                      <select
-                        id="altaOrigen"
-                        value={alta.origen}
-                        onChange={(e) =>
-                          setAlta({ ...ALTA_VACIA, origen: e.target.value as "MOVIMIENTO" | "JSI" })
-                        }
-                        className="w-full sm:w-auto border border-gray-300 rounded-lg p-2 text-sm bg-white"
-                      >
-                        <option value="MOVIMIENTO">Movimiento de caja (Cobranza / Pago / manual)</option>
-                        <option value="JSI">Cobro de JSI</option>
-                      </select>
-                    </div>
-                    {alta.origen === "JSI" ? (
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="sm:col-span-2">
-                          <span className="block text-xs font-medium text-gray-700 mb-1">Cliente</span>
-                          <button
-                            type="button"
-                            onClick={() => setShowClienteModal(true)}
-                            className="w-full text-left border border-gray-300 rounded-lg p-2 text-sm bg-white hover:bg-gray-50 cursor-pointer"
-                          >
-                            {alta.cliente
-                              ? `${alta.cliente.ClienteNombre} ${alta.cliente.ClienteApellido ?? ""}`.trim()
-                              : "Elegir cliente..."}
-                          </button>
-                        </div>
-                        <div>
-                          <label htmlFor="altaMontoJSI" className="block text-xs font-medium text-gray-700 mb-1">
-                            Monto Gs.
-                          </label>
-                          <input
-                            id="altaMontoJSI"
-                            type="number"
-                            min="1"
-                            step="any"
-                            value={alta.monto}
-                            onChange={(e) => setAlta({ ...alta, monto: e.target.value })}
-                            required
-                            className="w-full border border-gray-300 rounded-lg p-2 text-sm"
-                          />
-                        </div>
-                      </div>
-                    ) : (
-                    <>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div>
-                        <label htmlFor="altaTipo" className="block text-xs font-medium text-gray-700 mb-1">
-                          Tipo
-                        </label>
-                        <select
-                          id="altaTipo"
-                          value={alta.tipo}
-                          onChange={(e) => setAlta({ ...alta, tipo: Number(e.target.value), grupo: "" })}
-                          className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white"
-                        >
-                          <option value={2}>Ingreso</option>
-                          <option value={1}>Egreso</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label htmlFor="altaGrupo" className="block text-xs font-medium text-gray-700 mb-1">
-                          Grupo de gasto
-                        </label>
-                        <select
-                          id="altaGrupo"
-                          value={alta.grupo}
-                          onChange={(e) => setAlta({ ...alta, grupo: e.target.value })}
-                          required
-                          className="w-full border border-gray-300 rounded-lg p-2 text-sm bg-white"
-                        >
-                          <option value="">Seleccione...</option>
-                          {grupos
-                            .filter((g) => g.TipoGastoId === alta.tipo)
-                            .map((g) => (
-                              <option key={g.TipoGastoGrupoId} value={g.TipoGastoGrupoId}>
-                                {g.TipoGastoGrupoDescripcion.trim()}
-                              </option>
-                            ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label htmlFor="altaMonto" className="block text-xs font-medium text-gray-700 mb-1">
-                          Monto Gs.
-                        </label>
-                        <input
-                          id="altaMonto"
-                          type="number"
-                          min="1"
-                          step="any"
-                          value={alta.monto}
-                          onChange={(e) => setAlta({ ...alta, monto: e.target.value })}
-                          required
-                          className="w-full border border-gray-300 rounded-lg p-2 text-sm"
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label htmlFor="altaDetalle" className="block text-xs font-medium text-gray-700 mb-1">
-                        Descripción
-                      </label>
-                      <input
-                        id="altaDetalle"
-                        type="text"
-                        maxLength={250}
-                        value={alta.detalle}
-                        onChange={(e) => setAlta({ ...alta, detalle: e.target.value })}
-                        className="w-full border border-gray-300 rounded-lg p-2 text-sm"
-                      />
-                    </div>
-                    </>
-                    )}
-                    <div>
-                      <label htmlFor="altaMotivo" className="block text-xs font-medium text-gray-700 mb-1">
-                        Motivo
-                      </label>
-                      <input
-                        id="altaMotivo"
-                        type="text"
-                        maxLength={500}
-                        value={alta.motivo}
-                        onChange={(e) => setAlta({ ...alta, motivo: e.target.value })}
-                        required
-                        placeholder="Ej.: la cobranza se eliminó y faltaba volver a cargarla"
-                        className="w-full border border-gray-300 rounded-lg p-2 text-sm"
-                      />
-                    </div>
-                    <div className="flex gap-2">
-                      <ActionButton
-                        label={agregando ? "Agregando..." : "Agregar al cierre"}
-                        type="submit"
-                        disabled={agregando}
-                      />
-                      <ActionButton
-                        label="Cancelar"
-                        variant="secondary"
-                        onClick={() => {
-                          setAltaAbierta(false);
-                          setAlta(ALTA_VACIA);
-                        }}
-                      />
-                    </div>
-                  </form>
+                  <p className="text-sm text-gray-500">
+                    Sólo se agregan movimientos a cierres de los últimos {DIAS_TOPE_SUPERVISOR} días.
+                  </p>
                 )}
               </div>
             )}
@@ -949,13 +704,18 @@ export default function DiferenciasCierrePage() {
         )}
       </Modal>
 
-      <ClienteModal
-        show={showClienteModal}
-        onClose={() => setShowClienteModal(false)}
-        clientes={clientes}
-        onSelect={(cliente) => {
-          setAlta((prev) => ({ ...prev, cliente }));
-          setShowClienteModal(false);
+      <CargaDiaAnteriorModal
+        isOpen={cargaAbierta}
+        onClose={() => {
+          setCargaAbierta(false);
+          // Abierto desde un detalle: se vuelve a él
+          if (cargaEnCierre) setDetalleAbierto(true);
+        }}
+        cajas={cajas}
+        cierreFijo={cargaEnCierre}
+        onCargado={(cierreId) => {
+          cargar();
+          abrirDetalle(cierreId);
         }}
       />
     </div>

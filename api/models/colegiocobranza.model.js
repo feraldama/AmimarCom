@@ -1,6 +1,48 @@
 const db = require("../config/db");
 
+// Multa por día de mora (misma que CobranzaColegiosTab)
+const MULTA_POR_DIA = 1000;
+
 const ColegioCobranza = {
+  MULTA_POR_DIA,
+
+  // Total cobrado, con la misma fórmula que la pantalla de cobranza:
+  // importe del curso x meses + días de mora x 1.000 + examen - descuento
+  calcularTotal: (cobranza, importe) =>
+    Math.max(
+      0,
+      importe * (Number(cobranza.ColegioCobranzaMes) || 0) +
+        (Number(cobranza.ColegioCobranzaDiasMora) || 0) * MULTA_POR_DIA +
+        (Number(cobranza.ColegioCobranzaExamen) || 0) -
+        (Number(cobranza.ColegioCobranzaDescuento) || 0)
+    ),
+
+  // Alumno con su colegio (grupo de gasto) e importe de la cuota de su curso
+  getNominaConCurso: async (nominaId, q = db) => {
+    const result = await q.query(
+      `SELECT n."NominaId", n."NominaNombre", n."NominaApellido", n."ColegioId",
+              col."ColegioNombre", col."TipoGastoId", col."TipoGastoGrupoId",
+              cur."ColegioCursoImporte"
+       FROM "nomina" n
+       LEFT JOIN "colegio" col ON col."ColegioId" = n."ColegioId"
+       LEFT JOIN "colegiocurso" cur
+         ON cur."ColegioId" = n."ColegioId" AND cur."ColegioCursoId" = n."ColegioCursoId"
+       WHERE n."NominaId" = $1`,
+      [nominaId]
+    );
+    return result.rows[0];
+  },
+
+  // Detalle del registro de caja de una cobranza, con el formato de
+  // CobranzaColegiosTab (el "NominaId:<id> ColegioCobranzaId:<id>" la vincula:
+  // ver getRegistrosDeCobranza en el controller)
+  detalleRegistro: (nomina, colegioCobranzaId) =>
+    `Cobranza Colegio: ${(nomina.ColegioNombre || "").trim().slice(0, 80)} - Nómina: ${(
+      nomina.NominaApellido || ""
+    ).trim().slice(0, 50)}, ${(nomina.NominaNombre || "").trim().slice(0, 50)} | NominaId:${
+      nomina.NominaId
+    } ColegioCobranzaId:${colegioCobranzaId}`,
+
   getAll: async () => {
     const result = await db.query(
       `SELECT cc.*,
@@ -228,7 +270,8 @@ const ColegioCobranza = {
     };
   },
 
-  create: async (cobranzaData) => {
+  // `q` permite crearla dentro de una transacción (client de pg)
+  create: async (cobranzaData, q = db) => {
     const query = `
       INSERT INTO "colegiocobranza" (
         "CajaId",
@@ -243,7 +286,7 @@ const ColegioCobranza = {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING "ColegioCobranzaId"
     `;
 
-    const result = await db.query(
+    const result = await q.query(
       query,
       [
         cobranzaData.CajaId,
@@ -258,7 +301,7 @@ const ColegioCobranza = {
       ]
     );
 
-    const cobranza = await ColegioCobranza.getById(result.rows[0].ColegioCobranzaId);
+    const cobranza = await ColegioCobranza.getById(result.rows[0].ColegioCobranzaId, q);
     return cobranza;
   },
 

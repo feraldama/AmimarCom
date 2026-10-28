@@ -16,7 +16,8 @@ import {
 } from "../../services/cierrediario.service";
 import { useAuth } from "../../contexts/useAuth";
 import Swal from "sweetalert2";
-import { formatMiles } from "../../utils/utils";
+import { formatMiles, formatMilesWithDecimals } from "../../utils/utils";
+import { esGrupoUsd } from "../../utils/gruposUsd";
 import { useNavigate, useLocation } from "react-router-dom";
 import jsPDF from "jspdf";
 import PageHeader from "../../components/common/PageHeader";
@@ -306,6 +307,9 @@ export default function AperturaCierreCajaPage() {
     let ingresos = 0;
     for (const reg of registrosFiltrados) {
       const monto = Number(reg.RegistroDiarioCajaMonto);
+      // Los Western en dólares no suman: su monto no es Gs. y no movieron la
+      // caja (mismo criterio que la diferencia de cierre)
+      if (esGrupoUsd(reg.TipoGastoId, reg.TipoGastoGrupoId)) continue;
       if (reg.TipoGastoId === 2 && reg.TipoGastoGrupoId !== 2)
         ingresos += monto;
       if (reg.TipoGastoId === 1 && reg.TipoGastoGrupoId !== 2) egresos += monto;
@@ -331,12 +335,13 @@ export default function AperturaCierreCajaPage() {
 
     // Desglose de egresos e ingresos por concepto (grupo de gasto), sumando los
     // montos de cada grupo y acumulando el equivalente en U$D cuando hay cotización.
+    // Los Western en dólares se listan con su monto en U$D y no suman al total.
     const agruparMovimientos = (
       filtro: (reg: RegistroDiarioCaja) => boolean,
     ) => {
       const mapa = new Map<
         string,
-        { label: string; monto: number; usd: number }
+        { label: string; monto: number; usd: number; enDolares: boolean }
       >();
       registrosFiltrados
         .filter(filtro)
@@ -351,7 +356,12 @@ export default function AperturaCierreCajaPage() {
           const monto = Number(reg.RegistroDiarioCajaMonto) || 0;
           const cambio = Number(reg.RegistroDiarioCajaCambio) || 0;
           const usd = cambio > 0 ? monto / cambio : 0;
-          const actual = mapa.get(label) || { label, monto: 0, usd: 0 };
+          const actual = mapa.get(label) || {
+            label,
+            monto: 0,
+            usd: 0,
+            enDolares: esGrupoUsd(reg.TipoGastoId, reg.TipoGastoGrupoId),
+          };
           actual.monto += monto;
           actual.usd += usd;
           mapa.set(label, actual);
@@ -365,6 +375,15 @@ export default function AperturaCierreCajaPage() {
     const ingresosAgrupados = agruparMovimientos(
       (reg) => reg.TipoGastoId === 2 && reg.TipoGastoGrupoId !== 2,
     );
+    // Línea de un concepto: monto en Gs. (con su equivalente en U$D si hubo
+    // cotización) o, en un Western en dólares, el monto en U$D fuera del total
+    const lineaGrupo = (g: { label: string; monto: number; usd: number; enDolares: boolean }) =>
+      g.enDolares
+        ? `${g.label}: U$D ${formatMilesWithDecimals(g.monto)} (no suma)`
+        : `${g.label}: ${formatMiles(g.monto)}${
+            g.usd > 0 ? ` - U$D: ${formatMiles(Math.round(g.usd))}` : ""
+          }`;
+
     // El cierre de caja no se cuenta como egreso en el ticket; el total de
     // egresos sólo suma los movimientos de egreso reales.
     const totalEgresosSeccion = egresos;
@@ -525,9 +544,7 @@ export default function AperturaCierreCajaPage() {
     doc.line(margin, y, pageW - margin, y);
     y += 5;
     egresosAgrupados.forEach((g) => {
-      const sufijoUsd =
-        g.usd > 0 ? ` - U$D: ${formatMiles(Math.round(g.usd))}` : "";
-      doc.text(`${g.label}: ${formatMiles(g.monto)}${sufijoUsd}`, margin, y);
+      doc.text(lineaGrupo(g), margin, y);
       y += 5;
     });
     doc.line(margin, y, pageW - margin, y);
@@ -546,9 +563,7 @@ export default function AperturaCierreCajaPage() {
     doc.text(`APERTURA CAJA: ${formatMiles(apertura)}`, margin, y);
     y += 5;
     ingresosAgrupados.forEach((g) => {
-      const sufijoUsd =
-        g.usd > 0 ? ` - U$D: ${formatMiles(Math.round(g.usd))}` : "";
-      doc.text(`${g.label}: ${formatMiles(g.monto)}${sufijoUsd}`, margin, y);
+      doc.text(lineaGrupo(g), margin, y);
       y += 5;
     });
     doc.line(margin, y, pageW - margin, y);

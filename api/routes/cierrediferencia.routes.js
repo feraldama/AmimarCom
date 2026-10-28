@@ -11,6 +11,12 @@ router.get(
   verificarPermiso("CIERREDIFERENCIAS", "leer"),
   cierreDiferenciaController.getAll
 );
+// Grupos que se pueden agregar a un cierre como movimiento suelto
+router.get(
+  "/grupos-alta",
+  verificarPermiso("CIERREDIFERENCIAS", "editar"),
+  cierreDiferenciaController.getGruposAlta
+);
 router.get(
   "/:id",
   verificarPermiso("CIERREDIFERENCIAS", "leer"),
@@ -21,6 +27,12 @@ router.post(
   "/:id/movimientos",
   verificarPermiso("CIERREDIFERENCIAS", "editar"),
   cierreDiferenciaController.agregarMovimiento
+);
+// Lo que haría agregar ese movimiento (cajas, duplicados), sin guardar
+router.post(
+  "/:id/movimientos/previsualizar",
+  verificarPermiso("CIERREDIFERENCIAS", "editar"),
+  cierreDiferenciaController.previsualizarMovimiento
 );
 router.put(
   "/:id",

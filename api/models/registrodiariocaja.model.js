@@ -1,4 +1,5 @@
 const db = require("../config/db");
+const { sqlNoEsGrupoUsd } = require("../utils/gruposUsd");
 const CierreDiferencia = require("./cierrediferencia.model");
 const { esRegistroPagoAdmin } = require("../utils/ajusteCajas");
 
@@ -971,9 +972,10 @@ const RegistroDiarioCaja = {
 
   // Saldo teórico de una caja desde su apertura hasta ahora: misma fórmula que
   // el ticket de cierre y el reporte de Registro Diario (apertura + ingresos -
-  // egresos, sin contar los registros de apertura/cierre, grupo 2). Se toma
-  // por CajaId, sin filtrar usuario, para incluir los PASE de otras cajas. No
-  // cuenta los movimientos agregados a un cierre anterior.
+  // egresos, sin contar los registros de apertura/cierre, grupo 2, ni los
+  // Western en dólares, utils/gruposUsd.js). Se toma por CajaId, sin filtrar
+  // usuario, para incluir los PASE de otras cajas. No cuenta los movimientos
+  // agregados a un cierre anterior.
   getSaldoTeorico: async (aperturaId, cajaId) => {
     const result = await db.query(
       `SELECT
@@ -985,6 +987,7 @@ const RegistroDiarioCaja = {
        WHERE "CajaId" = $2
          AND "RegistroDiarioCajaId" > $1
          AND "TipoGastoGrupoId" <> ${GRUPO_TURNO}
+         AND ${sqlNoEsGrupoUsd()}
          AND "RegistroDiarioCajaCierreId" IS NULL`,
       [aperturaId, cajaId]
     );
@@ -1102,7 +1105,8 @@ const RegistroDiarioCaja = {
   // Ingresos/egresos por caja en el rango. Excluye las filas de apertura y
   // cierre de turno (grupo 2): antes la apertura sumaba como ingreso y el
   // cierre como egreso, y el "Saldo" terminaba siendo el faltante del arqueo.
-  // Ahora Saldo = neto de los movimientos reales, misma regla que el ticket.
+  // Ahora Saldo = neto de los movimientos reales, misma regla que el ticket
+  // (tampoco suma los Western en dólares: no son Gs.).
   getCierreDiario: async (fechaDesde, fechaHasta, cajaIds) => {
     const params = [fechaDesde, fechaHasta];
     const filtroCajas = filtroCajasSql(params, cajaIds, 'r."CajaId"');
@@ -1120,6 +1124,7 @@ const RegistroDiarioCaja = {
       WHERE r."RegistroDiarioCajaFecha"::date >= $1::date
         AND r."RegistroDiarioCajaFecha"::date <= $2::date
         AND r."TipoGastoGrupoId" <> ${GRUPO_TURNO}
+        AND ${sqlNoEsGrupoUsd("r.")}
         ${filtroCajas}
       GROUP BY c."CajaId", c."CajaDescripcion"
       ORDER BY c."CajaDescripcion"`,
@@ -1236,5 +1241,8 @@ const RegistroDiarioCaja = {
     return result.rows;
   },
 };
+
+// Día (YYYY-MM-DD) en Paraguay de una fecha (ver diaParaguay arriba)
+RegistroDiarioCaja.diaParaguay = diaParaguay;
 
 module.exports = RegistroDiarioCaja;

@@ -116,7 +116,9 @@ conTransaccionDePrueba(async ({ realQuery, uno, transaccion, llamar, ok, user, u
   const existe2 = async (id) =>
     (await realQuery(`SELECT 1 FROM registrodiariocaja WHERE "RegistroDiarioCajaId" = $1`, [id])).rows.length === 1;
 
-  ok((await dif()) === -20000, `diferencia inicial de ayer: ${await dif()} (esperado -20.000)`);
+  // El pago Western en dólares no cuenta en el teórico en Gs. (utils/gruposUsd.js):
+  // como el efectivo en Gs. sí salió, el error de carga aparece como faltante
+  ok((await dif()) === -20000 + 700000, `diferencia inicial de ayer: ${await dif()} (esperado 680.000: el pago en Gs. cargado como USD se ve como faltante)`);
   const saldoHoy = await saldoCaja();
 
   console.log("Validación de fecha (no recargar con fecha de un turno cerrado)");
@@ -218,7 +220,9 @@ conTransaccionDePrueba(async ({ realQuery, uno, transaccion, llamar, ok, user, u
   ok(r.status === 200 && regW.TipoGastoGrupoId === westernGs && envW.TipoGastoGrupoId === westernGs,
     "reclasificado USD -> Gs. (mismo ID, registro y envío): " + r.body.message);
   ok(cajasIguales(esperado, await saldos()), "cada caja quedó como si se hubiera cargado en Gs. (cuenta USD revertida, cuenta Gs. aplicada)");
-  ok((await dif()) === d, `diferencia de ayer sin cambios (el efectivo era el mismo): ${await dif()}`);
+  ok((await dif()) === d - 700000,
+    `reclasificarlo a Gs. corrige el faltante que dejaba el error: diferencia ${d} -> ${await dif()}`);
+  d = await dif();
   r = await llamar(wec.update, { params: { id: w.envio.WesternEnvioId }, body: { WesternEnvioMonto: 650000, Motivo: "era 650.000" }, user });
   ok(r.status === 200 && (await montoDe(w.registro.RegistroDiarioCajaId)) === 650000 && (await dif()) === d + 50000,
     `monto 700.000 -> 650.000: diferencia ${d} -> ${await dif()}`);
@@ -306,6 +310,194 @@ conTransaccionDePrueba(async ({ realQuery, uno, transaccion, llamar, ok, user, u
   ok(r.status === 200 && !quedaCobro && !(await existe2(regJSI.RegistroDiarioCajaId)) && (await dif()) === d - 60000 && cajasIguales(s2, await saldos()),
     `eliminarlo desde Cobros JSI deja todo como antes: diferencia ${d} -> ${await dif()}`);
 
+  // Efecto en las cajas de crear algo desde su pestaña (medido dentro de un
+  // savepoint y deshecho), sin la caja del cajero, que al agregar a un
+  // cierre no se toca
+  const esperadoSinCajero = async (crearDesdeTab) => {
+    const base = await saldos();
+    await realQuery("SAVEPOINT efecto");
+    await crearDesdeTab();
+    const despues = await saldos();
+    await realQuery("ROLLBACK TO SAVEPOINT efecto");
+    const esperado = new Map(despues);
+    esperado.set(caja.CajaId, base.get(caja.CajaId));
+    return { base, esperado };
+  };
+  const previsualizar = (body, id = c1.RegistroDiarioCajaId) =>
+    llamar(cdc.previsualizarMovimiento, { params: { id }, body, user });
+
+  console.log("Diferencias de Cierre: grupos que no se cargan como movimiento suelto");
+  const gruposAlta = (await llamar(cdc.getGruposAlta, { user })).body;
+  const claveGrupo = (t, g) => gruposAlta.movimiento.some((x) => x.TipoGastoId === t && x.TipoGastoGrupoId === g);
+  ok(gruposAlta.western.some((x) => x.TipoGastoId === 1 && x.TipoGastoGrupoId === westernGs) &&
+    gruposAlta.western.every((x) => /WESTERN/i.test(x.TipoGastoGrupoDescripcion)), "grupos-alta da aparte los grupos Western");
+  ok(claveGrupo(2, grupo.TipoGastoGrupoId), "grupos-alta ofrece un grupo común");
+  ok(!claveGrupo(2, alumno.TipoGastoGrupoId) && !claveGrupo(2, transporte.TipoGastoGrupoId) &&
+    !claveGrupo(1, westernGs) && !claveGrupo(2, grupoJSI.TipoGastoGrupoId),
+    "grupos-alta no ofrece colegio, transporte, Western ni JSI");
+  r = await agregar({ TipoGastoId: 2, TipoGastoGrupoId: alumno.TipoGastoGrupoId, RegistroDiarioCajaMonto: 1000, Motivo: "x" });
+  ok(r.status === 400 && /Cobranza de colegio/.test(r.body.message), "grupo de un colegio como suelto: 400 (indica la opción)");
+  r = await agregar({ TipoGastoId: 2, TipoGastoGrupoId: transporte.TipoGastoGrupoId, RegistroDiarioCajaMonto: 1000, Motivo: "x" });
+  ok(r.status === 400 && /Pago de transporte/.test(r.body.message), "grupo de un transporte como suelto: 400 (indica la opción)");
+  const grupoDivisa = await uno(
+    `SELECT cg."TipoGastoId", cg."TipoGastoGrupoId" FROM cajagasto cg JOIN caja c ON c."CajaId" = cg."CajaId"
+     WHERE c."CajaTipoId" = 3 LIMIT 1`);
+  if (grupoDivisa) {
+    r = await agregar({ TipoGastoId: grupoDivisa.TipoGastoId, TipoGastoGrupoId: grupoDivisa.TipoGastoGrupoId, RegistroDiarioCajaMonto: 1000, Motivo: "x" });
+    ok(r.status === 400 && /divisas/.test(r.body.message), "grupo que mueve una caja de divisas: 400");
+    ok(!claveGrupo(grupoDivisa.TipoGastoId, grupoDivisa.TipoGastoGrupoId), "grupos-alta no ofrece grupos de divisas");
+  }
+
+  console.log("Agregar a un cierre anterior una cobranza de colegio que faltó");
+  const bodyColegio = { Origen: "COLEGIO", Colegio: { nominaId: alumno.NominaId, mes: 1, mesPagado: "MES PRUEBA" }, Motivo: "faltó la cobranza" };
+  r = await agregar({ ...bodyColegio, Colegio: { ...bodyColegio.Colegio, mes: 0 } });
+  ok(r.status === 400 && /meses/.test(r.body.message), "sin meses: 400");
+  r = await agregar({ ...bodyColegio, Colegio: { ...bodyColegio.Colegio, mesPagado: " " } });
+  ok(r.status === 400 && /mes pagado/.test(r.body.message), "sin mes pagado: 400");
+  r = await previsualizar({ ...bodyColegio, Colegio: { ...bodyColegio.Colegio, mes: 2, diasMora: 3, examen: 5000, descuento: 1000 } });
+  ok(r.status === 200 && r.body.monto === importe * 2 + 3000 + 5000 - 1000,
+    `vista previa: total calculado por el servidor (${r.body.monto})`);
+  r = await previsualizar({ ...bodyColegio, RegistroDiarioCajaMonto: 1 });
+  ok(r.status === 200 && r.body.monto === importe && r.body.tipo === 2 && r.body.cajas.every((c) => c.Ajuste === -importe && c.CajaId !== caja.CajaId) &&
+    r.body.duplicados.every((x) => !/alumno/.test(x.Motivo)),
+    `vista previa: ignora un monto enviado, ajusta las demás cajas (${r.body.cajas.map((c) => c.CajaDescripcion).join(", ")}) y sin duplicados del alumno`);
+  const saldosAntesVista = await saldos();
+  await previsualizar(bodyColegio);
+  ok(cajasIguales(saldosAntesVista, await saldos()), "la vista previa no deja cambios en las cajas");
+  await realQuery("SAVEPOINT sincuota");
+  await realQuery(
+    `UPDATE colegiocurso SET "ColegioCursoImporte" = 0
+     WHERE ("ColegioId", "ColegioCursoId") = (SELECT "ColegioId", "ColegioCursoId" FROM nomina WHERE "NominaId" = $1)`,
+    [alumno.NominaId]);
+  r = await agregar({ ...bodyColegio, Colegio: { ...bodyColegio.Colegio, examen: 50000 } });
+  ok(r.status === 400 && /cuota/.test(r.body.message), "curso sin cuota cargada: 400 (no carga sólo el examen)");
+  await realQuery("ROLLBACK TO SAVEPOINT sincuota");
+  const efColegio = await esperadoSinCajero(() => tabs.colegio({ cajaId: caja.CajaId, fecha: AYER, alumno }));
+  d = await dif();
+  r = await agregar(bodyColegio);
+  const regCol = r.body?.data?.registro;
+  const idCobranza = Number(/ColegioCobranzaId:(\d+)/.exec(regCol?.RegistroDiarioCajaDetalle || "")?.[1]);
+  const cobranzaCol = idCobranza ? await uno(`SELECT * FROM colegiocobranza WHERE "ColegioCobranzaId" = $1`, [idCobranza]) : null;
+  ok(r.status === 201 && regCol.RegistroDiarioCajaCierreId === c1.RegistroDiarioCajaId && Number(regCol.RegistroDiarioCajaMonto) === importe &&
+    (await dif()) === d + importe, `agregada al cierre de ayer: diferencia ${d} -> ${await dif()}`);
+  ok(cobranzaCol && Number(cobranzaCol.NominaId) === Number(alumno.NominaId) && cobranzaCol.ColegioCobranzaMesPagado === "MES PRUEBA" &&
+    Number(cobranzaCol.CajaId) === Number(caja.CajaId) && cobranzaCol.ColegioCobranzaFecha.getTime() === c1.RegistroDiarioCajaFecha.getTime(),
+    "se creó la cobranza del alumno (caja y fecha del cierre)");
+  ok(regCol.RegistroDiarioCajaDetalle.startsWith("Cobranza Colegio: ") && regCol.RegistroDiarioCajaDetalle.endsWith(`NominaId:${alumno.NominaId} ColegioCobranzaId:${idCobranza}`),
+    "detalle con el formato de la pestaña: " + regCol.RegistroDiarioCajaDetalle);
+  ok(cajasIguales(efColegio.esperado, await saldos()) && (await teoricoHoy()) === teoricoAntes,
+    "caja del colegio ajustada como desde la pestaña; caja del cajero y turno de hoy sin cambios");
+  r = await previsualizar(bodyColegio);
+  ok(r.status === 200 && r.body.duplicados.some((x) => /alumno ya tiene/.test(x.Motivo)) && r.body.duplicados.some((x) => x.Id === regCol.RegistroDiarioCajaId),
+    "cargarla de nuevo avisa los duplicados (misma cobranza del alumno y mismo movimiento ese día)");
+  d = await dif();
+  r = await llamar(ccc.update, { params: { id: idCobranza }, body: { ColegioCobranzaMes: 2 }, user });
+  ok(r.status === 200 && (await dif()) === d + importe && (await teoricoHoy()) === teoricoAntes,
+    `editarla desde Cobranzas de colegio recalcula ese cierre: diferencia ${d} -> ${await dif()}`);
+  d = await dif();
+  r = await llamar(ccc.delete, { params: { id: idCobranza }, body: { Motivo: "prueba" }, user });
+  const quedaCobranza = (await realQuery(`SELECT 1 FROM colegiocobranza WHERE "ColegioCobranzaId" = $1`, [idCobranza])).rows.length;
+  ok(r.status === 200 && !quedaCobranza && !(await existe2(regCol.RegistroDiarioCajaId)) && (await dif()) === d - 2 * importe &&
+    cajasIguales(efColegio.base, await saldos()), `eliminarla desde Cobranzas de colegio deja todo como antes: diferencia ${d} -> ${await dif()}`);
+
+  console.log("Agregar a un cierre anterior un pago de transporte que faltó");
+  const bodyTrans = {
+    Origen: "TRANSPORTE", RegistroDiarioCajaMonto: 85000, Motivo: "faltó el pasaje",
+    Transporte: { transporteId: transporte.TransporteId, clienteId: cliente.ClienteId, origen: "asunción", destino: "encarnación",
+      fechaEmbarque: `${diaHoy}T08:00`, hora: "08:00", asiento: "12", numeroBoleto: "B-PRUEBA-1", telefono: "0981", clienteRUC: "123-4" },
+  };
+  r = await agregar({ ...bodyTrans, Transporte: { ...bodyTrans.Transporte, transporteId: null } });
+  ok(r.status === 400 && /transporte/.test(r.body.message), "sin empresa: 400");
+  r = await agregar({ ...bodyTrans, Transporte: { ...bodyTrans.Transporte, destino: "" } });
+  ok(r.status === 400 && /destino/.test(r.body.message), "sin destino: 400");
+  const efTrans = await esperadoSinCajero(() => tabs.transporte({ cajaId: caja.CajaId, fecha: AYER, transporte, monto: 85000 }));
+  d = await dif();
+  r = await agregar(bodyTrans);
+  const regTrans = r.body?.data?.registro;
+  const idPago = Number(/PagoTransId:(\d+)/.exec(regTrans?.RegistroDiarioCajaDetalle || "")?.[1]);
+  const pagoT = idPago ? await uno(`SELECT * FROM pagotrans WHERE "PagoTransId" = $1`, [idPago]) : null;
+  ok(r.status === 201 && regTrans.RegistroDiarioCajaCierreId === c1.RegistroDiarioCajaId && (await dif()) === d + 85000,
+    `agregado al cierre de ayer: diferencia ${d} -> ${await dif()}`);
+  ok(pagoT && Number(pagoT.TransporteId) === Number(transporte.TransporteId) && Number(pagoT.PagoTransMonto) === 85000 &&
+    pagoT.PagoTransOrigen === "ASUNCIÓN" && pagoT.PagoTransNumeroBoleto === "B-PRUEBA-1" && Number(pagoT.ClienteId) === Number(cliente.ClienteId) &&
+    Number(pagoT.CajaId) === Number(caja.CajaId) && pagoT.PagoTransFecha.getTime() === c1.RegistroDiarioCajaFecha.getTime(),
+    "se creó el pago de transporte (datos del pasaje, caja y fecha del cierre)");
+  ok(regTrans.RegistroDiarioCajaDetalle.endsWith(`PagoTransId:${idPago} TransporteId:${transporte.TransporteId}`),
+    "detalle con el formato de la pestaña: " + regTrans.RegistroDiarioCajaDetalle);
+  ok(cajasIguales(efTrans.esperado, await saldos()) && (await teoricoHoy()) === teoricoAntes,
+    "caja de la empresa ajustada como desde la pestaña; caja del cajero y turno de hoy sin cambios");
+  r = await previsualizar(bodyTrans);
+  ok(r.status === 200 && r.body.duplicados.some((x) => /boleto/.test(x.Motivo)), "cargarlo de nuevo avisa el boleto repetido");
+  d = await dif();
+  r = await llamar(ptc.delete, { params: { id: idPago }, body: { Motivo: "prueba" }, user });
+  const quedaPago = (await realQuery(`SELECT 1 FROM pagotrans WHERE "PagoTransId" = $1`, [idPago])).rows.length;
+  ok(r.status === 200 && !quedaPago && !(await existe2(regTrans.RegistroDiarioCajaId)) && (await dif()) === d - 85000 &&
+    cajasIguales(efTrans.base, await saldos()), `eliminarlo desde Transporte deja todo como antes: diferencia ${d} -> ${await dif()}`);
+
+  console.log("Agregar a un cierre anterior un Western que faltó (supervisor)");
+  for (const [tipoW, grupoW, monto, cambio] of [[1, westernGs, 90000, 0], [1, 8, 730000, 7300], [2, 28, 150.5, 0]]) {
+    const bodyW = {
+      Origen: "WESTERN", TipoGastoId: tipoW, TipoGastoGrupoId: grupoW, RegistroDiarioCajaMonto: monto,
+      RegistroDiarioCajaCambio: cambio, RegistroDiarioCajaMTCN: 777000 + grupoW, RegistroDiarioCajaCargoEnvio: tipoW === 2 ? 5 : 0,
+      RegistroDiarioCajaDetalle: "western faltante", ClienteId: cliente.ClienteId, Motivo: "faltó el western",
+    };
+    const nombre = `Western ${tipoW === 1 ? "pago" : "envío"} grupo ${grupoW}`;
+    const efW = await esperadoSinCajero(() =>
+      tabs.western({ cajaId: caja.CajaId, fecha: AYER, tipo: tipoW, grupo: grupoW, monto, cambioDolar: cambio }));
+    const vistaW = await previsualizar(bodyW);
+    const esperadoVista = [...efW.esperado].filter(([id, m]) => Math.abs(m - efW.base.get(id)) > 0.001);
+    ok(vistaW.status === 200 && vistaW.body.cajas.length === esperadoVista.length &&
+      esperadoVista.every(([id, m]) => vistaW.body.cajas.some((c) => c.CajaId === id && Math.abs(c.Ajuste - (m - efW.base.get(id))) < 0.01)) &&
+      vistaW.body.enDolares === (grupoW === 28),
+      `${nombre}: la vista previa muestra los mismos ajustes que la pestaña (${vistaW.body.cajas.map((c) => `${c.CajaDescripcion} ${c.Ajuste}`).join(", ")})`);
+    d = await dif();
+    r = await agregar(bodyW);
+    const regW = r.body?.data?.registro;
+    const envioW = regW && await uno(
+      `SELECT * FROM westernenvio WHERE "CajaId" = $1 AND "TipoGastoGrupoId" = $2 AND "WesternEnvioMTCN" = $3`,
+      [caja.CajaId, grupoW, 777000 + grupoW]);
+    const difW = await dif();
+    ok(grupoW === 28 ? difW === d : difW !== d,
+      `${nombre}: ${grupoW === 28 ? "en dólares no mueve" : "mueve"} la diferencia del cierre (${d} -> ${difW})`);
+    ok(r.status === 201 && regW.RegistroDiarioCajaCierreId === c1.RegistroDiarioCajaId && envioW &&
+      Number(envioW.ClienteId) === Number(cliente.ClienteId) && Number(envioW.WesternEnvioCambio) === cambio,
+      `${nombre}: agregado al cierre con su westernenvio (diferencia ${d} -> ${await dif()})`);
+    ok(cajasIguales(efW.esperado, await saldos()) && (await teoricoHoy()) === teoricoAntes,
+      `${nombre}: cajas como desde la pestaña; caja del cajero y turno de hoy sin cambios`);
+    r = await previsualizar(bodyW);
+    ok(r.body.duplicados.some((x) => x.Id === regW.RegistroDiarioCajaId), `${nombre}: cargarlo de nuevo avisa el duplicado`);
+    r = await llamar(wec.delete, { params: { id: envioW.WesternEnvioId }, body: { Motivo: "prueba" }, user });
+    ok(r.status === 200 && cajasIguales(efW.base, await saldos()), `${nombre}: eliminarlo desde Western deja todo como antes`);
+  }
+  r = await agregar({ Origen: "WESTERN", TipoGastoId: 1, TipoGastoGrupoId: 8, RegistroDiarioCajaMonto: 730000, ClienteId: cliente.ClienteId, Motivo: "x" });
+  ok(r.status === 400 && /cotización/.test(r.body.message), "Western con cotización sin cotización: 400");
+  r = await agregar({ Origen: "WESTERN", TipoGastoId: 1, TipoGastoGrupoId: westernGs, RegistroDiarioCajaMonto: 1000, ClienteId: cliente.ClienteId, Motivo: "x" });
+  ok(r.status === 400 && /MTCN/.test(r.body.message), "Western sin MTCN: 400");
+  r = await agregar({ Origen: "WESTERN", TipoGastoId: 1, TipoGastoGrupoId: westernGs, RegistroDiarioCajaMonto: 1000, RegistroDiarioCajaMTCN: 1, Motivo: "x" });
+  ok(r.status === 400 && /cliente/.test(r.body.message), "Western sin cliente: 400");
+
+  console.log("Western en dólares en el turno en curso: no cuenta en el a rendir");
+  await realQuery("SAVEPOINT usd");
+  const rendirAntes = await teoricoHoy();
+  await tabs.western({ cajaId: caja.CajaId, fecha: `${diaHoy}T12:00`, tipo: 1, grupo: westernUSD, monto: 300 });
+  await tabs.western({ cajaId: caja.CajaId, fecha: `${diaHoy}T12:05`, tipo: 2, grupo: 28, monto: 120.5 });
+  ok((await teoricoHoy()) === rendirAntes, `pago y envío en dólares: el a rendir no cambia (${rendirAntes} -> ${await teoricoHoy()})`);
+  await tabs.western({ cajaId: caja.CajaId, fecha: `${diaHoy}T12:10`, tipo: 1, grupo: westernGs, monto: 40000 });
+  ok((await teoricoHoy()) === rendirAntes - 40000, "un pago en Gs. sí baja el a rendir");
+  await realQuery("ROLLBACK TO SAVEPOINT usd");
+
+  console.log("Diferencias de Cierre: tope de 15 días");
+  await realQuery("SAVEPOINT tope");
+  const cierreViejo = await ins(new Date(Date.now() - 16 * 24 * 3600 * 1000), 1, 2, "CIERRE viejo", 0);
+  const cierre15 = await ins(new Date(Date.now() - 15 * 24 * 3600 * 1000), 1, 2, "CIERRE 15 días", 0);
+  const bodyTope = { TipoGastoId: 2, TipoGastoGrupoId: grupo.TipoGastoGrupoId, RegistroDiarioCajaMonto: 1000, Motivo: "x" };
+  r = await llamar(cdc.agregarMovimiento, { params: { id: cierreViejo.RegistroDiarioCajaId }, body: bodyTope, user });
+  const rPrev = await previsualizar(bodyTope, cierreViejo.RegistroDiarioCajaId);
+  ok(r.status === 400 && /15 días/.test(r.body.message) && rPrev.status === 400, "cierre de hace 16 días: 400 (agregar y vista previa)");
+  r = await llamar(cdc.agregarMovimiento, { params: { id: cierre15.RegistroDiarioCajaId }, body: bodyTope, user });
+  ok(r.status === 201, "cierre de hace 15 días: se puede");
+  await realQuery("ROLLBACK TO SAVEPOINT tope");
+
   console.log("El cajero carga desde Cobranza / JSI con la fecha de ayer (pedido del cliente)");
   r = await llamar(rdc.create, {
     body: { CajaId: caja.CajaId, RegistroDiarioCajaFecha: AYER, TipoGastoId: 2, TipoGastoGrupoId: grupo.TipoGastoGrupoId, RegistroDiarioCajaMonto: 25000 },
@@ -387,7 +579,7 @@ conTransaccionDePrueba(async ({ realQuery, uno, transaccion, llamar, ok, user, u
   console.log("Diferencias de Cierre: auditoría");
   const det = await llamar(cdc.getDetalle, { params: { id: c1.RegistroDiarioCajaId }, user });
   const tipos = det.body.correcciones.map((c) => c.Tipo);
-  ok(tipos.length === 21, `21 correcciones auditadas (${tipos.join(", ")})`);
+  ok(tipos.length === 32, `32 correcciones auditadas (${tipos.join(", ")})`);
   ok(det.body.correcciones.some((c) => c.Motivo === "se cargó dos veces"), "el motivo de la eliminación quedó auditado");
   ok(det.body.correcciones.every((c) => c.DiferenciaAnterior !== null && c.DiferenciaNueva !== null), "cada una guarda la diferencia antes/después");
 });

@@ -2,6 +2,18 @@ import Swal from "sweetalert2";
 import { cargarEnCierreAnterior } from "../services/registros.service";
 import { pedirMotivo } from "./confirmarEliminacion";
 
+// Un supervisor agrega movimientos desde Diferencias de Cierre sólo a cierres
+// de los últimos DIAS_TOPE_SUPERVISOR días (mismo tope que
+// cierrediferencia.controller)
+export const DIAS_TOPE_SUPERVISOR = 15;
+
+// Primer día (YYYY-MM-DD, hora local) en que un supervisor puede cargar
+export const primerDiaCargable = () => {
+  const d = new Date();
+  d.setDate(d.getDate() - DIAS_TOPE_SUPERVISOR);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
 // Código con el que el backend rechaza un alta fechada en un turno ya cerrado
 // de la caja (ver RegistroDiarioCaja.validarFechaEnTurno)
 export const esTurnoCerrado = (error: unknown) =>

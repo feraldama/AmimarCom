@@ -1,4 +1,5 @@
 const db = require("../config/db");
+const { sqlNoEsGrupoUsd } = require("../utils/gruposUsd");
 
 // Diferencias de cierre de caja: una fila por cada CIERRE de turno con el
 // sobrante/faltante, con la misma fórmula que el ticket de cierre (los
@@ -8,6 +9,8 @@ const db = require("../config/db");
 //   diferencia = teórico - contado   (> 0 faltante, < 0 sobrante)
 // Se toman los movimientos de la caja entre la apertura y el cierre, de
 // cualquier usuario (así entran los PASE recibidos), igual que el ticket.
+// No cuentan los Western en dólares (utils/gruposUsd.js): su monto no es Gs.
+// y no mueven la caja del cajero.
 
 const SELECT_LISTADO = `
   SELECT
@@ -89,6 +92,7 @@ const CierreDiferencia = {
            COALESCE(SUM(CASE WHEN r."TipoGastoId" = 1 THEN r."RegistroDiarioCajaMonto" END), 0) AS egresos
          FROM "registrodiariocaja" r
          WHERE r."CajaId" = c."CajaId" AND r."TipoGastoGrupoId" <> 2
+           AND ${sqlNoEsGrupoUsd("r.")}
            AND ((r."RegistroDiarioCajaId" > ap."RegistroDiarioCajaId"
                  AND r."RegistroDiarioCajaId" < c."RegistroDiarioCajaId"
                  AND r."RegistroDiarioCajaCierreId" IS NULL)

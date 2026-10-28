@@ -228,7 +228,8 @@ const PagoTrans = {
     };
   },
 
-  create: async (pagoTransData) => {
+  // `q` permite crearlo dentro de una transacción (client de pg)
+  create: async (pagoTransData, q = db) => {
     const query = `
       INSERT INTO "pagotrans" (
         "PagoTransFecha",
@@ -270,10 +271,10 @@ const PagoTrans = {
       pagoTransData.PagoTransClienteRUC || "",
     ];
 
-    const result = await db.query(query, values);
+    const result = await q.query(query, values);
 
     // Obtener el registro recién creado
-    return PagoTrans.getById(result.rows[0].PagoTransId);
+    return PagoTrans.getById(result.rows[0].PagoTransId, q);
   },
 
   update: async (id, pagoTransData, q = db) => {
